@@ -114,6 +114,32 @@ async function inventoryRuntimeForVerification(root: string): Promise<DesktopRun
 }
 
 /**
+ * Name the first file whose recorded bytes, size, or executable bit no longer match the tree.
+ * @param expected - Inventory recorded when the runtime tree was sealed.
+ * @param actual - Inventory read back from the materialized tree.
+ * @returns A readable suffix naming one difference, or an empty string when both agree.
+ */
+function describeRuntimeDifference(
+  expected: readonly DesktopRuntimeFile[], actual: readonly DesktopRuntimeFile[],
+): string {
+  const remaining = new Map(actual.map(entry => [entry.path, entry]))
+  for (const entry of expected) {
+    const found = remaining.get(entry.path)
+    if (found === undefined) return `: missing ${entry.path}`
+    remaining.delete(entry.path)
+    const permissions = process.platform === 'win32' || found.executable === entry.executable
+      ? ''
+      : ` executable recorded=${String(entry.executable)} found=${String(found.executable)}`
+    if (found.bytes !== entry.bytes || found.sha256 !== entry.sha256 || permissions !== '') {
+      return `: ${entry.path} bytes recorded=${entry.bytes} found=${found.bytes}`
+        + ` sha256 recorded=${entry.sha256} found=${found.sha256}${permissions}`
+    }
+  }
+  const unexpected = remaining.keys().next()
+  return unexpected.done === true ? '' : `: unexpected ${unexpected.value}`
+}
+
+/**
  * Seal the final runtime tree after materialization and native signing.
  * @param root - Runtime output directory.
  * @param release - Matching shell, dsh, Host, and executable versions.
@@ -208,7 +234,7 @@ export async function verifyDesktopRuntime(
   const comparable = (items: readonly DesktopRuntimeFile[]): unknown => process.platform === 'win32'
     ? items.map(({ executable: _executable, ...item }) => item) : items
   if (JSON.stringify(comparable(descriptor.files)) !== JSON.stringify(comparable(actual))) {
-    throw new Error('desktop runtime: integrity verification failed')
+    throw new Error(`desktop runtime: integrity verification failed${describeRuntimeDifference(descriptor.files, actual)}`)
   }
   return descriptor
 }

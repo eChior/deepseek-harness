@@ -134,6 +134,8 @@ export function apply(ctx) {
   } finally {
     clearTimeout(timer)
     await host.stop()
-    rmSync(home, { recursive: true, force: true })
+    // The just-stopped Host can still hold handles under its HOME on Windows, where deletion
+    // retries only apply; the extra attempts keep the removal from failing the packaging run.
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 }
