@@ -500,7 +500,12 @@ export async function packageTarget(
   await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime'], electronBuilderEnv)
   await execute(['run', 'prepare:packages'], targetEnv)
-  await execute(['run', 'prepare:dsh', ...(signPrimaryRuntime ? ['--defer-runtime-smoke'] : [])], downloadEnv)
+  // The prepare-stage smoke boots a real Host, and a bundled plugin can rewrite files inside its own
+  // package while it runs, which invalidates the descriptor recorded moments earlier and dirties the
+  // tree that electron-builder then packs. Windows and Linux verify the packaged archive instead,
+  // before its first boot, so the packed payload stays exactly what the runtime stage produced.
+  const deferredRuntimeSmoke = signPrimaryRuntime || target.platform !== 'darwin'
+  await execute(['run', 'prepare:dsh', ...(deferredRuntimeSmoke ? ['--defer-runtime-smoke'] : [])], downloadEnv)
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime', '--dsh'], electronBuilderEnv)
   if (invocation.prepareOnly) return
   if (target.platform === 'darwin' && !invocation.directory) {
