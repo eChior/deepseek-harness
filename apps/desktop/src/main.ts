@@ -65,6 +65,15 @@ import { DesktopBackgroundNotice } from './background-notice.ts'
 // Windows and macOS keep the product name.
 if (process.platform === 'linux') app.setName('deepseek-harness')
 
+// Electron's native Wayland backend dies before the first frame on Kylin V10 SP1 (SIGSEGV, exit
+// 139); the same build starts normally through XWayland, and no upstream flag combination
+// (ozone-platform-hint, WaylandWindowDecorations, disable-gpu-compositing) survives it. Kylin
+// sessions always carry XWayland, so pin the backend to X11 by default and leave an escape hatch:
+// DSH_DESKTOP_OZONE_PLATFORM=wayland (or "auto") overrides it for compositors that do work.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('ozone-platform', process.env.DSH_DESKTOP_OZONE_PLATFORM ?? 'x11')
+}
+
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => {}
 let shuttingDown = false

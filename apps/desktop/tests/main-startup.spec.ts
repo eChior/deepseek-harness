@@ -153,11 +153,13 @@ const harness = await vi.hoisted(async () => {
   const app = Object.assign(new EventEmitter(), {
     isPackaged: true,
     name: 'Desktop test',
+    commandLine: { appendSwitch: vi.fn() },
     whenReady: () => Promise.resolve(),
     getLocale: (): string => 'en-US',
     getPreferredSystemLanguages: () => ['en-US'],
     getVersion: () => '1.0.0',
     getAppPath: (): string => 'desktop-test-app',
+    setName: vi.fn(),
     setAppLogsPath: vi.fn(),
     getPath: vi.fn<(name: string) => string>(),
     setAboutPanelOptions: vi.fn<(options: Electron.AboutPanelOptionsOptions) => void>(),
