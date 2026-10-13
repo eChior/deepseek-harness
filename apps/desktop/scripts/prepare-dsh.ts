@@ -67,6 +67,21 @@ function desktopRelease(): DesktopRelease {
   })
 }
 
+/**
+ * Let the bundled runtime install this distribution's preinstalled plugins.
+ *
+ * Those plugins reach third-party packages hosted in git repositories, which pnpm refuses as a
+ * subdependency while `blockExoticSubdeps` holds its default. pnpm 11 reads that setting only from
+ * `pnpm-workspace.yaml`, so an `.npmrc` entry has no effect.
+ */
+function allowExoticSubdependencies(): void {
+  const manifest = join(BUILD_ROOT, 'pnpm-workspace.yaml')
+  const current = existsSync(manifest) ? readFileSync(manifest, 'utf8') : ''
+  if (/^blockExoticSubdeps:/mu.test(current)) return
+  const separator = current.length === 0 || current.endsWith('\n') ? '' : '\n'
+  writeFileSync(manifest, `${current}${separator}blockExoticSubdeps: false\n`)
+}
+
 function runPnpm(args: readonly string[]): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const [command, ...commandArgs] = args
@@ -75,9 +90,8 @@ function runPnpm(args: readonly string[]): Promise<void> {
     const config = join(PNPM_BUILD_STATE, 'config')
     const userConfig = join(config, 'npmrc')
     mkdirSync(config, { recursive: true })
-    // The bundled runtime carries this distribution's preinstalled bundles, and those reach
-    // third-party plugins hosted in git repositories; pnpm refuses exotic subdependencies by default.
-    writeFileSync(userConfig, 'block-exotic-subdeps=false\n')
+    writeFileSync(userConfig, '')
+    allowExoticSubdependencies()
     const child = spawn(NODE, [
       '--expose-internals',
       PNPM,

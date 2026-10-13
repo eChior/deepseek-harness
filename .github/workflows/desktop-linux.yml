@@ -29,10 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Native runners only: cross-building linux-arm64 on an x64 host silently produces
+          # Native runner only: cross-building linux-arm64 on an x64 host silently produces
           # native modules built for the wrong architecture.
-          - arch: x64
-            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     steps:
