@@ -2,6 +2,7 @@ import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-prod
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
+import { execFileSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -65,6 +66,23 @@ import { DesktopBackgroundNotice } from './background-notice.ts'
 // Windows and macOS keep the product name.
 if (process.platform === 'linux') app.setName('deepseek-harness')
 
+/**
+ * Read the X resource Kylin and similar desktops use to publish their panel scale. Electron 44 on
+ * X11 ignores it, so a HiDPI laptop panel renders at 1x and every glyph looks cramped.
+ * @returns Declared dots per inch, or undefined when xrdb is unavailable.
+ */
+function readDeclaredXftDpi(): number | undefined {
+  try {
+    const output = execFileSync('xrdb', ['-query'], { encoding: 'utf8', timeout: 2_000 })
+    const declared = /^Xft\.dpi:[ \t]*(\d+)/mu.exec(output)?.[1]
+    if (declared === undefined) return undefined
+    const value = Number.parseInt(declared, 10)
+    return Number.isNaN(value) ? undefined : value
+  } catch {
+    return undefined
+  }
+}
+
 // Electron's native Wayland backend dies before the first frame on Kylin V10 SP1 (SIGSEGV, exit
 // 139); the same build starts normally through XWayland, and no upstream flag combination
 // (ozone-platform-hint, WaylandWindowDecorations, disable-gpu-compositing) survives it. Kylin
@@ -72,6 +90,15 @@ if (process.platform === 'linux') app.setName('deepseek-harness')
 // DSH_DESKTOP_OZONE_PLATFORM=wayland (or "auto") overrides it for compositors that do work.
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('ozone-platform', process.env.DSH_DESKTOP_OZONE_PLATFORM ?? 'x11')
+  // A 2160x1440 panel declaring Xft.dpi 120 renders cramped at Chromium's own 1.25, so the fork
+  // ships 1.5. DSH_DESKTOP_SCALE_FACTOR overrides it, and panels that declare no scale are left
+  // alone rather than being scaled twice.
+  const declaredDpi = readDeclaredXftDpi()
+  const scaleFactor = process.env.DSH_DESKTOP_SCALE_FACTOR
+    ?? (declaredDpi === undefined || declaredDpi <= 96 ? undefined : '1.5')
+  if (scaleFactor !== undefined) {
+    app.commandLine.appendSwitch('force-device-scale-factor', scaleFactor)
+  }
 }
 
 let focusPrimaryWindow = (): void => {}
