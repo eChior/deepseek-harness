@@ -1138,6 +1138,11 @@ async function main(): Promise<void> {
     }
     window.on('closed', () => { if (mainWindow === window) mainWindow = undefined })
     window.webContents.on('console-message', (details) => {
+      // Field diagnosis: a renderer problem that never becomes fatal (a reconnect loop, for one)
+      // leaves no trace in the terminal. DSH_DESKTOP_DEBUG_CONSOLE=1 mirrors every renderer message.
+      if (process.env.DSH_DESKTOP_DEBUG_CONSOLE === '1') {
+        process.stderr.write(`[renderer:${details.level}] ${details.sourceId}:${String(details.lineNumber)} ${details.message}\n`)
+      }
       if (details.level !== 'error') return
       rendererConsole.push(`${details.sourceId}:${String(details.lineNumber)} ${details.message}`)
     })
