@@ -154,6 +154,8 @@ export function createElectronBuilderConfig(
       { from: fileURLToPath(new URL(packagesLinux ? '../resources/icon.png' : '../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
       // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
+      // The Linux tray loads a PNG: a GTK/AppIndicator icon host cannot read the Windows ICO.
+      ...(packagesLinux ? [{ from: fileURLToPath(new URL('../resources/tray.png', import.meta.url)), to: 'tray.png' }] : []),
     ],
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
@@ -245,8 +247,21 @@ export function createElectronBuilderConfig(
       // deb packaging requires a maintainer; AppImage ignores it.
       maintainer: 'eChior <eChior@users.noreply.github.com>',
       synopsis: 'DeepSeek Harness desktop application for Linux',
+      desktop: {
+        entry: {
+          // Pinned to the name main.ts sets with app.setName, so the menu entry and the running
+          // window resolve the same icon instead of the taskbar falling back to a generic one.
+          StartupWMClass: 'deepseek-harness',
+          Keywords: 'deepseek;harness;dsh;ai;',
+        },
+      },
       // AppImage is the auto-update carrier; deb and tar.gz are additional install formats.
       target: ['AppImage', 'deb', 'tar.gz'],
+    },
+    deb: {
+      // Domestic Linux (Kylin/UOS) needs the sandbox helper marked SUID and the hicolor cache
+      // refreshed before the menu entry shows its icon; the stock template does neither.
+      afterInstall: fileURLToPath(new URL('./linux-after-install.sh', import.meta.url)),
     },
     nsis: {
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),

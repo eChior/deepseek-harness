@@ -60,6 +60,11 @@ import { DesktopQuitConfirmation } from './quit-confirmation.ts'
 import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
 
+// Linux reports app.name as the window class, and the deb's desktop entry pins the same value;
+// matching them is what lets the shell attach the running window to its menu and taskbar icon.
+// Windows and macOS keep the product name.
+if (process.platform === 'linux') app.setName('deepseek-harness')
+
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => {}
 let shuttingDown = false
@@ -981,8 +986,11 @@ async function main(): Promise<void> {
     tray?.relabel()
   }
   refreshApplicationMenu()
-  const trayIconPath = development ? join(app.getAppPath(), 'resources', 'tray-windows.ico') : join(process.resourcesPath, 'tray.ico')
-  if (process.platform === 'win32') {
+  // Windows reads the multi-size ICO; Linux trays (AppIndicator/GTK) want a plain PNG.
+  const trayIconPath = development
+    ? join(app.getAppPath(), 'resources', process.platform === 'linux' ? 'tray.png' : 'tray-windows.ico')
+    : join(process.resourcesPath, process.platform === 'linux' ? 'tray.png' : 'tray.ico')
+  if (process.platform === 'win32' || process.platform === 'linux') {
     // The tray is the way back to a hidden window; without it, relaunching the application still focuses it.
     try {
       tray = new DesktopTray({ iconPath: trayIconPath, locale: currentDesktopLocale,

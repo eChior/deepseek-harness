@@ -1,4 +1,4 @@
-/** Windows system tray: the always-present way back to a hidden window and the explicit quit entry. */
+/** System tray (Windows ICO / Linux PNG): the always-present way back to a hidden window and the explicit quit entry. */
 
 import { Menu, nativeImage, Tray } from 'electron'
 import type { DesktopLocale } from './locale.ts'
