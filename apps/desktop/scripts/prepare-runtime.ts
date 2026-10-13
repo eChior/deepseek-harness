@@ -28,18 +28,53 @@ function preparePnpm(): string {
   return manifest.version
 }
 
+/**
+ * Download the pinned Electron distribution, retrying transport failures.
+ *
+ * The download is one ~110 MB GET from GitHub's release CDN, and it fails often enough to cost
+ * a build: the failure arrives as a bare `TypeError: fetch failed` from undici, with no status
+ * code to tell a dropped connection from a missing asset. Retrying is therefore the only
+ * available response, and the last attempt is the one whose error is reported.
+ * @param version - Electron version from the workspace manifest.
+ * @param platform - Target platform.
+ * @param arch - Target architecture.
+ * @returns Path to the downloaded archive.
+ */
+async function downloadElectron(
+  version: string,
+  platform: 'darwin' | 'linux' | 'win32',
+  arch: 'arm64' | 'x64',
+): Promise<string> {
+  const attempts = 4
+  let last: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads })
+    } catch (error) {
+      last = error
+      const detail = error instanceof Error ? error.message : String(error)
+      process.stderr.write(`desktop runtime: electron download attempt ${attempt}/${attempts} failed: ${detail}\n`)
+      if (attempt < attempts) {
+        await new Promise<void>((resolve) => { setTimeout(resolve, 5_000 * attempt) })
+      }
+    }
+  }
+  throw last instanceof Error ? last : new Error(`desktop runtime: electron download failed: ${String(last)}`)
+}
+
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: { 'defer-primary-runtime-smoke': { type: 'boolean', default: false } } })
   const target = resolveDesktopBuildTarget()
-  const platform = target.startsWith('mac-') ? 'darwin' : 'win32'
+  const platform = target.startsWith('mac-') ? 'darwin' : target.startsWith('linux-') ? 'linux' : 'win32'
   const arch = target.endsWith('arm64') ? 'arm64' : 'x64'
   const require = createRequire(import.meta.url)
   const { version } = require('electron/package.json') as { version: string }
   const archive = await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'download:electron',
-    () => downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads }))
+    () => downloadElectron(version, platform, arch))
   rmSync(BUILD_PATHS.electron, { recursive: true, force: true })
   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'extract:electron', () => extractZip(archive, { dir: BUILD_PATHS.electron }))
-  const executable = join(BUILD_PATHS.electron, platform === 'win32' ? 'electron.exe' : 'Electron.app/Contents/MacOS/Electron')
+  const executable = join(BUILD_PATHS.electron, platform === 'win32' ? 'electron.exe'
+    : platform === 'linux' ? 'electron' : 'Electron.app/Contents/MacOS/Electron')
   const nodeVersion = execFileSync(executable, ['-p', 'process.versions.node'], {
     encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
   }).trim()

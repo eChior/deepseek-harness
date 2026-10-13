@@ -48,7 +48,7 @@ async function fixture(
   await writeFile(join(repositoryRoot, 'package.json'), `${JSON.stringify({ version })}\n`)
   await writeFile(join(appRoot, 'package.json'), `${JSON.stringify({ version })}\n`)
 
-  const [os, arch] = target.split('-') as ['mac' | 'win', 'arm64' | 'x64']
+  const [os, arch] = target.split('-') as ['mac' | 'win' | 'linux', 'arm64' | 'x64']
   const base = `deepseek-harness-${version}-${os}-${arch}`
   const origin = environment === 'test'
     ? TEST_ORIGIN
@@ -71,6 +71,23 @@ async function fixture(
       path: `${base}.zip`,
       files: [{ url: `${base}.zip`, size: Buffer.byteLength(zip), sha512: digest(zip) }],
     })}\n`)
+  }
+  else if (os === 'linux') {
+    const executable = 'signed AppImage fixture'
+    await writeFile(join(artifactsRoot, `${base}.AppImage`), executable)
+    const info = await createBlockmap(join(artifactsRoot, `${base}.AppImage`), {},
+      { info: { emitArtifactBuildCompleted: async () => {} } }, `${base}.AppImage`)
+    expect(Object.hasOwn(info, 'blockMapSize')).toBe(false)
+    await writeFile(join(artifactsRoot, desktopUpdateMetadataFilename(version, 'linux')), `${JSON.stringify({
+      version,
+      path: `${base}.AppImage`,
+      files: [{
+        url: `${base}.AppImage`,
+        ...info,
+      }],
+    })}\n`)
+    await writeFile(join(artifactsRoot, `${base}.deb`), 'Debian package fixture')
+    await writeFile(join(artifactsRoot, `${base}.tar.gz`), 'portable archive fixture')
   }
   else {
     const executable = 'signed NSIS executable fixture'
@@ -116,7 +133,7 @@ describe('desktop upload plan', () => {
   it('uploads only the selected latest installer to each deployment using the existing COS transport', async () => {
     const published = []
     for (const environment of ['production', 'test'] as const) {
-      for (const target of ['mac-arm64', 'mac-x64', 'win-x64'] as const) {
+      for (const target of ['mac-arm64', 'mac-x64', 'win-x64', 'linux-x64', 'linux-arm64'] as const) {
         const paths = await fixture(target, '1.2.3', environment)
         const plan = await createDesktopUploadPlan(target, { ...paths, latest: true })
         const loopback = await startCosLoopback()
@@ -212,11 +229,12 @@ describe('desktop upload plan', () => {
     })
   })
 
-  it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('publishes every %s object and YAML reference inside the test release directory', async (target) => {
+  it.each(['mac-arm64', 'mac-x64', 'win-x64', 'linux-x64', 'linux-arm64'] as const)('publishes every %s object and YAML reference inside the test release directory', async (target) => {
     const paths = await fixture(target)
     const plan = await createDesktopUploadPlan(target, paths)
     const prefix = `dsh-desk/${RELEASE_ID}`
-    const payload = plan.artifacts.find(artifact => artifact.filename.endsWith(target === 'win-x64' ? '.exe' : '.zip'))!
+    const payloadExtension = target === 'win-x64' ? '.exe' : target.startsWith('linux') ? '.AppImage' : '.zip'
+    const payload = plan.artifacts.find(artifact => artifact.filename.endsWith(payloadExtension))!
     for (const artifact of plan.artifacts) {
       expect(artifact.key).toBe(`${prefix}/${artifact.channelMetadata ? 'feeds' : 'bin'}/${target}/${artifact.filename}`)
       if (artifact.channelMetadata) {
@@ -264,6 +282,35 @@ describe('desktop upload plan', () => {
       publicUrl: 'https://download.deepseek.com/dsh-desk/feeds/win-x64/',
       bucket: PRODUCTION_BUCKET,
     })
+  })
+
+  it('validates the Linux AppImage update feed and additional install formats', async () => {
+    const paths = await fixture('linux-x64')
+    const plan = await createDesktopUploadPlan('linux-x64', paths)
+    expect(plan.artifacts.map(artifact => artifact.filename)).toEqual([
+      'deepseek-harness-1.2.3-linux-x64.AppImage',
+      'deepseek-harness-1.2.3-linux-x64.AppImage.blockmap',
+      'deepseek-harness-1.2.3-linux-x64.deb',
+      'deepseek-harness-1.2.3-linux-x64.tar.gz',
+      'nightly-linux.yml',
+      'latest-linux.yml',
+    ])
+    const deb = plan.artifacts.find(artifact => artifact.filename.endsWith('.deb'))!
+    expect(deb.contentType).toBe('application/vnd.debian.binary-package')
+    expect(plan.artifacts.filter(artifact => artifact.channelMetadata)).toHaveLength(2)
+  })
+
+  it('skips missing Linux install formats but keeps the AppImage update feed', async () => {
+    const paths = await fixture('linux-arm64')
+    await rm(join(paths.artifactsRoot, 'deepseek-harness-1.2.3-linux-arm64.deb'))
+    await rm(join(paths.artifactsRoot, 'deepseek-harness-1.2.3-linux-arm64.tar.gz'))
+    const plan = await createDesktopUploadPlan('linux-arm64', paths)
+    expect(plan.artifacts.map(artifact => artifact.filename)).toEqual([
+      'deepseek-harness-1.2.3-linux-arm64.AppImage',
+      'deepseek-harness-1.2.3-linux-arm64.AppImage.blockmap',
+      'nightly-linux.yml',
+      'latest-linux.yml',
+    ])
   })
 
   it.each(['missing', 'empty'])('rejects a %s Windows blockmap before publishing its feed', async (condition) => {

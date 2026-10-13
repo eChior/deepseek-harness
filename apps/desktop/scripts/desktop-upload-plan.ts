@@ -7,6 +7,7 @@ import { basename, join, resolve } from 'node:path'
 import { dump, load } from 'js-yaml'
 import { prerelease } from 'semver'
 import type { DesktopPackageTargetName } from './package-target.ts'
+import type { DesktopAutoUpdateEnvironment } from './desktop-auto-update-environment.mjs'
 import {
   desktopBuildRecordFilename,
   desktopUpdateMetadataFilename,
@@ -21,6 +22,8 @@ const TARGETS = {
   'mac-arm64': { platform: 'darwin', arch: 'arm64', os: 'mac' },
   'mac-x64': { platform: 'darwin', arch: 'x64', os: 'mac' },
   'win-x64': { platform: 'win32', arch: 'x64', os: 'win' },
+  'linux-x64': { platform: 'linux', arch: 'x64', os: 'linux' },
+  'linux-arm64': { platform: 'linux', arch: 'arm64', os: 'linux' },
 } as const satisfies Record<DesktopPackageTargetName, {
   readonly platform: NodeJS.Platform
   readonly arch: string
@@ -40,7 +43,7 @@ export interface DesktopUploadArtifact {
 
 /** A validated installer or update upload, with any channel metadata ordered last. */
 export interface DesktopUploadPlan {
-  readonly environment: 'test' | 'production'
+  readonly environment: DesktopAutoUpdateEnvironment
   readonly target: DesktopPackageTargetName
   readonly version: string
   /** Update feed directory URL, or the single installer URL for a fixed download. */
@@ -235,7 +238,7 @@ export async function createDesktopUploadPlan(
   }
 
   const base = `deepseek-harness-${buildVersion}-${target.os}-${target.arch}`
-  const updaterExtension = target.platform === 'darwin' ? 'zip' : 'exe'
+  const updaterExtension = target.platform === 'darwin' ? 'zip' : target.platform === 'linux' ? 'AppImage' : 'exe'
   const updaterInfo = updateFileInfo(metadata.files[0], `${metadataFilename}.files[0]`, `${base}.${updaterExtension}`)
   const updaterPath = await verifyChecksummedArtifact(artifactsRoot, updaterInfo)
   const artifacts: DesktopUploadArtifact[] = []
@@ -252,8 +255,22 @@ export async function createDesktopUploadPlan(
       uploadArtifact(blockmapPath, binaryPrefix, 'application/octet-stream'),
     )
   }
+  else if (target.platform === 'linux') {
+    const blockmapPath = await requireArtifact(artifactsRoot, `${base}.AppImage.blockmap`)
+    installerArtifact = uploadArtifact(updaterPath, binaryPrefix, 'application/x-executable')
+    artifacts.push(installerArtifact)
+    artifacts.push(uploadArtifact(blockmapPath, binaryPrefix, 'application/octet-stream'))
+    // Additional install formats produced by the same electron-builder run. They are versioned
+    // binaries only: auto-update remains AppImage-only, and the fixed latest download stays the AppImage.
+    for (const [extension, contentType] of [['deb', 'application/vnd.debian.binary-package'], ['tar.gz', 'application/gzip']] as const) {
+      const path = join(artifactsRoot, `${base}.${extension}`)
+      if ((await stat(path).catch(() => undefined))?.isFile() === true) {
+        artifacts.push(uploadArtifact(path, binaryPrefix, contentType))
+      }
+    }
+  }
   else {
-    const blockmapPath = await requireArtifact(artifactsRoot, `${base}.exe.blockmap`)
+    const blockmapPath = await requireArtifact(artifactsRoot, `${base}.${updaterExtension}.blockmap`)
     installerArtifact = uploadArtifact(
       updaterPath,
       binaryPrefix,
@@ -278,7 +295,7 @@ export async function createDesktopUploadPlan(
     const stableFilename = metadataFilename.replace('nightly', 'latest')
     artifacts.push({ ...channelArtifact, filename: stableFilename, key: `${update.keyPrefix}/${stableFilename}` })
   }
-  const latestFilename = `dsh-latest-${target.platform === 'darwin' ? 'macos' : 'windows'}-${target.arch}.${target.platform === 'darwin' ? 'dmg' : 'exe'}`
+  const latestFilename = `dsh-latest-${target.platform === 'darwin' ? 'macos' : target.platform === 'linux' ? 'linux' : 'windows'}-${target.arch}.${target.platform === 'darwin' ? 'dmg' : target.platform === 'linux' ? 'AppImage' : 'exe'}`
   const latestKey = `desktop/${latestFilename}`
   return {
     environment: update.environment,

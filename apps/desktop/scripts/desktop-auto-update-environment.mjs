@@ -20,19 +20,30 @@ const UPDATE_ENVIRONMENTS = {
     secretIdEnvName: 'DOWNLOAD_PROD_COS_SECRET_ID',
     secretKeyEnvName: 'DOWNLOAD_PROD_COS_SECRET_KEY',
   },
+  // A self-hosted deployment publishes to an operator-controlled web server instead of Tencent COS.
+  // There is no bucket or credential pair: binaries and channel metadata share one flat directory,
+  // and `upload-selfhosted.mjs` pushes that directory to the server over SSH.
+  selfhosted: {
+    originEnvName: 'DOWNLOAD_SELFHOST_ORIGIN',
+    prefixEnvName: 'DOWNLOAD_SELFHOST_PREFIX',
+    fixedOrigin: undefined,
+    bucketEnvName: undefined,
+    secretIdEnvName: undefined,
+    secretKeyEnvName: undefined,
+  },
 }
 
-const UPDATE_TARGETS = new Set(['mac-arm64', 'mac-x64', 'win-x64'])
+const UPDATE_TARGETS = new Set(['mac-arm64', 'mac-x64', 'win-x64', 'linux-x64', 'linux-arm64'])
 
 /**
  * Resolve the update deployment, defaulting local release work to test.
  * @param {NodeJS.ProcessEnv} env - Packaging or upload environment.
- * @returns {'test' | 'production'} Validated deployment name.
+ * @returns {'test' | 'production' | 'selfhosted'} Validated deployment name.
  */
 export function resolveDesktopAutoUpdateEnvironment(env) {
   const value = env[DESKTOP_AUTO_UPDATE_ENV]?.trim() || 'test'
-  if (value !== 'test' && value !== 'production') {
-    throw new Error(`desktop auto-update: ${DESKTOP_AUTO_UPDATE_ENV} must be "test" or "production"`)
+  if (value !== 'test' && value !== 'production' && value !== 'selfhosted') {
+    throw new Error(`desktop auto-update: ${DESKTOP_AUTO_UPDATE_ENV} must be "test", "production", or "selfhosted"`)
   }
   return value
 }
@@ -41,7 +52,7 @@ export function resolveDesktopAutoUpdateEnvironment(env) {
  * Resolve one supported platform and architecture to its update directory.
  * @param {NodeJS.Platform} platform - Target Node.js platform.
  * @param {string} arch - Target Node.js architecture.
- * @returns {'mac-arm64' | 'mac-x64' | 'win-x64'} Update target directory.
+ * @returns {'mac-arm64' | 'mac-x64' | 'win-x64' | 'linux-x64' | 'linux-arm64'} Update target directory.
  */
 export function resolveDesktopAutoUpdateTarget(platform, arch) {
   const os = platform === 'darwin' ? 'mac' : platform === 'win32' ? 'win' : platform
@@ -54,7 +65,7 @@ export function resolveDesktopAutoUpdateTarget(platform, arch) {
 
 /**
  * Return the local completion record filename for one packaged target.
- * @param {'mac-arm64' | 'mac-x64' | 'win-x64'} target - Supported release target.
+ * @param {'mac-arm64' | 'mac-x64' | 'win-x64' | 'linux-x64' | 'linux-arm64'} target - Supported release target.
  * @returns {string} Filename stored beside electron-builder artifacts.
  */
 export function desktopBuildRecordFilename(target) {
@@ -68,16 +79,21 @@ export function desktopBuildRecordFilename(target) {
  * Return the electron-builder channel metadata filename for an application version.
  * @param {string} version - Desktop semantic version.
  * @param {NodeJS.Platform} platform - Target platform.
+ * @param {string} [arch] - Target architecture; Linux manifests are suffixed unless it is x64.
  * @returns {string} Channel metadata filename emitted for the target.
  */
-export function desktopUpdateMetadataFilename(version, platform) {
+export function desktopUpdateMetadataFilename(version, platform, arch) {
   if (valid(version) === null) {
     throw new Error(`desktop auto-update: invalid Desktop version ${JSON.stringify(version)}`)
   }
-  if (platform !== 'darwin' && platform !== 'win32') {
+  if (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') {
     throw new Error(`desktop auto-update: unsupported metadata platform ${platform}`)
   }
-  return `nightly${platform === 'darwin' ? '-mac' : ''}.yml`
+  // electron-builder names a Linux manifest after its architecture, and electron-updater requests
+  // the same name, so a non-x64 Linux build must not look for the x64 file.
+  const osSuffix = platform === 'darwin' ? '-mac' : platform === 'linux' ? '-linux' : ''
+  const archSuffix = platform === 'linux' && arch !== undefined && arch !== '' && arch !== 'x64' ? `-${arch}` : ''
+  return `nightly${osSuffix}${archSuffix}.yml`
 }
 
 /**
@@ -124,7 +140,7 @@ function httpsOrigin(value, name) {
  * @param {NodeJS.ProcessEnv} env - Packaging or upload environment.
  * @param {NodeJS.Platform} platform - Target Node.js platform.
  * @param {string} arch - Target Node.js architecture.
- * @returns {{ environment: 'test' | 'production', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string }} Resolved updater configuration.
+ * @returns {{ environment: 'test' | 'production' | 'selfhosted', target: 'mac-arm64' | 'mac-x64' | 'win-x64' | 'linux-x64' | 'linux-arm64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string }} Resolved updater configuration.
  * @throws {Error} When the test deployment lacks a valid HTTPS origin or a 32-character lowercase hexadecimal release ID.
  */
 export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
@@ -145,15 +161,38 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
     }
     releasePrefix += `/${releaseId}`
   }
-  const keyPrefix = `${releasePrefix}/feeds/${target}`
+  else if (environment === 'selfhosted') {
+    releasePrefix = selfHostedPrefix(env, deployment.prefixEnvName)
+  }
+  // A self-hosted origin serves one flat directory shared by every architecture. electron-builder
+  // and electron-updater both suffix Linux manifests with a non-x64 architecture, so x64 and arm64
+  // coexist there without per-target subdirectories.
+  const flat = environment === 'selfhosted'
+  const keyPrefix = flat ? releasePrefix : `${releasePrefix}/feeds/${target}`
   return {
     environment,
     target,
     origin,
     keyPrefix,
-    binaryKeyPrefix: `${releasePrefix}/bin/${target}`,
+    binaryKeyPrefix: flat ? releasePrefix : `${releasePrefix}/bin/${target}`,
     publicUrl: `${origin}/${keyPrefix}/`,
   }
+}
+
+/**
+ * Normalize the directory a self-hosted origin serves the release from.
+ * @param {NodeJS.ProcessEnv} env - Packaging or upload environment.
+ * @param {string | undefined} name - Environment variable holding the directory prefix.
+ * @returns {string} Prefix without leading or trailing slashes, defaulting to `dsh`.
+ */
+function selfHostedPrefix(env, name) {
+  if (name === undefined) throw new Error('desktop auto-update: selected deployment has no prefix')
+  const value = (env[name] ?? '').trim() || 'dsh'
+  if (value.includes('\\')
+    || value.split('/').some(segment => segment === '' || segment === '.' || segment === '..')) {
+    throw new Error(`desktop auto-update: ${name} must be a relative directory path without empty, ".", or ".." segments`)
+  }
+  return value
 }
 
 /**
@@ -161,12 +200,16 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
  * @param {NodeJS.ProcessEnv} env - Upload environment.
  * @param {NodeJS.Platform} platform - Target Node.js platform.
  * @param {string} arch - Target Node.js architecture.
- * @returns {{ environment: 'test' | 'production', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string, bucket: string, secretIdEnvName: string, secretKeyEnvName: string }} Resolved upload configuration.
+ * @returns {{ environment: 'test' | 'production', target: 'mac-arm64' | 'mac-x64' | 'win-x64' | 'linux-x64' | 'linux-arm64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string, bucket: string, secretIdEnvName: string, secretKeyEnvName: string }} Resolved upload configuration.
  * @throws {Error} When the selected deployment lacks a bucket or valid updater configuration.
  */
 export function resolveDesktopUploadConfig(env, platform, arch) {
   const update = resolveDesktopAutoUpdateConfig(env, platform, arch)
   const deployment = UPDATE_ENVIRONMENTS[update.environment]
+  const { bucketEnvName } = deployment
+  if (bucketEnvName === undefined) {
+    throw new Error(`desktop auto-update: the ${update.environment} deployment stores nothing in Tencent COS; publish it with upload-selfhosted.mjs instead`)
+  }
   return {
     ...update,
     bucket: requiredEnvironmentValue(env, deployment.bucketEnvName),

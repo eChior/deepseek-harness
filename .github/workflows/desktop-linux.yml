@@ -1,0 +1,102 @@
+name: Desktop Linux
+
+# Packages the Electron desktop shell for Linux (AppImage + deb + tar.gz) and keeps the
+# artefacts as workflow output. Linux releases carry no signing stage, so every artefact
+# here is unsigned and the job needs no certificates or upload credentials.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [enhanced]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop-linux.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+
+permissions:
+  contents: read
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+
+jobs:
+  package:
+    name: package linux-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Native runners only: cross-building linux-arm64 on an x64 host silently produces
+          # native modules built for the wrong architecture.
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          package-manager-cache: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --reporter=append-only
+
+      - name: Install packaging dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # libfuse2 runs the AppImage; rpm lets electron-builder build the deb payload.
+          sudo apt-get install -y --no-install-recommends libfuse2 rpm
+
+      - name: Write apps/desktop/.env.linux
+        run: |
+          set -euo pipefail
+          cat > apps/desktop/.env.linux <<'EOF'
+          DSH_DESKTOP_APP_ID=com.deepseek.harness
+          DSH_DESKTOP_AUTO_UPDATE_ENV=test
+          DOWNLOAD_TEST_ORIGIN=https://download.local.invalid
+          DOWNLOAD_TEST_RELEASE_ID=0123456789abcdef0123456789abcdef
+          DSH_DESKTOP_LINUX_PACK_CONCURRENCY=4
+          DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://update.local.invalid
+          DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=https://update.local.invalid
+          DSH_DESKTOP_MANDATORY_UPDATE_CONFIG={"allowedAuthOrigins":["https://login.local.invalid"]}
+          EOF
+          sed -i 's/^          //' apps/desktop/.env.linux
+          cat apps/desktop/.env.linux
+
+      - name: Package linux-${{ matrix.arch }}
+        run: pnpm --dir apps/desktop run package:linux:${{ matrix.arch }}
+
+      - name: Upload artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-harness-linux-${{ matrix.arch }}
+          path: |
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.deb
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.AppImage
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.tar.gz
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.yml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Summarize artefacts
+        if: always()
+        run: |
+          {
+            echo "### linux-${{ matrix.arch }}"
+            ls -lh "apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts" || true
+          } >> "$GITHUB_STEP_SUMMARY"
