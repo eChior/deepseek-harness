@@ -1,4 +1,4 @@
-/** Official DeepSeek Harness occupants for the generic browser-brand slots. */
+/** This distribution's occupants for the generic browser-brand slots. */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -10,11 +10,14 @@ export const inject = ['slots']
 /**
  * Fill the sidebar brand slots as one declaration-aware registration set. The
  * conversation hero stays on its declaring package's animated fish fallback,
- * so the official build registers nothing there.
+ * so this package registers nothing there.
+ *
+ * Unlike the upstream package this occupies for, the registration is
+ * unconditional: a locally assembled client should show the distribution's
+ * brand rather than the generic local-build fallback.
  * @param ctx - Client root context.
  */
 export function apply(ctx: ClientContext): void {
-  if (process.env.DSH_CLIENT_BUILD_PROFILE !== 'official') return
   ctx.slots.inject('sidebar.brand.mark', () =>
     ctx.slots.inject('sidebar.brand.name', function* () {
       yield ctx.slots.register({ name: 'sidebar.brand.mark' }, OfficialBrandMark)

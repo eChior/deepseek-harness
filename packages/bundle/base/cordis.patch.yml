@@ -187,6 +187,7 @@
 
     - id: otel
       name: '@deepseek-ai/dsh-otel'
+      disabled: true
 
     # OTel releases a Session-log prefix only after explicit user feedback,
     # regardless of model provider. Ordinary activity never triggers capture.
@@ -203,6 +204,9 @@
     # Every CLI exit path drains by disposing the root on SIGINT/SIGTERM.
     - id: session-telemetry-otel
       name: '@deepseek-ai/dsh-session-telemetry-otel'
+      # This distribution ships with telemetry off: the row is disabled here and
+      # stays off unless a later layer re-enables it.
+      disabled: true
       config:
         mode: !!js process.env.DSH_TELEMETRY_MODE || 'FEEDBACK_ONLY'
         shutdownTimeoutMillis: 3000

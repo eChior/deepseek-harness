@@ -59,22 +59,14 @@ function clientBuildValue(name: string): string | undefined {
 it('boots the built plugin graph and renders a fixture session end to end', async () => {
   mountAssembledApp()
 
-  // The sidebar renders from the boot graph: every inject layer activated.
+  // The sidebar renders from the boot graph: every inject layer activated. This
+  // distribution fills the brand slots under every build profile, so neither the
+  // whale fallback nor the generic local-build version label reaches the DOM.
   const tree = await screen.findByRole('tree', { name: 'Sessions' }, { timeout: 10_000 })
-  if (clientBuildValue('DSH_CLIENT_BUILD_PROFILE') === 'official') {
-    expect(document.querySelector('svg[viewBox="26 0 156 24"]')).not.toBeNull()
-    expect(screen.queryByText('DSH Local Build')).toBeNull()
-  } else {
-    expect(document.querySelector('svg[viewBox="0 0 23.16 17.04"]')).not.toBeNull()
-    const version = clientBuildValue('DSH_CLIENT_VERSION')
-    if (version === undefined) throw new Error('default client build record must carry DSH_CLIENT_VERSION')
-    const commit = clientBuildValue('DSH_CLIENT_COMMIT_HASH')
-    const buildVersion = version
-      + (commit === undefined ? '' : `-${commit}`)
-      + (clientBuildValue('DSH_CLIENT_GIT_DIRTY') === 'true' ? '-dirty' : '')
-    screen.getByText('DSH Local Build')
-    screen.getByText(buildVersion)
-  }
+  expect(document.querySelector('svg[viewBox="32 -1723 12222 2018"]')).not.toBeNull()
+  expect(document.querySelector('img[src^="data:image/png;base64,"]')).not.toBeNull()
+  expect(screen.queryByText('DSH Local Build')).toBeNull()
+  expect(clientBuildValue('DSH_CLIENT_VERSION')).toBeDefined()
   // The compact layout dropped group session counts; the fixture workspace
   // group row renders immediately with its sessions beneath it.
   const fixtureGroup = (await within(tree).findAllByText('fixture'))

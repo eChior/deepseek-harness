@@ -42,9 +42,11 @@
 # `dsh.client` rows are the browser roster the modules node half scans into
 # window.__DSH_BOOT__; the modules row is simultaneously a host row.
 - insert:
+    # This distribution ships product telemetry off. Upstream enables both rows
+    # only under the desktop profile; here the row stays disabled everywhere.
     - id: desktop-product-telemetry
       name: '@deepseek-ai/dsh-host-product-telemetry-otel'
-      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
+      disabled: true
       config:
         scheduledDelayMillis: 30000
         timeoutMillis: 15000
@@ -56,7 +58,7 @@
 
     - id: product-analytics
       name: '@deepseek-ai/dsh-client-product-analytics'
-      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
+      disabled: true
       config:
         enabled: true
         appVersion: !!js process.env.DSH_CLIENT_VERSION
@@ -563,3 +565,54 @@
       name: '@deepseek-ai/dsh-agent-preset-registry'
       config:
         default: standard
+
+# ---------------------------------------------------------------------------
+# Distribution additions: the third-party plugins this fork preinstalls.
+#
+# The rows below are copied verbatim from each package's own bundle patch
+# (`dsh.bundle.patch`), so every one of them stays addressable by id from a
+# later profile patch or `--patch` layer.
+- insert:
+    - id: bili-native
+      name: billion-context
+
+    - id: zh-thinking
+      name: dsh-zh-thinking
+
+    - id: superpowers-dsh
+      name: superpowers-dsh
+
+    - id: dsh-market
+      name: dshmarket
+
+    - id: skills-manager
+      name: '@michengai/dsh-skills-manager'
+
+    - id: ui-workspace-archive-manager
+      name: '@michengai/dsh-archive-manager'
+
+# billion-context: DSH's default retry whitelist omits MALFORMED_RESPONSE, so
+# one sampling flake that breaks a tool-call argument JSON kills the whole turn
+# unretried. A patch replaces the targeted row's WHOLE config (no deep merge),
+# so each row restates every default code plus MALFORMED_RESPONSE — dropping any
+# default code silently removes its retries.
+#
+# `compaction-basic` is disabled on this plane (see above), so `auto: false`
+# only reaches the host row; in a web-app profile the running compaction
+# instance lives inside the preset-owned row, which a bundle layer cannot
+# address by id.
+- id: compaction-basic
+  config:
+    auto: false
+
+- id: llm-deepseek
+  config:
+    retryPolicy:
+      mode: normal
+      retryableCodes: [EMPTY_RESPONSE, RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT, MALFORMED_RESPONSE]
+
+- id: llm-deepseek-account
+  config:
+    retryPolicy:
+      mode: normal
+      retryableCodes: [EMPTY_RESPONSE, RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT, MALFORMED_RESPONSE]
