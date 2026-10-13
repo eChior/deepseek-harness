@@ -1,0 +1,95 @@
+name: Desktop Windows
+
+# Packages this distribution's unsigned Windows x64 NSIS installer on GitHub's Windows runner.
+#
+# Upstream ships no Desktop packaging lane: a signed release needs an EV token, SignTool, and a
+# PIN, so the only path a hosted runner can complete is the unsigned one described in
+# apps/desktop/README.md. `package:win:x64:unsigned` writes its installer to
+# apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/ and needs the same Windows x64
+# host, Python, and Visual C++ build tools that the signed lane does, minus the signing hardware.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - enhanced
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop-windows.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+
+permissions:
+  contents: read
+
+env:
+  # CI runs must never report to the production telemetry endpoint baked into apps/cli/cordis.yml.
+  DSH_TELEMETRY_DISABLED: '1'
+  PRIMARY_NODE_VERSION: '24'
+
+jobs:
+  package:
+    name: package win-x64 unsigned
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Packaging records the commit and the dirty flag in the artifact manifest.
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Set up Python for native modules
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write apps/desktop/.env.windows
+        shell: pwsh
+        run: |
+          # Git ignores this file, so the lane writes the release settings the packaging
+          # preflight reads: an application id, a mandatory-update policy for the default
+          # `test` deployment, and the signature-cache concurrency. Unsigned packaging
+          # resolves no signing certificate and no update credentials.
+          $path = Join-Path $PWD 'apps/desktop/.env.windows'
+          @(
+            'DSH_DESKTOP_APP_ID=com.deepseek.harness'
+            'DSH_DESKTOP_AUTO_UPDATE_ENV=test'
+            'DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://update.local.invalid'
+            'DSH_DESKTOP_MANDATORY_UPDATE_CONFIG={"allowedAuthOrigins":["https://login.local.invalid"]}'
+            'DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_CONCURRENCY=4'
+          ) | Set-Content -Path $path -Encoding utf8
+          Get-Content $path
+
+      - name: Package Windows x64
+        run: pnpm run package:desktop:win:x64:unsigned
+
+      - name: Upload installer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-x64-unsigned
+          path: apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload packaging logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-x64-packaging-runs
+          path: apps/desktop/.desktop-build/packaging-runs/**
+          if-no-files-found: ignore
+          retention-days: 7
