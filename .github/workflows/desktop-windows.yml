@@ -54,7 +54,23 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --reporter=append-only
+
+      - name: Report install diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          # A failed install must leave its reason on the run summary: the failure log is
+          # only readable to a signed-in actor, and the job dies before any artifact exists.
+          "pnpm: $(pnpm --version)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          "node: $(node -v)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          $logs = Join-Path $env:LOCALAPPDATA 'pnpm-cache\_logs'
+          if (Test-Path $logs) {
+            Get-ChildItem $logs | Sort-Object LastWriteTime -Descending | Select-Object -First 2 | ForEach-Object {
+              "### $($_.Name)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+              Get-Content $_.FullName -Tail 300 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+            }
+          }
 
       - name: Write apps/desktop/.env.windows
         shell: pwsh
