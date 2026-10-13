@@ -83,11 +83,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deepseek-harness-linux-${{ matrix.arch }}
+          # Ship the deb only. AppImage and tar.gz carry the same application a second and third
+          # time; add them back when the self-hosted update origin needs the AppImage carrier.
           path: |
             apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.deb
-            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.AppImage
-            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.tar.gz
-            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.yml
           if-no-files-found: warn
           retention-days: 14
 

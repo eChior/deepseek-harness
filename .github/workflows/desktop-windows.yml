@@ -97,7 +97,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-x64-unsigned
-          path: apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/**
+          # Ship the installer and its update block map only: the unpacked application directory
+          # doubles the artifact without adding anything the installer does not already carry.
+          path: |
+            apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe
+            apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe.blockmap
           if-no-files-found: warn
           retention-days: 14
 
