@@ -11,6 +11,9 @@ import { parseDesktopRelease, type DesktopRelease } from './release.ts'
 /** Descriptor at the root of the immutable Desktop resource tree. */
 export const DESKTOP_RUNTIME_FILE = 'desktop-runtime.json'
 
+/** Upper bound on the differences one integrity report names before it truncates. */
+const MAX_RUNTIME_DIFFERENCES = 5
+
 /** Host-owned package available to external plugins through a directory link. */
 export interface DesktopSharedPackage {
   readonly name: string
@@ -129,29 +132,39 @@ export function desktopToleratedRuntimeAsset(path: string): boolean {
 }
 
 /**
- * Name the first file whose recorded bytes, size, or executable bit no longer match the tree.
+ * Name the files whose recorded bytes, size, or executable bit no longer match the tree.
  * @param expected - Inventory recorded when the runtime tree was sealed.
  * @param actual - Inventory read back from the materialized tree.
- * @returns A readable suffix naming one difference, or an empty string when both agree.
+ * @returns A readable suffix naming the differences, or an empty string when both agree.
  */
 export function describeRuntimeDifference(
   expected: readonly DesktopRuntimeFile[], actual: readonly DesktopRuntimeFile[],
 ): string {
+  const differences: string[] = []
+  const full = (): boolean => differences.length >= MAX_RUNTIME_DIFFERENCES
   const remaining = new Map(actual.map(entry => [entry.path, entry]))
   for (const entry of expected) {
     const found = remaining.get(entry.path)
-    if (found === undefined) return `: missing ${entry.path}`
+    if (found === undefined) {
+      differences.push(`missing ${entry.path}`)
+      if (full()) return `: ${differences.join('; ')}`
+      continue
+    }
     remaining.delete(entry.path)
     const permissions = process.platform === 'win32' || found.executable === entry.executable
       ? ''
       : ` executable recorded=${String(entry.executable)} found=${String(found.executable)}`
     if (found.bytes !== entry.bytes || found.sha256 !== entry.sha256 || permissions !== '') {
-      return `: ${entry.path} bytes recorded=${entry.bytes} found=${found.bytes}`
-        + ` sha256 recorded=${entry.sha256} found=${found.sha256}${permissions}`
+      differences.push(`${entry.path} bytes recorded=${entry.bytes} found=${found.bytes}`
+        + ` sha256 recorded=${entry.sha256} found=${found.sha256}${permissions}`)
+      if (full()) return `: ${differences.join('; ')}`
     }
   }
-  const unexpected = remaining.keys().next()
-  return unexpected.done === true ? '' : `: unexpected ${unexpected.value}`
+  for (const entry of remaining.values()) {
+    differences.push(`unexpected ${entry.path}`)
+    if (full()) break
+  }
+  return differences.length === 0 ? '' : `: ${differences.join('; ')}`
 }
 
 /**
