@@ -2751,8 +2751,8 @@ importers:
         specifier: ^15.0.0
         version: 15.0.0
       dsh-zh-thinking:
-        specifier: github:yingjian666/dsh-zh-thinking#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe
-        version: git+ssh://git@github.com/yingjian666/dsh-zh-thinking.git#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)
+        specifier: git+https://github.com/yingjian666/dsh-zh-thinking.git#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe
+        version: https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)
       dshmarket:
         specifier: 1.66.18
         version: 1.66.18(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery)(node-addon-require-builtin@0.1.6))(@deepseek-ai/schemastery@vendor+schemastery)
@@ -2760,8 +2760,8 @@ importers:
         specifier: ^11.0.0
         version: 11.0.4
       superpowers-dsh:
-        specifier: github:LayneChai/superpowers-dsh#10448b549702c0be9445beb454f39f6214a63601
-        version: git+ssh://git@github.com/LayneChai/superpowers-dsh.git#10448b549702c0be9445beb454f39f6214a63601
+        specifier: git+https://github.com/LayneChai/superpowers-dsh.git#10448b549702c0be9445beb454f39f6214a63601
+        version: https://codeload.github.com/LayneChai/superpowers-dsh/tar.gz/10448b549702c0be9445beb454f39f6214a63601
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
@@ -20514,8 +20514,8 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dsh-zh-thinking@git+ssh://git@github.com/yingjian666/dsh-zh-thinking.git#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe:
-    resolution: {commit: ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe, repo: git@github.com:yingjian666/dsh-zh-thinking.git, type: git}
+  dsh-zh-thinking@https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe:
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe}
     version: 0.1.2
     engines: {node: ^22.19.0 || >=24.0.0}
     peerDependencies:
@@ -23068,8 +23068,8 @@ packages:
     resolution: {integrity: sha512-H+ue8Zo4vJmV2nRjpx86P35lzwDT3nItnIsocgumgr0hHMQ+ZGq5vrERg9kJBo5AWGmxZDhzDo+WVIJqkB0cGA==}
     engines: {node: '>=16'}
 
-  superpowers-dsh@git+ssh://git@github.com/LayneChai/superpowers-dsh.git#10448b549702c0be9445beb454f39f6214a63601:
-    resolution: {commit: 10448b549702c0be9445beb454f39f6214a63601, repo: git@github.com:LayneChai/superpowers-dsh.git, type: git}
+  superpowers-dsh@https://codeload.github.com/LayneChai/superpowers-dsh/tar.gz/10448b549702c0be9445beb454f39f6214a63601:
+    resolution: {gitHosted: true, integrity: sha512-aPw2rx8HnigJ9x1LRFRWdZu1Ur0d2DbVEsq5WyUgZs9I08dHM4tzCNOgGuUhV/GZxgCFZf5cRnvi4B/6BkkCHg==, tarball: https://codeload.github.com/LayneChai/superpowers-dsh/tar.gz/10448b549702c0be9445beb454f39f6214a63601}
     version: 0.2.0
 
   supports-color@7.2.0:
@@ -24482,7 +24482,7 @@ snapshots:
       '@deepseek-ai/dsh-tools': 0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87)
       '@deepseek-ai/dsh-typert-protocol': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
       '@deepseek-ai/schemastery': link:vendor/schemastery
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       zod: 4.4.3
     transitivePeerDependencies:
       - '@deepseek-ai/cordis-plugin-group'
@@ -24643,7 +24643,7 @@ snapshots:
       '@deepseek-ai/dsh-system-prompt': link:packages/core/system-prompt
       '@eslint-community/regexpp': 4.12.2
       ajv: 8.20.0
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       node-addon-require-builtin: 0.1.6
       resolve.exports: 2.0.3
       semver: 7.8.5
@@ -25032,7 +25032,7 @@ snapshots:
       '@deepseek-ai/cordis-plugin-loader': 1.0.5(@deepseek-ai/cordis@vendor+cordis)(node-addon-require-builtin@0.1.6)
       '@deepseek-ai/dsh-app-boot': link:packages/boot/app-boot
       '@deepseek-ai/dsh-atomic-write': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       yaml: 2.9.0
     optionalDependencies:
       '@deepseek-ai/dsh-hmr': 0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline)
@@ -25044,7 +25044,7 @@ snapshots:
       '@deepseek-ai/cordis-plugin-loader': link:vendor/loader
       '@deepseek-ai/dsh-app-boot': link:packages/boot/app-boot
       '@deepseek-ai/dsh-atomic-write': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       yaml: 2.9.0
     optionalDependencies:
       '@deepseek-ai/dsh-hmr': 0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline)
@@ -29687,7 +29687,7 @@ snapshots:
       app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
       builder-util: 26.15.3
       fs-extra: 10.1.0
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
     transitivePeerDependencies:
       - electron-builder-squirrel-windows
       - supports-color
@@ -29704,7 +29704,7 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  dsh-zh-thinking@git+ssh://git@github.com/yingjian666/dsh-zh-thinking.git#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt):
+  dsh-zh-thinking@https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt):
     optionalDependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       '@deepseek-ai/dsh-system-prompt': link:packages/core/system-prompt
@@ -32743,7 +32743,7 @@ snapshots:
     dependencies:
       copy-anything: 4.0.5
 
-  superpowers-dsh@git+ssh://git@github.com/LayneChai/superpowers-dsh.git#10448b549702c0be9445beb454f39f6214a63601: {}
+  superpowers-dsh@https://codeload.github.com/LayneChai/superpowers-dsh/tar.gz/10448b549702c0be9445beb454f39f6214a63601: {}
 
   supports-color@7.2.0:
     dependencies:
