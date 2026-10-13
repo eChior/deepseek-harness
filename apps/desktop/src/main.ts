@@ -251,6 +251,9 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     minWidth: 520,
     minHeight: 600,
     show,
+    // GTK desktops draw this menu bar inside the window, where it costs a full row on top of the
+    // window manager's own title bar. Keep it reachable with Alt instead of always visible.
+    ...(process.platform === 'linux' ? { autoHideMenuBar: true } : {}),
     ...(process.platform === 'win32' && primary ? {
       titleBarStyle: 'hidden' as const,
       titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
