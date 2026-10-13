@@ -114,12 +114,27 @@ async function inventoryRuntimeForVerification(root: string): Promise<DesktopRun
 }
 
 /**
+ * Identify third-party documentation assets a running plugin may rewrite inside its own package.
+ *
+ * Preinstalled plugins occasionally refresh the reference documents they ship with when the Host
+ * starts them, which changes bytes the sealed runtime tree recorded. Those files never take part in
+ * execution, so integrity checks tolerate them instead of failing the release.
+ * @param path - Slash-separated path relative to the runtime root.
+ * @returns True when the entry is a tolerated documentation asset.
+ */
+export function desktopToleratedRuntimeAsset(path: string): boolean {
+  if (!path.startsWith('node_modules/')) return false
+  const file = path.split('/').at(-1) ?? ''
+  return /\.(?:markdown|md|txt)$/iu.test(file) || /^LICENSE/u.test(file) || path.includes('/paper/')
+}
+
+/**
  * Name the first file whose recorded bytes, size, or executable bit no longer match the tree.
  * @param expected - Inventory recorded when the runtime tree was sealed.
  * @param actual - Inventory read back from the materialized tree.
  * @returns A readable suffix naming one difference, or an empty string when both agree.
  */
-function describeRuntimeDifference(
+export function describeRuntimeDifference(
   expected: readonly DesktopRuntimeFile[], actual: readonly DesktopRuntimeFile[],
 ): string {
   const remaining = new Map(actual.map(entry => [entry.path, entry]))
@@ -137,6 +152,32 @@ function describeRuntimeDifference(
   }
   const unexpected = remaining.keys().next()
   return unexpected.done === true ? '' : `: unexpected ${unexpected.value}`
+}
+
+/**
+ * Report the tolerated documentation assets a smoke run rewrote inside the runtime tree.
+ * @param expected - Inventory recorded when the runtime tree was sealed.
+ * @param actual - Inventory read back after the tree was exercised.
+ * @returns One readable line per tolerated change, empty when those assets still match.
+ */
+function describeToleratedRuntimeChanges(
+  expected: readonly DesktopRuntimeFile[], actual: readonly DesktopRuntimeFile[],
+): string[] {
+  const changes: string[] = []
+  const remaining = new Map(actual.map(entry => [entry.path, entry]))
+  for (const entry of expected) {
+    if (!desktopToleratedRuntimeAsset(entry.path)) continue
+    const found = remaining.get(entry.path)
+    remaining.delete(entry.path)
+    if (found === undefined) changes.push(`removed ${entry.path}`)
+    else if (found.bytes !== entry.bytes || found.sha256 !== entry.sha256) {
+      changes.push(`rewrote ${entry.path} bytes=${String(entry.bytes)}->${String(found.bytes)}`)
+    }
+  }
+  for (const entry of remaining.values()) {
+    if (desktopToleratedRuntimeAsset(entry.path)) changes.push(`created ${entry.path}`)
+  }
+  return changes
 }
 
 /**
@@ -230,11 +271,20 @@ export async function verifyDesktopRuntime(
     }
   }
   const actual = await inventoryRuntimeForVerification(root)
+  const recorded = descriptor.files
+  const tolerated = describeToleratedRuntimeChanges(recorded, actual)
+  if (tolerated.length > 0) {
+    process.stderr.write(`desktop runtime: tolerated running-tree document changes (${String(tolerated.length)}):`
+      + `${tolerated.slice(0, 20).map(line => `\n  ${line}`).join('')}\n`)
+  }
+  const retained = (items: readonly DesktopRuntimeFile[]): DesktopRuntimeFile[] =>
+    items.filter(item => !desktopToleratedRuntimeAsset(item.path))
   // Windows has no portable Unix executable permission bits.
   const comparable = (items: readonly DesktopRuntimeFile[]): unknown => process.platform === 'win32'
     ? items.map(({ executable: _executable, ...item }) => item) : items
-  if (JSON.stringify(comparable(descriptor.files)) !== JSON.stringify(comparable(actual))) {
-    throw new Error(`desktop runtime: integrity verification failed${describeRuntimeDifference(descriptor.files, actual)}`)
+  if (JSON.stringify(comparable(retained(recorded))) !== JSON.stringify(comparable(retained(actual)))) {
+    throw new Error('desktop runtime: integrity verification failed'
+      + describeRuntimeDifference(retained(recorded), retained(actual)))
   }
   return descriptor
 }

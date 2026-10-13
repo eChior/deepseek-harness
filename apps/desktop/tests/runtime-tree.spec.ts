@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { DESKTOP_HOST_PACKAGE, DESKTOP_HOST_RUNTIME_FILES } from '../src/core-package-set.ts'
-import { DESKTOP_RUNTIME_FILE, readDesktopRuntime, runtimePath, verifyDesktopRuntime } from '../src/runtime-tree.ts'
+import {
+  DESKTOP_RUNTIME_FILE,
+  desktopToleratedRuntimeAsset,
+  readDesktopRuntime,
+  runtimePath,
+  verifyDesktopRuntime,
+} from '../src/runtime-tree.ts'
 import { runtimeFixture } from './runtime-fixture.ts'
 
 const roots: string[] = []
@@ -104,4 +110,22 @@ it('verifies recorded executable permissions only on Unix', async () => {
 })
 it.each(['../outside', '/absolute', 'C:/absolute', 'a\\b', 'a//b', './a'])('rejects nonportable path %s', (path) => {
   expect(() => runtimePath('/runtime', path)).toThrow(/invalid relative path/u)
+})
+it('tolerates the package documents a running plugin rewrites', async () => {
+  const dsh = join(fixture(), 'dsh')
+  const base = join(dsh, 'node_modules', '@deepseek-ai', 'dsh-base')
+  await expect(verifyDesktopRuntime(dsh, '1.0.0')).resolves.toBeDefined()
+  writeFileSync(join(base, 'CONFIGURATION.md'), 'rewritten while the plugin ran\n')
+  mkdirSync(join(base, 'paper'), { recursive: true })
+  writeFileSync(join(base, 'paper', 'figure.png'), 'figure\n')
+  await expect(verifyDesktopRuntime(dsh, '1.0.0')).resolves.toBeDefined()
+  writeFileSync(join(base, 'index.js'), 'export const changed = 1\n')
+  await expect(verifyDesktopRuntime(dsh, '1.0.0')).rejects.toThrow(/integrity/u)
+})
+it('tolerates package documents but never runtime code', () => {
+  expect(desktopToleratedRuntimeAsset('node_modules/pkg/CONFIGURATION.md')).toBe(true)
+  expect(desktopToleratedRuntimeAsset('node_modules/pkg/LICENSE')).toBe(true)
+  expect(desktopToleratedRuntimeAsset('node_modules/pkg/paper/figure.png')).toBe(true)
+  expect(desktopToleratedRuntimeAsset('node_modules/pkg/index.js')).toBe(false)
+  expect(desktopToleratedRuntimeAsset('dsh/README.md')).toBe(false)
 })

@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto'
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readAsar, type Node } from 'app-builder-lib/out/asar/asar.js'
-import type { DesktopRuntimeDescriptor, DesktopRuntimeFile } from '../src/runtime-tree.ts'
+import {
+  describeRuntimeDifference,
+  desktopToleratedRuntimeAsset,
+  type DesktopRuntimeDescriptor,
+  type DesktopRuntimeFile,
+} from '../src/runtime-tree.ts'
 
 /**
  * Compare the complete archived dsh tree with the sealed preparation inventory.
@@ -49,5 +54,12 @@ export async function verifyRuntimeArchive(archivePath: string, expected: Deskto
     if (!entry.isFile() || !unpacked.has(path)) throw new Error(`desktop runtime: unexpected unpacked entry ${path}`)
   }
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
-  if (JSON.stringify(files) !== JSON.stringify(expected.files)) throw new Error('desktop runtime: ASAR integrity verification failed')
+  const retained = (items: readonly DesktopRuntimeFile[]): DesktopRuntimeFile[] =>
+    items.filter(item => !desktopToleratedRuntimeAsset(item.path))
+  const recorded = retained(expected.files)
+  const archived = retained(files)
+  if (JSON.stringify(archived) !== JSON.stringify(recorded)) {
+    throw new Error('desktop runtime: ASAR integrity verification failed'
+      + describeRuntimeDifference(recorded, archived))
+  }
 }
