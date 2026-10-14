@@ -60,19 +60,38 @@ function fixture() {
     return ['verified-package']
   })
   const quitAndInstall = vi.fn()
+  const setFeedURL = vi.fn()
   const beforeRestart = vi.fn(async () => true)
   const downloadResult = vi.fn()
+  const releaseFeed = vi.fn(async () => 'https://releases.invalid/nightly')
   const states: DesktopUpdateState[] = []
-  const updater = Object.assign(events, { checkForUpdates, downloadUpdate, quitAndInstall }) as unknown as AppUpdater
+  const updater = Object.assign(events, { checkForUpdates, downloadUpdate, quitAndInstall, setFeedURL }) as unknown as AppUpdater
   const coordinator = new DesktopUpdateCoordinator(
     (state) => { states.push(state); return state },
-    beforeRestart, updater, () => true, () => '1.1.0-alpha.1', downloadResult,
+    beforeRestart, updater, () => true, () => '1.1.0-alpha.1', downloadResult, releaseFeed,
   )
   coordinators.push(coordinator)
-  return { coordinator, updater, events, states, checkForUpdates, downloadUpdate, quitAndInstall, beforeRestart, downloadResult }
+  return {
+    coordinator, updater, events, states, checkForUpdates, downloadUpdate,
+    quitAndInstall, beforeRestart, downloadResult, setFeedURL, releaseFeed,
+  }
 }
 
 describe('desktop update coordinator', () => {
+  it('points the updater at this distribution release feed before every check', async () => {
+    const f = fixture()
+    await f.coordinator.check()
+    expect(f.setFeedURL).toHaveBeenCalledWith({
+      provider: 'generic', url: 'https://releases.invalid/nightly', channel: 'nightly',
+    })
+  })
+
+  it('reports a check failure when the release feed cannot be resolved', async () => {
+    const f = fixture()
+    f.releaseFeed.mockRejectedValueOnce(new Error('release lookup failed'))
+    expect(await f.coordinator.check()).toMatchObject({ phase: 'error', failedOperation: 'check' })
+    expect(f.checkForUpdates).not.toHaveBeenCalled()
+  })
   it('keeps safe preparation diagnostics separate and clears them on an explicit retry', async () => {
     const f = fixture()
     await f.coordinator.check()

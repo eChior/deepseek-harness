@@ -8,6 +8,7 @@ import { gt, valid } from 'semver'
 import type { DesktopUpdateState } from './ipc.ts'
 import { DesktopUpdateHttpExecutor } from './update-http-executor.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
+import { resolveReleaseFeed } from './update-source.ts'
 
 const { autoUpdater } = electronUpdater
 
@@ -54,6 +55,7 @@ export class DesktopUpdateCoordinator {
     private readonly enabled: () => boolean = () => app.isPackaged && existsSync(join(process.resourcesPath, 'app-update.yml')),
     private readonly currentVersion: () => string = () => app.getVersion(),
     private readonly downloadResult?: (success: boolean, reason?: string) => void,
+    private readonly releaseFeed: () => Promise<string> = () => resolveReleaseFeed(),
   ) {
     if (updater === autoUpdater) {
       // electron-updater omits this internal transport property from its public declarations.
@@ -183,6 +185,9 @@ export class DesktopUpdateCoordinator {
     try {
       this.assertLive()
       if (!this.enabled()) throw new Error('desktop update: this application has no packaged update source')
+      // The packaged feed points at the public origin; this distribution publishes to its own
+      // repository and Gitea serves each release from the tag directory, so re-point first.
+      this.updater.setFeedURL({ provider: 'generic', url: await this.releaseFeed(), channel: 'nightly' })
       const result = await this.updater.checkForUpdates()
       if (result === null) throw new Error('desktop update: no check result was returned')
       const version = result.updateInfo.version
