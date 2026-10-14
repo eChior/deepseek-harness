@@ -241,7 +241,11 @@ export function createElectronBuilderConfig(
       target: ['nsis'],
     },
     linux: {
-      icon: fileURLToPath(new URL('../resources/icon.png', import.meta.url)),
+      // A single-file icon lands in hicolor/<w>x<h>/apps using the source file's own pixel size,
+      // so a 1104px source produced /usr/share/icons/hicolor/1104x1104/apps/deepseek-harness.png
+      // — a directory no desktop index scans, which is why the menu entry fell back to a generic
+      // icon. The directory form installs the standard sizes (512/256/128/64/48/32) instead.
+      icon: fileURLToPath(new URL('../resources/icons', import.meta.url)),
       executableName: 'deepseek-harness',
       category: 'Development',
       // deb packaging requires a maintainer; AppImage ignores it.
