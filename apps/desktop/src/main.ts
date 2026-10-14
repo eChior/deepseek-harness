@@ -768,7 +768,16 @@ async function main(): Promise<void> {
     const requested = new URL(details.url)
     if (requested.host !== target.host) { callback({}); return }
     const headers = Object.fromEntries(Object.entries(details.requestHeaders).map(([name, value]) => [name.toLowerCase(), value]))
-    if (headers.origin !== 'dsh-app://app') { callback({ cancel: true }); return }
+    if (process.env.DSH_DESKTOP_DEBUG_WS === '1') {
+      process.stderr.write(`[ws] ${requested.href} origin=${headers.origin ?? 'absent'} cookie=${headers.cookie === undefined ? 'absent' : 'present'}\n`)
+    }
+    // Chromium serialises the origin of a non-standard scheme as "null", and a request issued from
+    // an Electron custom protocol can carry no Origin header at all. Cancelling on anything but the
+    // literal page origin therefore killed the renderer's own WebSocket: the stream came up and
+    // ended immediately, over and over, which is what the connection indicator showed. Reject only
+    // an origin that clearly belongs to another site.
+    const origin = headers.origin
+    if (origin !== undefined && origin !== 'null' && origin !== 'dsh-app://app') { callback({ cancel: true }); return }
     callback({ requestHeaders: { ...headers, origin: target.origin, cookie: hostCookie, 'sec-fetch-site': 'same-origin' } })
   })
 
