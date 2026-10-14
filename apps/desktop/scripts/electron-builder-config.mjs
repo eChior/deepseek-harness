@@ -278,6 +278,10 @@ export function createElectronBuilderConfig(
       installerLanguages: ['en_US', 'zh_CN'],
       differentialPackage: true,
     },
+    // Ship only the two locales this distribution is used in. Electron's runtime otherwise
+    // carries ~50 language packs that dpkg must unpack one by one on every install, which is
+    // noticeable on the arm64 machines this build targets.
+    electronLanguages: ['en-US', 'zh-CN'],
     detectUpdateChannel: false,
     publish: update === undefined ? null : [{ provider: 'generic', url: update.publicUrl, channel: 'nightly' }],
   }

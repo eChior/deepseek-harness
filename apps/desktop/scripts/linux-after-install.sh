@@ -42,10 +42,14 @@ if hash update-desktop-database 2>/dev/null; then
     update-desktop-database /usr/share/applications || true
 fi
 
-# Themes that index hicolor cache the directory; without this refresh the application-menu entry
-# shows a placeholder icon until the user logs in again.
-if hash gtk-update-icon-cache 2>/dev/null; then
-    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+# Themes that index hicolor cache the directory; without a refresh the application-menu entry
+# shows a placeholder icon until the user logs in again. Only an existing cache is refreshed, and
+# without -f: rebuilding a full hicolor cache from scratch is the slowest step of this script on
+# the arm64 machines this build targets, while the tool's own staleness check already notices the
+# icons that were just installed.
+HICOLOR_DIR='/usr/share/icons/hicolor'
+if [ -f "$HICOLOR_DIR/icon-theme.cache" ] && hash gtk-update-icon-cache 2>/dev/null; then
+    gtk-update-icon-cache -t "$HICOLOR_DIR" || true
 fi
 
 # Install apparmor profile. (Ubuntu 24+)
