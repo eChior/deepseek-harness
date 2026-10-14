@@ -83,12 +83,47 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deepseek-harness-linux-${{ matrix.arch }}
-          # Ship the deb only. AppImage and tar.gz carry the same application a second and third
-          # time; add them back when the self-hosted update origin needs the AppImage carrier.
+          # Ship the deb plus the channel metadata. AppImage and tar.gz carry the same
+          # application a second and third time; add them back when the self-hosted update
+          # origin needs the AppImage carrier. electron-updater reads the channel file from
+          # the release directory, so it has to travel with the package.
           path: |
             apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.deb
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts/*.yml
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Publish linux-${{ matrix.arch }} to Gitea
+        if: always() && env.GITEA_TOKEN != ''
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          set -euo pipefail
+          origin="${GITEA_ORIGIN:-http://10.151.5.175:3000}"
+          repo="${GITEA_REPOSITORY:-ITPublic/deepseek-harness}"
+          version="$(node -p "require('./apps/desktop/package.json').version")"
+          tag="v${version}-hrzszy"
+          artifacts="apps/desktop/.desktop-build/targets/linux-${{ matrix.arch }}/artifacts"
+          auth="Authorization: token ${GITEA_TOKEN}"
+
+          # Reuse the release when this version was published before, so a rerun adds assets
+          # instead of failing on the tag that already exists.
+          release_id="$(curl -sS "${origin}/api/v1/repos/${repo}/releases?limit=50" -H "${auth}" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const tag=process.argv[1];const found=(JSON.parse(s)||[]).find(r=>r.tag_name===tag);process.stdout.write(found?String(found.id):'')})" "${tag}")"
+          if [ -z "${release_id}" ]; then
+            release_id="$(curl -sS -X POST "${origin}/api/v1/repos/${repo}/releases" -H "${auth}" \
+              -H 'Content-Type: application/json' \
+              -d "{\"tag_name\":\"${tag}\",\"target_commitish\":\"${GITHUB_REF_NAME}\",\"name\":\"DeepSeek Harness 增强版 ${version}\",\"draft\":false,\"prerelease\":false}" \
+              | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{process.stdout.write(String(JSON.parse(s).id))})")"
+          fi
+
+          for file in "${artifacts}"/*.deb "${artifacts}"/*.yml; do
+            [ -e "${file}" ] || continue
+            curl -sS -X DELETE "${origin}/api/v1/repos/${repo}/releases/${release_id}/assets?name=$(basename "${file}")" -H "${auth}" > /dev/null || true
+            curl -sS -X POST "${origin}/api/v1/repos/${repo}/releases/${release_id}/assets?name=$(basename "${file}")" \
+              -H "${auth}" -H 'Content-Type: application/octet-stream' --data-binary "@${file}" > /dev/null
+            echo "published $(basename "${file}") to ${tag}"
+          done
 
       - name: Summarize artefacts
         if: always()
