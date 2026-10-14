@@ -1047,7 +1047,20 @@ async function main(): Promise<void> {
     // The tray is the way back to a hidden window; without it, relaunching the application still focuses it.
     try {
       tray = new DesktopTray({ iconPath: trayIconPath, locale: currentDesktopLocale,
-        open: () => { focusPrimaryWindow() }, quit: () => { app.quit() } })
+        open: () => { focusPrimaryWindow() }, quit: () => { app.quit() },
+        // Linux panels report the secondary click instead of opening the menu themselves, so pop
+        // the same entries the Windows tray installs.
+        showContextMenu: () => {
+          const messages = currentDesktopLocale().messages
+          const menu = Menu.buildFromTemplate([
+            { label: messages.openApplication, click: () => { focusPrimaryWindow() } },
+            { type: 'separator' },
+            { label: messages.quitApplication, click: () => { app.quit() } },
+          ])
+          const owner = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+          if (owner === undefined) menu.popup()
+          else menu.popup({ window: owner })
+        } })
     } catch (error) { console.warn('desktop tray: unavailable', error) }
   }
   const backgroundNotice = process.platform === 'win32'
