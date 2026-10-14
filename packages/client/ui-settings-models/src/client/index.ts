@@ -18,6 +18,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { ModelsSection } from './ModelsSection.tsx'
 import type { ModelsSectionInjected } from './ModelsSection.tsx'
+import { ModelsShortcut, publishModelsShortcutInjected } from './SidebarModelsShortcut.tsx'
 import { DeepSeekOnboardingDialog } from './DeepSeekOnboardingDialog.tsx'
 import type { DeepSeekOnboardingInjected } from './DeepSeekOnboardingDialog.tsx'
 import { WelcomeNotice } from './WelcomeNotice.tsx'
@@ -152,6 +153,17 @@ export function apply(ctx: ClientContext): void {
     order: -100,
     inject: welcomeInjected,
   }, WelcomeNotice))
+  // The sidebar foot keeps the account row last; this seat sits directly above it so the
+  // models that drive every session stay reachable without opening Settings first.
+  ctx.slots.inject('sidebar.footer.action', () => {
+    publishModelsShortcutInjected(injected)
+    return ctx.slots.register({
+      name: 'sidebar.footer.action',
+      id: 'models-shortcut',
+      locale: NS,
+      order: 20,
+    }, ModelsShortcut)
+  })
   ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
     name: 'settings.onboarding',
     id: 'deepseek-official',
