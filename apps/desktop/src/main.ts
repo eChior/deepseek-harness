@@ -60,6 +60,7 @@ import { DesktopUpdateOverlays } from './update-overlay.ts'
 import { DesktopQuitConfirmation } from './quit-confirmation.ts'
 import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
+import type { DesktopAccountBackend } from './account-backend.ts'
 
 // Linux reports app.name as the window class, and the deb's desktop entry pins the same value;
 // matching them is what lets the shell attach the running window to its menu and taskbar icon.
@@ -242,6 +243,55 @@ function platformLoginUrl(authorizeUrl: string): string {
   const url = new URL(authorizeUrl)
   url.searchParams.set('theme', nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
   return url.href
+}
+
+/**
+ * Sign-in window for deployments that authenticate browser sessions with a
+ * cookie rather than a callback to the Host.
+ *
+ * The page stays ours to run: it opens in a window the application controls,
+ * and we poll that window's session for the cookie the gateway sets once the
+ * employee finishes signing in. No redirect comes back, so the Host learns
+ * about the browser only when the captured session is committed.
+ * @param authorizeUrl - validated sign-in page URL reported by the account provider.
+ * @param backend - native account operations that commit the captured session.
+ * @returns nothing; the window closes itself once the Host accepts the session.
+ */
+function openCookieSignInWindow(authorizeUrl: string, backend: DesktopAccountBackend): void {
+  const url = new URL(authorizeUrl)
+  // Cookies for the sign-in page live one label up: `accounts.example.com` sets
+  // them for `example.com`, which is the domain every later request carries.
+  const domain = url.hostname.split('.').slice(1).join('.')
+  const signIn = new BrowserWindow({
+    width: 520,
+    height: 760,
+    show: true,
+    autoHideMenuBar: true,
+    title: app.name,
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+  })
+  const cookies = signIn.webContents.session.cookies
+  let committing = false
+  const timer = setInterval(() => {
+    if (committing) return
+    void cookies.get({ domain }).then(async (found) => {
+      if (committing || found.length === 0) return
+      const header = found.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
+      committing = true
+      try {
+        await backend.acceptExternalSession({ provider: 'rwork', cookie: header })
+        clearInterval(timer)
+        if (!signIn.isDestroyed()) signIn.close()
+      } catch {
+        // An anonymous page already carries device cookies, so a rejected probe
+        // simply means the employee has not finished signing in yet.
+        committing = false
+      }
+      return undefined
+    }).catch(() => undefined)
+  }, 1_000)
+  signIn.on('closed', () => { clearInterval(timer) })
+  void signIn.loadURL(url.href).catch(() => undefined)
 }
 
 function createWindow(preload: string, show = false, primary = false): BrowserWindow {
@@ -515,7 +565,7 @@ async function main(): Promise<void> {
           const attempt = state.attempt
           if (attempt?.phase === 'waiting-browser' && attempt.authorizeUrl !== undefined && openedAttempt !== attempt.id) {
             openedAttempt = attempt.id
-            void shell.openExternal(platformLoginUrl(attempt.authorizeUrl)).catch(() => undefined)
+            openCookieSignInWindow(attempt.authorizeUrl, accountBackend)
           }
           if ((attempt?.phase === 'failed' || attempt?.phase === 'expired') && returnedAttempt !== attempt.id) {
             returnedAttempt = attempt.id

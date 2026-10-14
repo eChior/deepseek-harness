@@ -236,6 +236,7 @@
 
     { "path": "./packages/api/account-controller" },
     { "path": "./packages/credentials/deepseek-account-platform" },
+    { "path": "./packages/credentials/hrzszy-account" },
     { "path": "./packages/credentials/deepseek-account" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },
@@ -343,6 +344,7 @@
     { "path": "./packages/skill/skill" },
     { "path": "./packages/skill/skill-badge" },
     { "path": "./packages/skill/skill-filesystem" },
+    { "path": "./packages/skill/skill-repo" },
     { "path": "./packages/skill/tool-skill" },
     { "path": "./packages/interaction/tool-ask-user" },
     { "path": "./packages/context/agent-instructions" },

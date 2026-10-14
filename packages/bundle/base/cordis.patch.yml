@@ -110,9 +110,7 @@
       name: '@deepseek-ai/dsh-authorization'
 
     - id: deepseek-account
-      name: '@deepseek-ai/dsh-deepseek-account-platform'
-      config:
-        desktopPlatform: !!js "ctx.get('profileContext')?.name === 'desktop' && ['darwin', 'win32'].includes(process.platform) ? process.platform : null"
+      name: '@deepseek-ai/dsh-hrzszy-account'
 
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
@@ -298,8 +296,17 @@
     - id: skill
       name: '@deepseek-ai/dsh-skill'
 
+    # Mirrors this distribution's skill repository into the DSH home before the
+    # filesystem provider scans, so a released skill reaches users without a new
+    # installer. The provider reads the mirror rather than the network.
+    - id: skill-repo
+      name: '@deepseek-ai/dsh-skill-repo'
+
     - id: skill-filesystem
       name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        customSkillDirs:
+          - !!js dshHomePath('skills-repo', 'skills')
 
     - id: skill-badge
       name: '@deepseek-ai/dsh-skill-badge'

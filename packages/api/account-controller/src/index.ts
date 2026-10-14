@@ -74,6 +74,15 @@ export class AccountController extends TypertRemoteService {
   @Remote
   cancelSignIn(attemptId: SignInAttemptId): Promise<AccountView> { return this.ctx.deepseekAccount.cancelSignIn(attemptId) }
   /**
+   * Commit a session a shell captured outside the Host, in its own sign-in window.
+   * @param session - provider-defined session payload; providers that finish in a browser callback reject it.
+   * @returns state after the session is committed.
+   */
+  @Remote
+  acceptExternalSession(session: Record<string, unknown>): Promise<AccountView> {
+    return this.ctx.deepseekAccount.acceptExternalSession(session)
+  }
+  /**
    * Inspect the latest logged request providers of running tasks, including tools and retries.
    * @returns whether running work has a latest request context on the account route.
    */

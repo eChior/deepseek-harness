@@ -61,6 +61,11 @@ export interface DesktopAccountBackend {
   start(client: AccountClientMetadata): Promise<AccountView>
   /** @param id - attempt to cancel. @returns cancellation or completed commit state. */
   cancel(id: SignInAttemptId): Promise<AccountView>
+  /**
+   * @param session - provider-defined session a native sign-in window captured.
+   * @returns state after the session is committed.
+   */
+  acceptExternalSession(session: Record<string, unknown>): Promise<AccountView>
   /** @param client - this window's identity. @returns state after local sign-out. */
   signOut(client: AccountClientMetadata): Promise<AccountView>
   /**
@@ -90,6 +95,7 @@ export function desktopAccountBackend(origin: string, invoke: AccountInvoke, coo
     state: () => call('getState'),
     start: client => call('startSignIn', { client, callbackOrigin: new URL(origin).origin, loginSource: 'desktop' }),
     cancel: attemptId => call('cancelSignIn', { attemptId }), signOut: client => call('signOut', { client }),
+    acceptExternalSession: session => call('acceptExternalSession', { session }),
     watch(listener, failed, expired, onAnalyticsEnabledChanged) {
       let closed = false
       let socket: WebSocket | undefined
