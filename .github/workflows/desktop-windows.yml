@@ -99,13 +99,61 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-x64-unsigned
-          # Ship the installer and its update block map only: the unpacked application directory
-          # doubles the artifact without adding anything the installer does not already carry.
+          # Ship the installer, its update block map, and the channel metadata electron-updater
+          # reads out of the release directory: the unpacked application directory doubles the
+          # artifact without adding anything the installer does not already carry.
           path: |
             apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe
             apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe.blockmap
+            apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.yml
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Publish win-x64 to Gitea
+        if: always() && env.GITEA_TOKEN != ''
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $origin = if ($env:GITEA_ORIGIN) { $env:GITEA_ORIGIN } else { 'http://10.151.5.175:3000' }
+          $repo = if ($env:GITEA_REPOSITORY) { $env:GITEA_REPOSITORY } else { 'ITPublic/deepseek-harness' }
+          $version = (Get-Content 'apps/desktop/package.json' -Raw | ConvertFrom-Json).version
+          $tag = "v$version-hrzszy"
+          $artifacts = 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'
+          $headers = @{ Authorization = "token $env:GITEA_TOKEN" }
+
+          # Reuse the release when this version was published before, so a rerun adds assets
+          # instead of failing on the tag that already exists.
+          $releases = Invoke-RestMethod -Uri "$origin/api/v1/repos/$repo/releases?limit=50" -Headers $headers
+          $existing = $releases | Where-Object { $_.tag_name -eq $tag } | Select-Object -First 1
+          if ($existing) {
+            $releaseId = $existing.id
+          } else {
+            $body = @{
+              tag_name = $tag
+              target_commitish = $env:GITHUB_REF_NAME
+              name = "DeepSeek Harness 增强版 $version"
+              draft = $false
+              prerelease = $false
+            } | ConvertTo-Json
+            $releaseId = (Invoke-RestMethod -Method Post -Uri "$origin/api/v1/repos/$repo/releases" `
+              -Headers $headers -ContentType 'application/json' -Body $body).id
+          }
+
+          $files = Get-ChildItem -Path $artifacts -File | Where-Object { $_.Extension -in @('.exe', '.yml') }
+          foreach ($file in $files) {
+            $assetName = $file.Name
+            # Replacing means deleting first: Gitea rejects a second asset with the same name.
+            try {
+              Invoke-RestMethod -Method Delete -Uri "$origin/api/v1/repos/$repo/releases/$releaseId/assets?name=$assetName" `
+                -Headers $headers | Out-Null
+            } catch {
+              Write-Output "no existing asset $assetName"
+            }
+            Invoke-RestMethod -Method Post -Uri "$origin/api/v1/repos/$repo/releases/$releaseId/assets?name=$assetName" `
+              -Headers $headers -ContentType 'application/octet-stream' -InFile $file.FullName | Out-Null
+            Write-Output "published $assetName to $tag"
+          }
 
       - name: Upload packaging logs
         if: always()
