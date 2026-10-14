@@ -39,6 +39,9 @@ export type RemoteStreamFailureMapper = (error: unknown) => RemoteStreamFailure
 
 const MAX_MISSED_HEARTBEATS = 2
 
+/** Heartbeat payload; see startHeartbeat() for why an empty one breaks the socket on some kernels. */
+const PING_PAYLOAD = Buffer.from([0x00])
+
 /** Own the no-server WebSocket acceptor and every active logical stream. */
 export class RemoteStreamMuxServer {
   private readonly server = new WebSocketServer({ noServer: true })
@@ -117,7 +120,14 @@ export class RemoteStreamMuxServer {
           continue
         }
         this.missedHeartbeats.set(socket, missed + 1)
-        socket.ping()
+        // The payload must not be empty. `ws` frames a payload-less ping as a two-byte header followed
+        // by an empty write, and Node merges the corked pair into a single writev whose iovec array
+        // then carries a zero-length entry. Some aarch64 Linux kernels (Kylin 5.4 here; the same
+        // report exists for Raspberry Pi on 6.12) answer that writev with EFAULT, so the socket is
+        // destroyed mid-frame and every client silently drops and reconnects forever. A one-byte
+        // payload keeps the protocol semantics — the pong listener never inspects it — while leaving
+        // the iovec well-formed.
+        socket.ping(PING_PAYLOAD)
       }
     }, this.heartbeatIntervalMs)
     this.heartbeatTimer.unref()

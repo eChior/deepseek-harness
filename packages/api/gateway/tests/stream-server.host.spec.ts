@@ -36,8 +36,11 @@ describe('Remote stream mux server carrier lifecycle', () => {
 
     const ping = once(client, 'ping')
     const pong = once(serverSocket, 'pong')
-    expect((await ping)[0]).toEqual(Buffer.alloc(0))
-    expect((await pong)[0]).toEqual(Buffer.alloc(0))
+    // The heartbeat carries a one-byte payload by design: an empty control frame makes Node emit a
+    // writev whose iovec array holds a zero-length entry, and some aarch64 kernels answer that with
+    // EFAULT, killing the socket (see stream-server.ts). The pong echoes the same byte.
+    expect((await ping)[0]).toEqual(Buffer.from([0x00]))
+    expect((await pong)[0]).toEqual(Buffer.from([0x00]))
     expect(messages).not.toHaveBeenCalled()
 
     const closingPing = vi.spyOn(serverSocket, 'ping')

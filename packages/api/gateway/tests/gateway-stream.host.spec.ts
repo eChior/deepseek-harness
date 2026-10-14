@@ -888,7 +888,7 @@ describe('Typert Remote streams', () => {
     })
     const ping = once(socket, 'ping')
     await once(socket, 'open')
-    expect((await ping)[0]).toEqual(Buffer.alloc(0))
+    expect((await ping)[0]).toEqual(Buffer.from([0x00]))
 
     socket.close()
     await once(socket, 'close')

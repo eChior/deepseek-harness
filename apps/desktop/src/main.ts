@@ -768,9 +768,6 @@ async function main(): Promise<void> {
     const requested = new URL(details.url)
     if (requested.host !== target.host) { callback({}); return }
     const headers = Object.fromEntries(Object.entries(details.requestHeaders).map(([name, value]) => [name.toLowerCase(), value]))
-    if (process.env.DSH_DESKTOP_DEBUG_WS === '1') {
-      process.stderr.write(`[ws] ${requested.href} origin=${headers.origin ?? 'absent'} cookie=${headers.cookie === undefined ? 'absent' : 'present'}\n`)
-    }
     // Chromium serialises the origin of a non-standard scheme as "null", and a request issued from
     // an Electron custom protocol can carry no Origin header at all. Cancelling on anything but the
     // literal page origin therefore killed the renderer's own WebSocket: the stream came up and
@@ -1155,11 +1152,6 @@ async function main(): Promise<void> {
     }
     window.on('closed', () => { if (mainWindow === window) mainWindow = undefined })
     window.webContents.on('console-message', (details) => {
-      // Field diagnosis: a renderer problem that never becomes fatal (a reconnect loop, for one)
-      // leaves no trace in the terminal. DSH_DESKTOP_DEBUG_CONSOLE=1 mirrors every renderer message.
-      if (process.env.DSH_DESKTOP_DEBUG_CONSOLE === '1') {
-        process.stderr.write(`[renderer:${details.level}] ${details.sourceId}:${String(details.lineNumber)} ${details.message}\n`)
-      }
       if (details.level !== 'error') return
       rendererConsole.push(`${details.sourceId}:${String(details.lineNumber)} ${details.message}`)
     })
