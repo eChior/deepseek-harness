@@ -24,6 +24,16 @@ if [ -f '/opt/${sanitizedProductName}/chrome-sandbox' ]; then
     chmod 4755 '/opt/${sanitizedProductName}/chrome-sandbox' || true
 fi
 
+# Chromium resolves its ozone platform before the main bundle is evaluated, so the
+# app.commandLine.appendSwitch() in main.ts lands too late: on Kylin the app still starts on
+# Wayland and dies before a window appears, and only a hand-typed --ozone-platform=x11 gets it
+# running. Put the switches on the launcher itself so a menu click behaves like that command line:
+# X11 for the backend, and the panel's 1.5 scale for the 2160x1440 screens this build targets.
+MENU_ENTRY='/usr/share/applications/${executable}.desktop'
+if [ -f "$MENU_ENTRY" ] && ! grep -q -- '--ozone-platform' "$MENU_ENTRY"; then
+    sed -i 's|^\(Exec="[^"]*"\) |\1 --ozone-platform=x11 --force-device-scale-factor=1.5 |' "$MENU_ENTRY" || true
+fi
+
 if hash update-mime-database 2>/dev/null; then
     update-mime-database /usr/share/mime || true
 fi
