@@ -10,16 +10,17 @@ name: Desktop Windows
 
 on:
   workflow_dispatch:
-  # The push trigger stays off while this fork ships Linux only, so a desktop change cannot fire a
-  # Windows runner. Restore the block below to re-enable it.
-  # push:
-  #   branches:
-  #     - enhanced
-  #   paths:
-  #     - 'apps/desktop/**'
-  #     - '.github/workflows/desktop-windows.yml'
-  #     - 'package.json'
-  #     - 'pnpm-lock.yaml'
+  # This fork ships both installers, so a desktop change rebuilds both. The paths stay narrow
+  # (shell, packages, and lockfile) so a documentation-only edit cannot burn a Windows runner.
+  push:
+    branches:
+      - enhanced
+    paths:
+      - 'apps/desktop/**'
+      - 'packages/**'
+      - '.github/workflows/desktop-windows.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
 
 permissions:
   contents: read

@@ -10,6 +10,7 @@ on:
     branches: [enhanced]
     paths:
       - 'apps/desktop/**'
+      - 'packages/**'
       - '.github/workflows/desktop-linux.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
