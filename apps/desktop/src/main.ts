@@ -254,6 +254,14 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     // GTK desktops draw this menu bar inside the window, where it costs a full row on top of the
     // window manager's own title bar. Keep it reachable with Alt instead of always visible.
     ...(process.platform === 'linux' ? { autoHideMenuBar: true } : {}),
+    // Linux panels and task switchers read the icon off the window itself. The menu entry having
+    // the right icon is not enough: without this the running app shows the theme's generic
+    // executable glyph, and StartupWMClass only aligns the two once the window carries it too.
+    ...(process.platform === 'linux' ? {
+      icon: nativeImage.createFromPath(app.isPackaged
+        ? join(process.resourcesPath, 'icon.png')
+        : join(app.getAppPath(), 'resources', 'icon.png')),
+    } : {}),
     ...(process.platform === 'win32' && primary ? {
       titleBarStyle: 'hidden' as const,
       titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),

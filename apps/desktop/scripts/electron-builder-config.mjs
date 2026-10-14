@@ -35,6 +35,13 @@ import {
 } from './macos-app-update-config.mjs'
 
 /**
+ * electron-builder's own dependency list for deb targets. Declaring `depends` replaces that list
+ * wholesale instead of extending it, so a project that needs one more library has to repeat the
+ * rest of it here.
+ */
+const DEFAULT_DEB_DEPENDS = ['libgtk-3-0', 'libnotify4', 'libnss3', 'libxss1', 'libxtst6', 'xdg-utils', 'libatspi2.0-0', 'libuuid1', 'libsecret-1-0']
+
+/**
  * Create electron-builder configuration from one release environment.
  * @param {NodeJS.ProcessEnv} env - Packaging environment.
  * @param {NodeJS.Platform} hostPlatform - Build-host platform used when no explicit target is present.
@@ -263,6 +270,11 @@ export function createElectronBuilderConfig(
       target: ['AppImage', 'deb', 'tar.gz'],
     },
     deb: {
+      // The stock list stops at the GUI toolkits. Chromium publishes its Linux tray icon as a
+      // StatusNotifierItem through libappindicator, so a machine without that library shows no
+      // tray icon at all even though the process creates one. Kylin and UOS ship either the
+      // ayatana fork or the original, hence the alternatives syntax.
+      depends: [...DEFAULT_DEB_DEPENDS, 'libayatana-appindicator3-1 | libappindicator3-1'],
       // Domestic Linux (Kylin/UOS) needs the sandbox helper marked SUID and the hicolor cache
       // refreshed before the menu entry shows its icon; the stock template does neither.
       afterInstall: fileURLToPath(new URL('./linux-after-install.sh', import.meta.url)),
