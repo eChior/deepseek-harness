@@ -16,14 +16,15 @@ vi.mock('@deepseek-ai/libreoffice-kit', async (importOriginal) => {
     createConverter: async (): Promise<Converter> => {
       engines.built += 1
       const answer = { backend: 'wasm' as const, missingFonts: [] }
-      return {
+      const stub: Converter = {
         backend: 'wasm',
         render: async () => { engines.calls.push('render'); return answer },
         convert: async () => { engines.calls.push('convert'); return answer },
         renderImages: async () => { engines.calls.push('renderImages'); return { backend: 'wasm' as const, pages: [] } },
         recalculate: async () => { engines.calls.push('recalculate'); return answer },
         dispose: async () => { engines.calls.push('dispose') },
-      } as unknown as Converter
+      }
+      return stub
     },
   }
 })

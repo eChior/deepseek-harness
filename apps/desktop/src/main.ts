@@ -47,6 +47,7 @@ import { DesktopUpdateJournal } from './update-journal.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
 import { desktopUpdateErrorSummary, presentDesktopUpdate } from './update-presentation.ts'
+import { resolveReleasePage } from './update-source.ts'
 import { desktopErrorState } from './startup-error.ts'
 import { readDesktopLoginShellEnvironment, resolveDesktopLoginShellConfig } from './login-shell-environment.ts'
 import { DesktopMandatoryUpdatePolicy, resolveDesktopPolicyConfig, type DesktopPolicyState } from './mandatory-update-policy.ts'
@@ -962,6 +963,19 @@ async function main(): Promise<void> {
           return
         }
         if (state.phase !== 'available' && !(state.phase === 'error' && state.failedOperation === 'download')) return
+        if (process.platform === 'linux') {
+          // electron-builder names an AppImage in the Linux channel metadata, and this lane packages
+          // only a deb, so a packaged download would ask for a file that was never published. The
+          // release page carries the deb the user installs by hand instead.
+          if (!manual) return
+          const result = await ordinaryMessageBox({ title: locale.messages.updateCheckTitle,
+            message: formatDesktopMessage(locale.messages.updateAvailable, { version: state.version ?? '' }),
+            detail: locale.messages.updateOpenPageDetail,
+            buttons: [locale.messages.updateOpenPage], cancelId: 1 })
+          if (result.response !== 0) return
+          await shell.openExternal(await resolveReleasePage())
+          return
+        }
         if (manual) {
           const result = await ordinaryMessageBox({ title: locale.messages.updateCheckTitle,
             message: formatDesktopMessage(locale.messages.updateAvailable, { version: state.version ?? '' }),

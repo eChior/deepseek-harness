@@ -27,6 +27,11 @@ export function releaseDownloadUrl(origin: string, repository: string, tag: stri
   return `${trimOrigin(origin)}/${repository}/releases/download/${tag}`
 }
 
+/** Human-facing release page for one tag. */
+export function releasePageUrl(origin: string, repository: string, tag: string): string {
+  return `${trimOrigin(origin)}/${repository}/releases/tag/${tag}`
+}
+
 /** Read one string field from an unknown JSON member. */
 function stringField(value: unknown, key: string): string | undefined {
   if (typeof value !== 'object' || value === null) return undefined
@@ -57,10 +62,10 @@ export function newestReleaseTag(payload: unknown): string | undefined {
  * @param origin - Release origin; defaults to this build's own Gitea instance.
  * @param repository - `owner/name` of the release repository.
  * @param fetchImpl - Transport seam; tests replace it instead of reaching the network.
- * @returns Absolute download directory that electron-updater reads channel metadata from.
+ * @returns The newest published tag.
  * @throws {Error} When the origin answers with a non-success status or publishes no release.
  */
-export async function resolveReleaseFeed(
+async function newestTag(
   origin: string = RELEASE_ORIGIN,
   repository: string = RELEASE_REPOSITORY,
   fetchImpl: typeof fetch = fetch,
@@ -72,5 +77,43 @@ export async function resolveReleaseFeed(
   }
   const tag = newestReleaseTag(await response.json())
   if (tag === undefined) throw new Error('desktop update: the release repository publishes no release')
-  return releaseDownloadUrl(origin, repository, tag)
+  return tag
+}
+
+/**
+ * Absolute download directory that electron-updater reads channel metadata from.
+ *
+ * @param origin - Release origin; defaults to this build's own Gitea instance.
+ * @param repository - `owner/name` of the release repository.
+ * @param fetchImpl - Transport seam; tests replace it instead of reaching the network.
+ * @returns Absolute download directory of the newest published release.
+ * @throws {Error} When the origin answers with a non-success status or publishes no release.
+ */
+export async function resolveReleaseFeed(
+  origin: string = RELEASE_ORIGIN,
+  repository: string = RELEASE_REPOSITORY,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  return releaseDownloadUrl(origin, repository, await newestTag(origin, repository, fetchImpl))
+}
+
+/**
+ * Absolute page a user opens to install this build by hand.
+ *
+ * The Linux lane ships a deb, while the channel metadata electron-builder writes names the
+ * AppImage that lane never builds, so a packaged download would ask for a file that is not
+ * there. The release page is the address that always resolves on that target.
+ *
+ * @param origin - Release origin; defaults to this build's own Gitea instance.
+ * @param repository - `owner/name` of the release repository.
+ * @param fetchImpl - Transport seam; tests replace it instead of reaching the network.
+ * @returns Absolute release page of the newest published release.
+ * @throws {Error} When the origin answers with a non-success status or publishes no release.
+ */
+export async function resolveReleasePage(
+  origin: string = RELEASE_ORIGIN,
+  repository: string = RELEASE_REPOSITORY,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  return releasePageUrl(origin, repository, await newestTag(origin, repository, fetchImpl))
 }

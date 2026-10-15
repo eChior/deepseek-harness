@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { newestReleaseTag, releaseDownloadUrl, resolveReleaseFeed } from '../src/update-source.ts'
+import { newestReleaseTag, releaseDownloadUrl, releasePageUrl, resolveReleaseFeed, resolveReleasePage } from '../src/update-source.ts'
 
 describe('release feed resolution', () => {
   it('builds one download directory per tag and tolerates a trailing origin separator', () => {
@@ -25,8 +25,23 @@ describe('release feed resolution', () => {
     ]), { status: 200 }))
     await expect(resolveReleaseFeed('http://host:3000', 'ITPublic/deepseek-harness', fetchImpl))
       .resolves.toBe('http://host:3000/ITPublic/deepseek-harness/releases/download/v0.2.0-rc.2-hrzszy')
-    expect(String(fetchImpl.mock.calls[0]?.[0]))
+    expect(fetchImpl.mock.calls[0]?.[0])
       .toBe('http://host:3000/api/v1/repos/ITPublic/deepseek-harness/releases?limit=20')
+  })
+
+  it('builds the human-facing page for one tag and tolerates a trailing origin separator', () => {
+    expect(releasePageUrl('http://host:3000', 'ITPublic/deepseek-harness', 'v1.2.3'))
+      .toBe('http://host:3000/ITPublic/deepseek-harness/releases/tag/v1.2.3')
+    expect(releasePageUrl('http://host:3000/', 'ITPublic/deepseek-harness', 'v1.2.3'))
+      .toBe('http://host:3000/ITPublic/deepseek-harness/releases/tag/v1.2.3')
+  })
+
+  it('resolves the newest published release into the page a user opens by hand', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify([
+      { draft: false, tag_name: 'v0.2.0-rc.2-hrzszy' },
+    ]), { status: 200 }))
+    await expect(resolveReleasePage('http://host:3000', 'ITPublic/deepseek-harness', fetchImpl))
+      .resolves.toBe('http://host:3000/ITPublic/deepseek-harness/releases/tag/v0.2.0-rc.2-hrzszy')
   })
 
   it('rejects a failing lookup and an empty release list', async () => {
