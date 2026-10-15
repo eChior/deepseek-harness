@@ -1,0 +1,50 @@
+diff --git a/lib/repositories.js b/lib/repositories.js
+index 4dfc519f7c86cfdf47cbb3ecf2f91f63d2bf16fc..772d224f744dda12abf2e26f681e4e00ea1a2c9d 100644
+--- a/lib/repositories.js
++++ b/lib/repositories.js
+@@ -8,6 +8,18 @@ const LIMIT = 32 << 20;
+ const STATE_LIMIT = 16 << 20;
+ const STATE_READ_LIMIT = 64 << 20;
+ const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
++/** Gitea origin serving the distribution's skill repositories; `DSH_SKILLS_MANAGER_ORIGIN` overrides it. */
++const REPOSITORY_ORIGIN = (process.env.DSH_SKILLS_MANAGER_ORIGIN || "http://10.151.5.175:3000").replace(/\/+$/, "");
++/** Repository the manager starts with, so a fresh install opens on this distribution's skills. */
++const DEFAULT_REPOSITORY = { owner: "itpublic", name: "dsh-skills", ref: "main", subdirectory: "skills" };
++function defaultRepositories() {
++  return [{ ...DEFAULT_REPOSITORY, id: hash(JSON.stringify(DEFAULT_REPOSITORY)).slice(0, 24), skills: [], commit: null, refreshedAt: null }];
++}
++function archiveUrl(owner, name, ref) {
++  if (!REPOSITORY_ORIGIN) return `https://codeload.github.com/${owner}/${name}/zip/${ref.split("/").map(encodeURIComponent).join("/")}`;
++  const branch = ref.replace(/^refs\/heads\//, "").replace(/^refs\/tags\//, "");
++  return `${REPOSITORY_ORIGIN}/api/v1/repos/${owner}/${name}/archive/${branch.split("/").map(encodeURIComponent).join("/")}.zip`;
++}
+ function failure(message, code = "error.repo.invalid", params) {
+   return Object.assign(new Error(message), { code, statusCode: 400, ...params && typeof params === "object" && !Array.isArray(params) ? { params } : {} });
+ }
+@@ -174,7 +186,7 @@ function createRepositoryManager({ fetchImpl = globalThis.fetch, log, registered
+       return value;
+     } catch (caught) {
+       const error = caught;
+-      if (error.code === "ENOENT") return { version: 1, repositories: [], installs: [] };
++      if (error.code === "ENOENT") return { version: 1, repositories: defaultRepositories(), installs: [] };
+       throw failure("\u4ED3\u5E93\u72B6\u6001\u6587\u4EF6\u635F\u574F\u6216\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u8BF7\u4FDD\u7559\u6587\u4EF6\u5E76\u4FEE\u590D\u540E\u91CD\u8BD5", "error.repo.state");
+     }
+   }
+@@ -241,7 +253,7 @@ function createRepositoryManager({ fetchImpl = globalThis.fetch, log, registered
+     }
+   }
+   async function download(repo) {
+-    if (/^[a-f0-9]{40}$/.test(repo.commit || "")) return decodeRepositoryArchive(await request(`https://codeload.github.com/${repo.owner}/${repo.name}/zip/${repo.commit}`));
++    if (/^[a-f0-9]{40}$/.test(repo.commit || "")) return decodeRepositoryArchive(await request(archiveUrl(repo.owner, repo.name, repo.commit)));
+     if (!/^[a-f0-9]{64}$/.test(repo.commit || "")) throw failure("\u8BF7\u5148\u5237\u65B0\u4ED3\u5E93");
+     try {
+       const target = join(await cacheDirectory(), `${repo.id}-${repo.commit}.zip`);
+@@ -258,7 +270,7 @@ function createRepositoryManager({ fetchImpl = globalThis.fetch, log, registered
+     const refs = repo.ref && repo.ref !== "HEAD" ? [`refs/heads/${repo.ref}`, `refs/tags/${repo.ref}`] : ["HEAD", "refs/heads/main", "refs/heads/master"];
+     for (let i = 0; i < refs.length; i++) {
+       try {
+-        return await request(`https://codeload.github.com/${repo.owner}/${repo.name}/zip/${refs[i].split("/").map(encodeURIComponent).join("/")}`);
++        return await request(archiveUrl(repo.owner, repo.name, refs[i]));
+       } catch (caught) {
+         const error = caught;
+         if (error.httpStatus !== 404 || i === refs.length - 1) throw error;

@@ -62,8 +62,8 @@ interface Origin {
   readonly archiveRequests: string[]
 }
 
-/** A local gitea stand-in serving one archive and one branch record. */
-async function origin(): Promise<Origin> {
+/** A local gitea stand-in serving one archive per request, then one branch record. */
+async function origin(archives: Buffer[] = [giteaArchive()]): Promise<Origin> {
   const archiveRequests: string[] = []
   const server = createServer((request, response) => {
     if (request.url === '/api/v1/repos/ITPublic/dsh-skills/branches/main') {
@@ -74,7 +74,7 @@ async function origin(): Promise<Origin> {
     archiveRequests.push(request.url ?? '')
     if (request.url === '/ITPublic/dsh-skills/archive/main.tar.gz') {
       response.writeHead(200, { 'content-type': 'application/gzip' })
-      response.end(gzipSync(giteaArchive()))
+      response.end(gzipSync(archives[Math.min(archiveRequests.length - 1, archives.length - 1)] ?? giteaArchive()))
       return
     }
     response.writeHead(404)
@@ -203,15 +203,17 @@ describe('Config', () => {
 describe('SkillRepository', () => {
   it('unpacks the branch archive into the mirror without a git binary', async () => {
     const { remote, archiveRequests } = await origin()
-    const directory = join(await tempDir('skill-home'), 'skills-repo')
+    const home = await tempDir('skill-home')
+    const directory = join(home, 'skills-repo')
     const ctx = new Context()
-    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory, skillsDirectory: 'skills' })
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory, skillsDirectory: 'skills', publishDirectory: join(home, 'skills') })
     const status = await ctx.skillRepo.sync()
     expect(status.state).toBe('ready')
     expect(status.revision).toBe('abc1234def')
     expect(archiveRequests).toEqual(['/ITPublic/dsh-skills/archive/main.tar.gz'])
     expect(await readFile(join(directory, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('---\nname: demo\n---\n')
     expect(status.skillsDirectory).toBe(join(directory, 'skills'))
+    expect(await readFile(join(home, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('---\nname: demo\n---\n')
     await fiber.dispose()
   })
 
@@ -221,11 +223,57 @@ describe('SkillRepository', () => {
     const directory = join(home, 'skills-repo')
     await writeFile(join(home, 'placeholder'), '')
     const ctx = new Context()
-    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory, skillsDirectory: 'skills' })
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory, skillsDirectory: 'skills', publishDirectory: join(home, 'skills') })
     await ctx.skillRepo.sync()
     const status = await ctx.skillRepo.sync()
     expect(status.state).toBe('ready')
     await expect(stat(`${directory}.staging`)).rejects.toThrow()
+    await fiber.dispose()
+  })
+
+  it('publishes every synced skill into the user skill root', async () => {
+    const { remote } = await origin()
+    const home = await tempDir('skill-home')
+    const published = join(home, 'skills')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory: join(home, 'skills-repo'), publishDirectory: published })
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('ready')
+    expect(status.publishDirectory).toBe(published)
+    expect(await readFile(join(published, 'demo', 'SKILL.md'), 'utf8')).toBe('---\nname: demo\n---\n')
+    expect(JSON.parse(await readFile(join(home, '.dsh-skill-repo-published.json'), 'utf8'))).toEqual(['demo'])
+    await fiber.dispose()
+  })
+
+  it('keeps a hand-written skill that shares a name with a synced one', async () => {
+    const { remote } = await origin()
+    const home = await tempDir('skill-home')
+    const published = join(home, 'skills')
+    await writeArchive([{ path: 'demo/SKILL.md', content: Buffer.from('mine\n', 'utf8'), directory: false }], published)
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory: join(home, 'skills-repo'), publishDirectory: published })
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('ready')
+    expect(await readFile(join(published, 'demo', 'SKILL.md'), 'utf8')).toBe('mine\n')
+    await fiber.dispose()
+  })
+
+  it('drops a published skill the archive no longer carries', async () => {
+    const emptied = Buffer.concat([
+      tarEntry('dsh-skills-main/', Buffer.alloc(0), '5'),
+      tarEntry('dsh-skills-main/skills/', Buffer.alloc(0), '5'),
+      Buffer.alloc(1024),
+    ])
+    const { remote } = await origin([giteaArchive(), emptied])
+    const home = await tempDir('skill-home')
+    const published = join(home, 'skills')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory: join(home, 'skills-repo'), publishDirectory: published })
+    await ctx.skillRepo.sync()
+    expect(await readFile(join(published, 'demo', 'SKILL.md'), 'utf8')).toBe('---\nname: demo\n---\n')
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('ready')
+    await expect(stat(join(published, 'demo'))).rejects.toThrow()
     await fiber.dispose()
   })
 

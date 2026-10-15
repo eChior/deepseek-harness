@@ -298,15 +298,13 @@
 
     # Mirrors this distribution's skill repository into the DSH home before the
     # filesystem provider scans, so a released skill reaches users without a new
-    # installer. The provider reads the mirror rather than the network.
+    # installer. Every synced skill is published into the user skill root, which
+    # the provider below already reads.
     - id: skill-repo
       name: '@deepseek-ai/dsh-skill-repo'
 
     - id: skill-filesystem
       name: '@deepseek-ai/dsh-skill-filesystem'
-      config:
-        customSkillDirs:
-          - !!js dshHomePath('skills-repo', 'skills')
 
     - id: skill-badge
       name: '@deepseek-ai/dsh-skill-badge'

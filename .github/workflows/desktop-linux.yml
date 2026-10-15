@@ -56,6 +56,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Stamp the build version
+        run: |
+          set -euo pipefail
+          # One product version can be built many times, and electron-updater compares versions
+          # before it downloads anything, so every run needs its own ordered version. The date
+          # keeps a day's builds adjacent in the feed and the commit count orders them.
+          product=$(node -p "require('./apps/desktop/package.json').version")
+          stamp="${product}.$(date -u +%Y%m%d).$(git rev-list --count HEAD)"
+          echo "DSH_DESKTOP_BUILD_VERSION=${stamp}" >> "$GITHUB_ENV"
+          echo "build version: ${stamp}"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --reporter=append-only
 

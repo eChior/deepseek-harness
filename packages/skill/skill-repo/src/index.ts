@@ -3,9 +3,9 @@
  *
  * This distribution ships its skills from a gitea repository instead of baking
  * them into the installer, so adding a skill does not require a new build. The
- * provider only maintains the mirror on disk — `skill-filesystem` picks the
- * directory up through `customSkillDirs`, so a failed or offline sync costs
- * nothing more than a stale skill set.
+ * provider keeps a mirror on disk and publishes every skill it carries into the
+ * user skill root, which `skill-filesystem` already scans, so a failed or
+ * offline sync costs nothing more than a stale skill set.
  *
  * The mirror is read from the branch archive over HTTP rather than from a `git
  * clone`: the desktop application has to work on machines that never installed a
@@ -14,7 +14,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import z from '@deepseek-ai/schemastery'
-import { mkdir, rename, rm } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { archiveUrl, branchRevision, downloadArchive, readArchive, writeArchive } from './archive.ts'
 
@@ -32,6 +32,9 @@ const STAGING_SUFFIX = '.staging'
 /** The archive wraps everything in one `<repository>-<branch>` directory. */
 const ARCHIVE_ROOT_COMPONENTS = 1
 
+/** File beside the mirror that names the skills this provider published. */
+const PUBLISH_MANIFEST = '.dsh-skill-repo-published.json'
+
 export interface Config {
   /** Set to false to keep the provider from touching the network at all. */
   enabled?: boolean
@@ -43,6 +46,8 @@ export interface Config {
   directory?: string
   /** Subdirectory of the mirror that holds the skills themselves. */
   skillsDirectory?: string
+  /** Skill root the synced skills are published into. Defaults to `$DSH_HOME/skills`. */
+  publishDirectory?: string
   /** Per-request timeout for the archive download and the branch lookup. */
   timeoutMs?: number
 }
@@ -53,13 +58,16 @@ export const Config: z<Config> = z.object({
   branch: z.string().default('main'),
   directory: z.string().default(dshHomePath('skills-repo')),
   skillsDirectory: z.string().default('skills'),
+  publishDirectory: z.string().default(dshHomePath('skills')),
   timeoutMs: z.number().default(120_000),
 })
 
 export interface SkillRepositoryStatus {
   readonly directory: string
-  /** Directory to hand to the skill provider, whether or not the sync worked. */
+  /** Directory inside the mirror that holds the skills the archive carries. */
   readonly skillsDirectory: string
+  /** Skill root the synced skills are published into. */
+  readonly publishDirectory: string
   readonly revision: string | null
   readonly state: 'idle' | 'syncing' | 'ready' | 'failed'
   readonly detail: string | null
@@ -86,6 +94,7 @@ export class SkillRepository extends Service {
       branch: config.branch ?? 'main',
       directory: config.directory ?? dshHomePath('skills-repo'),
       skillsDirectory: config.skillsDirectory ?? 'skills',
+      publishDirectory: config.publishDirectory ?? dshHomePath('skills'),
       timeoutMs: config.timeoutMs ?? 120_000,
     }
     const directory = this.config.directory
@@ -93,6 +102,7 @@ export class SkillRepository extends Service {
     this.current = {
       directory,
       skillsDirectory: join(directory, skillsDirectory),
+      publishDirectory: this.config.publishDirectory,
       revision: null,
       state: 'idle',
       detail: null,
@@ -128,7 +138,7 @@ export class SkillRepository extends Service {
   }
 
   private async mirror(): Promise<SkillRepositoryStatus> {
-    const { directory, skillsDirectory } = this.current
+    const { directory } = this.current
     this.current = { ...this.current, state: 'syncing', detail: null }
     const staging = `${directory}${STAGING_SUFFIX}`
     try {
@@ -141,16 +151,87 @@ export class SkillRepository extends Service {
        * failed download never leaves the skill directory empty. */
       await rm(directory, { recursive: true, force: true })
       await rename(staging, directory)
+      const published = await this.publish(this.current.skillsDirectory)
       const revision = await branchRevision(this.config.url, this.config.branch, this.config.timeoutMs)
       this.current = { ...this.current, state: 'ready', revision, detail: null }
-      this.ctx.logger.info(`skill-repo: ${this.config.url} at ${revision ?? 'an unreported revision'}`)
+      this.ctx.logger.info(`skill-repo: ${this.config.url} at ${revision ?? 'an unreported revision'}; published ${String(published.length)} skill(s) to ${this.current.publishDirectory}`)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       await rm(staging, { recursive: true, force: true })
       this.current = { ...this.current, state: 'failed', detail }
-      this.ctx.logger.warn(`skill-repo: keeping the existing mirror at ${skillsDirectory}: ${detail}`)
+      this.ctx.logger.warn(`skill-repo: keeping the skills already on disk: ${detail}`)
     }
     return this.current
+  }
+
+  /**
+   * Copy every skill the archive carries into the user skill root. A directory
+   * this provider published before is replaced; one it never published is left
+   * alone, so a hand-written skill that shares a name survives the sync.
+   */
+  private async publish(source: string): Promise<string[]> {
+    const target = this.current.publishDirectory
+    const manifest = join(dirname(this.current.directory), PUBLISH_MANIFEST)
+    const owned = await readPublished(manifest)
+    const names = await listSkillDirectories(source)
+    await mkdir(target, { recursive: true })
+    const published: string[] = []
+    for (const name of names) {
+      const destination = join(target, name)
+      if (!owned.includes(name) && await exists(destination)) {
+        this.ctx.logger.warn(`skill-repo: keeping ${destination}, which this provider never published`)
+        continue
+      }
+      await rm(destination, { recursive: true, force: true })
+      await cp(join(source, name), destination, { recursive: true })
+      published.push(name)
+    }
+    for (const name of owned) {
+      if (!published.includes(name)) await rm(join(target, name), { recursive: true, force: true })
+    }
+    await writeFile(manifest, `${JSON.stringify(published, null, 2)}\n`, 'utf8')
+    return published
+  }
+}
+
+/** Directory names under `source` that look like skills. */
+async function listSkillDirectories(source: string): Promise<string[]> {
+  let items
+  try {
+    items = await readdir(source, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const names: string[] = []
+  for (const item of items) {
+    if (!item.isDirectory() || item.name.startsWith('.')) continue
+    try {
+      if (!(await stat(join(source, item.name, 'SKILL.md'))).isFile()) continue
+    } catch {
+      continue
+    }
+    names.push(item.name)
+  }
+  return names.sort()
+}
+
+/** Names recorded by the previous sync, or an empty list when there is none. */
+async function readPublished(manifest: string): Promise<string[]> {
+  try {
+    const value: unknown = JSON.parse(await readFile(manifest, 'utf8'))
+    return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** Whether `path` exists at all. */
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch {
+    return false
   }
 }
 
