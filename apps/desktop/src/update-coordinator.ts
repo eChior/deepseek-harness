@@ -18,7 +18,7 @@ const { autoUpdater } = electronUpdater
  * state, so a test cannot assert a plain emitter to `AppUpdater`; naming the members here keeps
  * the network/platform test boundary typed without an assertion to `unknown`.
  */
-export interface DesktopUpdaterAdapter {
+export interface DesktopUpdaterAdapter extends Pick<EventEmitter, 'on' | 'off' | 'emit'> {
   /** Whether a check downloads without asking; this coordinator always drives both steps itself. */
   autoDownload: boolean
   /** Whether a quit installs whatever finished downloading; installation stays explicit. */
@@ -29,9 +29,6 @@ export interface DesktopUpdaterAdapter {
   allowPrerelease: boolean
   /** Whether a lower version may replace the installed one. */
   allowDowngrade: boolean
-  on(event: string, listener: (...args: never[]) => void): unknown
-  off(event: string, listener: (...args: never[]) => void): unknown
-  emit(event: string, ...args: unknown[]): boolean
   /** Points the updater at this distribution's release feed. */
   setFeedURL(options: Parameters<AppUpdater['setFeedURL']>[0]): void
   /** Resolves the feed's newest release, or `null` when the updater reports none. */

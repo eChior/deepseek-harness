@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Convert Office documents to PDFs on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. The provider accepts DOC, DOCX, XLS, XLSX, PPT, and PPTX. OOXML conversion returns missing-font names; binary Office conversion returns an empty list.
+Convert Office documents to PDFs on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. On Linux, where the kit publishes no engine, the provider drives the installed WPS Office through a command-line shim instead. The provider accepts DOC, DOCX, XLS, XLSX, PPT, and PPTX. OOXML conversion returns missing-font names; binary Office conversion returns an empty list.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ The [Web bundle](../../bundle/web-app/README.md) mounts this provider as `office
 
 Callers submit authorized source identity, version, optional byte size, a deferred bounded read, Office extension, and scheduling priority through `ctx.officeToPdf.convert()`. A changed source version rejects conversion. Results contain caller-owned PDF bytes, missing fonts, a cache key, and a conversion generation that changes on configuration replacement. Cancellation rejects with its reason; conversion failures use `OfficeToPdfError`.
 
-The provider depends on the independently published [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit/tree/main/packages/entry) npm API at kit version `0.1.1`. Application packaging selects the matching native package declared in the kit’s `optionalDependencies`, or WASM when no native package is declared for that target. A missing declared native engine rejects packaging without selecting WASM. The [platform engine decision](../../../.agents/notes/implemented/architecture/2026-09-15-platform-office-engines.md) defines installation and packaging; the [release ownership decision](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) defines the independent kit and Harness responsibilities.
+The provider depends on the independently published [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit/tree/main/packages/entry) npm API at kit version `0.1.5`. Application packaging selects the matching native package declared in the kit’s `optionalDependencies`, or WASM when no native package is declared for that target. A missing declared native engine rejects packaging without selecting WASM. The desktop shell additionally publishes its bundled WPS Office shim in `DSH_WPS_OFFICE_CLI`; when that variable names an existing absolute file, the provider converts through it instead of the kit, which is the only engine available on Linux. The [platform engine decision](../../../.agents/notes/implemented/architecture/2026-09-15-platform-office-engines.md) defines installation and packaging; the [release ownership decision](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) defines the independent kit and Harness responsibilities.
 
 Browsers request PDFs through the `officeToPdf.render` Remote method with a Session identity, Office path, and priority. This entry uses `workspaceFiles` for authorization and source versions, then reads raw bytes through `fs.readBytes` within the conversion reservation. In-process `convert()` does not require those services. Responses retain the source path and version and carry native PDF bytes through the binary Remote multipart transport, plus missing fonts and conversion generation. The `officeToPdf.generation` Remote method returns the current provider generation; `api/remotes` mounts the generated Client descriptor.
 
@@ -60,7 +60,7 @@ The defaults retain 8 PDFs/128 MiB and 64 source aliases, admit 32 readers and 8
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Invalid engine metadata, missing required assets, and conversion errors reject the request instead of switching engines. The shared WASM engine uses LibreOffice's CPU image filter. Native conversion uses its separate platform engine.
+Invalid engine metadata, missing required assets, and conversion errors reject the request instead of switching engines. The shared WASM engine uses LibreOffice's CPU image filter. Native conversion uses its separate platform engine. The WPS branch implements the same `Converter` contract and runs the shim as a child process over `process.execPath`, passing the input and output paths as arguments; it reports `unsupported-format` for the image and recalculation requests the kit supports but the shim does not.
 
 Each concurrent slot lazily creates and reuses one kit converter. The provider writes authorized input into a private temporary directory, reads a bounded regular PDF, and removes the directory before settling. Canceling an admitted reader does not block later queued work. Reader cancellation releases only that reader; the final reader and provider disposal cancel shared work. Disposal reports `unavailable` to outstanding readers and joins conversions and converter teardown. No runtime invariant companion is published because active operations and scratch cleanup have one lifetime owner.
 
@@ -92,6 +92,7 @@ None; conversion does not construct or modify model requests.
 <a id="known-limitations-and-deferred-work"></a>
 
 - Conversion fidelity and installed native/WASM assets belong to `@deepseek-ai/libreoffice-kit`; this provider neither searches for system LibreOffice nor downloads an engine at runtime.
+- The WPS shim converts through the Writer engine alone; the image and recalculation requests report `unsupported-format` in that branch instead of falling back to the kit.
 - Queue waiting time is not bounded by `timeoutMs`, which starts only when kit conversion begins.
 
 <a id="dev-note"></a>
