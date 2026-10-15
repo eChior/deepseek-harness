@@ -39,6 +39,7 @@ Mount the plugin on its own; every skill the repository carries is published int
 | `directory` | `$DSH_HOME/skills-repo` | Where the mirror lives. |
 | `skillsDirectory` | `skills` | Subdirectory of the mirror holding the skills the archive carries. |
 | `publishDirectory` | `$DSH_HOME/skills` | Skill root the synced skills are published into. |
+| `bundledDirectory` | the `assets/skills` copy inside this package | Skills used while no mirror exists yet and the remote stays unreachable. |
 | `timeoutMs` | `120000` | Per-request timeout. |
 
 ### When to choose it
@@ -57,6 +58,8 @@ Once the mirror is in place, `publish()` copies every directory the archive carr
 The sync reads the archive over HTTP and never runs a git binary, so a client machine that has no git installed still receives the distribution's skills. The revision is read from the host's branch endpoint and is reported as `null` when that endpoint does not answer.
 
 The provider never throws. An unreachable host, a refused archive, or a timeout is logged as a warning and written to `status.detail`; `skill-filesystem` keeps scanning whatever the mirror already contains.
+
+When the remote never answers and the machine has no mirror at all — a fresh install that has never seen the intranet — `seed()` copies the skills this package carries out of `bundledDirectory` through the same staging step, publishes them, and reports `source: 'bundled'` with a null revision. A machine that synced before keeps the remote copy instead, because that one is newer than the one this build shipped.
 
 ## Model Experience
 

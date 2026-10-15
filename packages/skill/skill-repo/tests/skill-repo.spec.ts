@@ -277,10 +277,32 @@ describe('SkillRepository', () => {
     await fiber.dispose()
   })
 
-  it('reports a failure instead of throwing when the remote is unreachable', async () => {
-    const missing = join(await tempDir('skill-home'), 'nope', 'repo')
+  it('falls back to the skills this build carries when no mirror exists yet', async () => {
+    const home = await tempDir('skill-home')
+    const published = join(home, 'skills')
     const ctx = new Context()
-    const fiber = await ctx.plugin(SkillRepo.default, { url: missing, directory: join(missing, 'mirror') })
+    const fiber = await ctx.plugin(SkillRepo.default, {
+      url: join(home, 'nope', 'repo'),
+      directory: join(home, 'skills-repo'),
+      publishDirectory: published,
+    })
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('ready')
+    expect(status.source).toBe('bundled')
+    expect(status.revision).toBeNull()
+    expect(status.detail).not.toBeNull()
+    expect(await readFile(join(published, 'tsd-reader', 'SKILL.md'), 'utf8')).toContain('tsd-reader')
+    await fiber.dispose()
+  })
+
+  it('still reports a failure when this build carries no skills to fall back on', async () => {
+    const home = await tempDir('skill-home')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, {
+      url: join(home, 'nope', 'repo'),
+      directory: join(home, 'skills-repo'),
+      bundledDirectory: join(home, 'no-such-bundled-copy'),
+    })
     const status = await ctx.skillRepo.sync()
     expect(status.state).toBe('failed')
     expect(status.detail).not.toBeNull()

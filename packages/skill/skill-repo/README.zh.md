@@ -39,6 +39,7 @@ kind: "package-reference"
 | `directory` | `$DSH_HOME/skills-repo` | 镜像所在目录。 |
 | `skillsDirectory` | `skills` | 镜像中存放压缩包所带技能的子目录。 |
 | `publishDirectory` | `$DSH_HOME/skills` | 同步来的技能发布到的技能根。 |
+| `bundledDirectory` | 本包内的 `assets/skills` 副本 | 尚无镜像、且远端始终不可达时使用的技能。 |
 | `timeoutMs` | `120000` | 每次请求的超时。 |
 
 ### 何时选用
@@ -57,6 +58,8 @@ kind: "package-reference"
 同步通过 HTTP 读取压缩包，从不调用 git 二进制，因此没装过 git 的客户端机器同样能收到发行版的技能。版本号取自宿主的分支接口，该接口无应答时上报为 `null`。
 
 该提供者从不抛错。宿主不可达、压缩包被拒或超时都只记一条警告并写入 `status.detail`；`skill-filesystem` 继续扫描镜像里已有的内容。
+
+当远端始终无应答、而这台机器根本没有镜像时 —— 从未连过内网的首次安装 —— `seed()` 会通过同样的暂存步骤把本包携带的技能从 `bundledDirectory` 复制出来并发布，同时以 `source: 'bundled'` 与空的版本号上报。此前同步成功过的机器保留远端那一份，因为它比本次构建携带的更新。
 
 <a id="model-experience"></a>
 

@@ -23,6 +23,7 @@
   },
   "files": [
     "lib/index.js",
+    "assets",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

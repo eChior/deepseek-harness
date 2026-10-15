@@ -16,6 +16,7 @@ import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import z from '@deepseek-ai/schemastery'
 import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { archiveUrl, branchRevision, downloadArchive, readArchive, writeArchive } from './archive.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -35,6 +36,13 @@ const ARCHIVE_ROOT_COMPONENTS = 1
 /** File beside the mirror that names the skills this provider published. */
 const PUBLISH_MANIFEST = '.dsh-skill-repo-published.json'
 
+/**
+ * Skills this distribution carries inside the installer. A machine that never
+ * reached the remote still receives a working skill set from them, so an
+ * offline install is not an install without skills.
+ */
+const BUNDLED_SKILLS = fileURLToPath(new URL('../assets/skills', import.meta.url))
+
 export interface Config {
   /** Set to false to keep the provider from touching the network at all. */
   enabled?: boolean
@@ -48,6 +56,11 @@ export interface Config {
   skillsDirectory?: string
   /** Skill root the synced skills are published into. Defaults to `$DSH_HOME/skills`. */
   publishDirectory?: string
+  /**
+   * Skills this build carries, used while no mirror exists yet and the remote is
+   * unreachable. Defaults to the copy inside this package.
+   */
+  bundledDirectory?: string
   /** Per-request timeout for the archive download and the branch lookup. */
   timeoutMs?: number
 }
@@ -59,6 +72,7 @@ export const Config: z<Config> = z.object({
   directory: z.string().default(dshHomePath('skills-repo')),
   skillsDirectory: z.string().default('skills'),
   publishDirectory: z.string().default(dshHomePath('skills')),
+  bundledDirectory: z.string().default(BUNDLED_SKILLS),
   timeoutMs: z.number().default(120_000),
 })
 
@@ -69,6 +83,8 @@ export interface SkillRepositoryStatus {
   /** Skill root the synced skills are published into. */
   readonly publishDirectory: string
   readonly revision: string | null
+  /** Where the skills on disk came from: the remote, this build, or nowhere yet. */
+  readonly source: 'remote' | 'bundled' | 'none'
   readonly state: 'idle' | 'syncing' | 'ready' | 'failed'
   readonly detail: string | null
 }
@@ -95,6 +111,7 @@ export class SkillRepository extends Service {
       directory: config.directory ?? dshHomePath('skills-repo'),
       skillsDirectory: config.skillsDirectory ?? 'skills',
       publishDirectory: config.publishDirectory ?? dshHomePath('skills'),
+      bundledDirectory: config.bundledDirectory ?? BUNDLED_SKILLS,
       timeoutMs: config.timeoutMs ?? 120_000,
     }
     const directory = this.config.directory
@@ -104,6 +121,7 @@ export class SkillRepository extends Service {
       skillsDirectory: join(directory, skillsDirectory),
       publishDirectory: this.config.publishDirectory,
       revision: null,
+      source: 'none',
       state: 'idle',
       detail: null,
     }
@@ -153,15 +171,48 @@ export class SkillRepository extends Service {
       await rename(staging, directory)
       const published = await this.publish(this.current.skillsDirectory)
       const revision = await branchRevision(this.config.url, this.config.branch, this.config.timeoutMs)
-      this.current = { ...this.current, state: 'ready', revision, detail: null }
+      this.current = { ...this.current, state: 'ready', revision, source: 'remote', detail: null }
       this.ctx.logger.info(`skill-repo: ${this.config.url} at ${revision ?? 'an unreported revision'}; published ${String(published.length)} skill(s) to ${this.current.publishDirectory}`)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       await rm(staging, { recursive: true, force: true })
+      if (await this.seed(staging, detail)) return this.current
       this.current = { ...this.current, state: 'failed', detail }
       this.ctx.logger.warn(`skill-repo: keeping the skills already on disk: ${detail}`)
     }
     return this.current
+  }
+
+  /**
+   * Fall back to the skills this build carries when the remote never answers and
+   * the machine has no mirror at all. A machine that synced before keeps what it
+   * already holds, because that copy came from the remote and is newer than the
+   * one this build shipped.
+   *
+   * The bundled copy goes through the same staging-then-rename step as a
+   * download, so a half-finished seed cannot leave an empty skill directory for
+   * the next sync to mistake for a mirror.
+   */
+  private async seed(staging: string, detail: string): Promise<boolean> {
+    const bundled = this.config.bundledDirectory
+    if (bundled === undefined) return false
+    if (await exists(this.current.skillsDirectory)) return false
+    try {
+      await rm(staging, { recursive: true, force: true })
+      await mkdir(join(staging, this.config.skillsDirectory), { recursive: true })
+      await cp(bundled, join(staging, this.config.skillsDirectory), { recursive: true })
+      await mkdir(dirname(this.current.directory), { recursive: true })
+      await rename(staging, this.current.directory)
+      const published = await this.publish(this.current.skillsDirectory)
+      this.current = { ...this.current, state: 'ready', revision: null, source: 'bundled', detail }
+      this.ctx.logger.info(`skill-repo: ${detail}; publishing the ${String(published.length)} skill(s) this build ships`)
+      return true
+    } catch (error) {
+      await rm(staging, { recursive: true, force: true })
+      const failure = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`skill-repo: the skills this build ships could not be published: ${failure}`)
+      return false
+    }
   }
 
   /**
