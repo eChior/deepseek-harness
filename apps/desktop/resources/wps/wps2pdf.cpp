@@ -1,8 +1,12 @@
-// wps2pdf —— 用 WPS 内核把 Word 文档转 PDF（Linux ARM64）
+// wps2pdf —— 用 WPS 内核把 Office 文档转 PDF（Linux ARM64）
 //
-// 原理：通过 WPS 的二次开发接口 librpcwpsapi_sysqt5.so（类 COM 接口）驱动
-// WPS 以 -automation 模式启动，调用 Documents.Open + Document.SaveAs(path, 17)。
-// 会话序列逆向自 PageOffice 客户端（详见同目录 REVERSE-ENGINEERING.md）。
+// 原理：通过 WPS 的二次开发接口（类 COM 接口）驱动 WPS 以 -automation 模式启动，
+// 调用集合的 Open + 文档的 SaveAs(path, 17)。按扩展名选择引擎：
+//   .doc/.docx/.rtf/.odt/.txt -> librpcwpsapi_sysqt5.so + wps（Documents）
+//   .xls/.xlsx/.ods/.csv      -> librpcetapi_sysqt5.so  + et （Workbooks）
+//   .ppt/.pptx/.odp           -> librpcwppapi_sysqt5.so + wpp（Presentations）
+// 命名对照表逆向自 PageOffice 客户端：三个库由同一套 RPC 生成器产出，导出同一批
+// `_XSysAllocString*` 分配器与 `call_method`，接口布局一致。
 //
 // 用法：LD_LIBRARY_PATH=/opt/kingsoft/wps-office/office6 wps2pdf <输入.docx> <输出.pdf>
 // 退出码：0 成功；非 0 失败（调用方应回退到其它后端）。
@@ -14,6 +18,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <cctype>
 #include <unistd.h>
 #include <signal.h>
 #include <string>
@@ -26,8 +31,43 @@ struct GUID { uint32_t d1; uint16_t d2, d3; uint8_t d4[8]; };
 typedef int32_t HRESULT;
 
 static const uint64_t DISP_E_PARAMNOTFOUND = 0x80020004ULL;
-static const char* WPS_LIB = "/opt/kingsoft/wps-office/office6/librpcwpsapi_sysqt5.so";
-static const char* WPS_BIN = "/opt/kingsoft/wps-office/office6/wps";
+
+// WPS 三个引擎各有一份同源的 RPC 库：接口布局相同，只有库名、可执行文件与工厂符号不同。
+// 二进制探测确认三个库都导出 `create<Engine>RpcInstance`、`call_method` 与同一套
+// `_XSysAllocString*` 内存分配器，所以这里按输入扩展名挑引擎，调用序列与 Writer 一致。
+struct Engine {
+  const char* lib;
+  const char* bin;
+  const char* create;
+};
+
+static const Engine ENGINE_WPS = {
+  "/opt/kingsoft/wps-office/office6/librpcwpsapi_sysqt5.so",
+  "/opt/kingsoft/wps-office/office6/wps",
+  "createWpsRpcInstance",
+};
+static const Engine ENGINE_ET = {
+  "/opt/kingsoft/wps-office/office6/librpcetapi_sysqt5.so",
+  "/opt/kingsoft/wps-office/office6/et",
+  "createEtRpcInstance",
+};
+static const Engine ENGINE_WPP = {
+  "/opt/kingsoft/wps-office/office6/librpcwppapi_sysqt5.so",
+  "/opt/kingsoft/wps-office/office6/wpp",
+  "createWppRpcInstance",
+};
+
+// 扩展名 -> 引擎。Writer 打开文字文档，ET 打开工作簿，WPP 打开演示文稿；
+// 引擎选错时 RPC 会返回 0x80010105（RPC_E_SERVERFAULT）。
+static const Engine* engine_for(const char* path) {
+  const char* dot = strrchr(path, '.');
+  if (!dot) return &ENGINE_WPS;
+  std::string ext(dot + 1);
+  for (char& c : ext) c = (char)tolower((unsigned char)c);
+  if (ext == "xls" || ext == "xlsx" || ext == "ods" || ext == "csv") return &ENGINE_ET;
+  if (ext == "ppt" || ext == "pptx" || ext == "odp") return &ENGINE_WPP;
+  return &ENGINE_WPS;
+}
 
 static std::string g_err;
 
@@ -86,7 +126,8 @@ int main(int argc, char** argv) {
   const char* out = argv[2];
   if (access(in, R_OK) != 0) { fprintf(stderr, "输入文件不可读: %s\n", in); return 2; }
 
-  void* h = dlopen(WPS_LIB, RTLD_NOW | RTLD_GLOBAL);
+  const Engine* engine = engine_for(in);
+  void* h = dlopen(engine->lib, RTLD_NOW | RTLD_GLOBAL);
   if (!h) { fprintf(stderr, "dlopen 失败: %s\n", dlerror()); return 3; }
 
   typedef uint16_t* (*alloc_t)(const uint16_t*, int);
@@ -94,14 +135,14 @@ int main(int argc, char** argv) {
   typedef HRESULT (*create_t)(void**);
   alloc_t  sallocLen = (alloc_t) dlsym(h, "_XSysAllocStringLen");
   alloc0_t salloc    = (alloc0_t)dlsym(h, "_XSysAllocString");
-  create_t create    = (create_t) dlsym(h, "createWpsRpcInstance");
+  create_t create    = (create_t) dlsym(h, engine->create);
   if (!sallocLen || !salloc || !create) { fprintf(stderr, "缺少 WPS 接口符号\n"); return 3; }
 
   void* client = nullptr;
-  if (create(&client) || !client) { fprintf(stderr, "createWpsRpcInstance 失败\n"); return 4; }
+  if (create(&client) || !client) { fprintf(stderr, "%s 失败\n", engine->create); return 4; }
 
   // 1) 设置 WPS 可执行路径 + 启动参数（与 PageOffice 一致）
-  { auto w = utf16(WPS_BIN); w.push_back(0); ((HRESULT(*)(void*,uint16_t*))vtfn(client,5))(client, salloc(w.data())); }
+  { auto w = utf16(engine->bin); w.push_back(0); ((HRESULT(*)(void*,uint16_t*))vtfn(client,5))(client, salloc(w.data())); }
   const char* args[3] = {"-shield", "-multiply", "-embedding"};
   uint16_t* av[4] = {nullptr, nullptr, nullptr, nullptr};
   for (int i = 0; i < 3; i++) { auto w = utf16(args[i]); w.push_back(0); av[i] = salloc(w.data()); }

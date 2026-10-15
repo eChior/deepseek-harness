@@ -71,7 +71,18 @@ jobs:
           set -euo pipefail
           # Upstream publishes no LibreOffice engine for Linux, so the Office skill runs the CLI in
           # resources/wps against the WPS installation instead. Only the compiled binary ships.
-          g++ -O2 -o apps/desktop/resources/wps/wps2pdf apps/desktop/resources/wps/wps2pdf.cpp -ldl
+          #
+          # The target desktop is Kylin V10 with glibc 2.31, so the shim is compiled inside a 20.04
+          # image rather than on the runner: linking against the runner's newer libc records
+          # GLIBC_2.34 and GLIBC_2.38 symbol versions, and the binary then refuses to start on the
+          # target with "version `GLIBC_2.38' not found".
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -w /work ubuntu:20.04 bash -c '
+            set -euo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq >/dev/null 2>&1
+            apt-get install -y -qq g++ >/dev/null 2>&1
+            g++ -O2 -o apps/desktop/resources/wps/wps2pdf apps/desktop/resources/wps/wps2pdf.cpp -ldl
+            ldd apps/desktop/resources/wps/wps2pdf | head -5'
           ls -l apps/desktop/resources/wps/
 
       - name: Write apps/desktop/.env.linux
