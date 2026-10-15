@@ -167,7 +167,7 @@ export default class RworkAccount extends DeepSeekAccount {
       view: {
         id: randomUUID() as SignInAttemptId,
         phase: 'waiting-browser',
-        authorizeUrl: rworkLoginUrl(this.loginOrigin, this.appId),
+        authorizeUrl: rworkLoginUrl(this.loginOrigin, this.appId, this.apiOrigin),
         expiresAt: Date.now() + this.attemptTimeout,
       },
       expiresAt: Date.now() + this.attemptTimeout,

@@ -100,7 +100,7 @@ async function accountMenu(operations: AccountSectionInjected, snapshot: () => A
 it.each([en, zh])('renders account cards without inventing profile or balance data', async (copy) => {
   mount({ status: 'credential-stored', attempt: null }, copy)
   expect(screen.getByText(copy.signedIn)).toBeTruthy()
-  expect(screen.getAllByText(copy.loading)).toHaveLength(3)
+  expect(screen.getAllByText(copy.loading)).toHaveLength(2)
   expect(screen.getByRole('link', { name: copy.usage }).getAttribute('href')).toBe('http://localhost:8081/usage')
   expect(screen.getByRole('link', { name: copy.topUp }).getAttribute('href')).toBe('http://localhost:8081/top_up')
   expect(screen.queryByRole('button', { name: copy.signOut })).toBeNull()
@@ -245,15 +245,13 @@ it('keeps the confirmation dialog open after a failed sign-out', async () => {
   expect(within(dialog).getByRole('alert').textContent).toBe(en.failed)
 })
 
-it.each([en, zh])('renders Platform profile and recharge wallet balances', async (copy) => {
+it.each([en, zh])('renders the Platform profile', async (copy) => {
   mount({ status: 'credential-stored', attempt: null }, copy, {
     profile: { status: 'ready', value: { id: null, name: 'Harness Mock (TEST ONLY)', contact: '138****0000' } },
     balance: { status: 'ready', bonusWallets: [], value: [{ currency: 'CNY', balance: '1234.56000000' }, { currency: 'USD', balance: '0.00000100' }] },
   })
   expect(screen.getByText('Harness Mock (TEST ONLY)')).toBeTruthy()
   expect(screen.getByText('138****0000')).toBeTruthy()
-  expect(screen.getByText('¥1,234.56')).toBeTruthy()
-  expect(screen.getByText('<$0.01')).toBeTruthy()
   await expect(`${screen.getByRole('region').textContent}\n`).toMatchFileSnapshot(`./expected/details-${copy === en ? 'en' : 'zh'}.txt`)
 })
 
@@ -356,8 +354,8 @@ it('shows the profile while the balance is still loading', async () => {
     profile: { status: 'ready', value: { id: null, name: 'Ready User', contact: '138****0000' } },
   })
   expect(screen.getByText('Ready User')).toBeTruthy()
-  // Both the recharge and the bonus row report their own pending read.
-  expect(screen.getAllByText(en.loading)).toHaveLength(2)
+  // The bonus row reports its own pending read.
+  expect(screen.getAllByText(en.loading)).toHaveLength(1)
   expect(screen.queryByText(en.balanceUnavailable)).toBeNull()
   await expect(`${screen.getByRole('region').textContent}\n`).toMatchFileSnapshot('./expected/profile-before-balance.txt')
 })
@@ -435,14 +433,13 @@ it('retries a changed avatar URL after an image fails', async () => {
   expect(view.container.querySelector('img')).toBeNull()
 })
 
-it.each([en, zh])('renders positive bonus wallets separately from recharge balances', async (copy) => {
+it.each([en, zh])('renders positive bonus wallets', async (copy) => {
   mount({ status: 'credential-stored', attempt: null }, copy, {
     balance: { status: 'ready', value: [{ currency: 'CNY', balance: '209.00' }, { currency: 'USD', balance: '20.07' }],
       bonusWallets: [{ currency: 'CNY', balance: '5.00' }, { currency: 'USD', balance: '0.000001' }] },
   })
-  expect(screen.getByText(copy.balance).parentElement!.textContent).toBe(`${copy.balance}¥209.00$20.07`)
   expect(screen.getByText(copy.bonusBalance).parentElement!.textContent).toBe(`${copy.bonusBalance}¥5.00<$0.01`)
-  expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(2)
+  expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(1)
   await expect(`${screen.getByRole('region').textContent}\n`)
     .toMatchFileSnapshot(`./expected/bonus-${copy === en ? 'en' : 'zh'}.txt`)
 })
@@ -453,9 +450,8 @@ it.each([[], [{ currency: 'CNY' as const, balance: '0.00' }, { currency: 'USD' a
       balance: { status: 'ready', value: [{ currency: 'CNY', balance: '0' }], bonusWallets },
     })
     expect(screen.queryByText(en.bonusBalance)).toBeNull()
-    // The divider above the bonus row goes with it.
-    expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(1)
-    expect(screen.getByText('¥0.00')).toBeTruthy()
+    // The divider belongs to the bonus row, so it goes with it.
+    expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(0)
     expect(screen.queryByText('¥-1.00')).toBeNull()
   },
 )
@@ -529,9 +525,9 @@ it('shows unavailable details and keeps external Platform links usable in a brow
     profile: { status: 'failed' }, balance: { status: 'failed' },
   })
   expect(screen.getByText(en.profileUnavailable)).toBeTruthy()
-  // The failed read keeps its copy in both balance rows, now as links into Platform.
+  // The failed read keeps its copy in the bonus row, now as a link into Platform.
   const unavailable = screen.getAllByRole('link', { name: en.balanceUnavailable })
-  expect(unavailable).toHaveLength(2)
+  expect(unavailable).toHaveLength(1)
   for (const link of unavailable) expect(link.getAttribute('href')).toBe('http://localhost:8081/usage')
   for (const name of [en.usage, en.topUp, en.balanceUnavailable]) {
     const event = new MouseEvent('click', { bubbles: true, cancelable: true })
@@ -544,7 +540,7 @@ it('opens the embedded Platform page from a failed balance row on Desktop', asyn
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const platform: PlatformBridge = { open: vi.fn(async () => {}), setBounds: vi.fn(async () => {}), close: vi.fn(async () => {}) }
   mount({ status: 'credential-stored', attempt: null }, en, { balance: { status: 'failed' } }, platform)
-  // Both failed rows reach the same destination as the Usage action, so the user can
+  // The failed row reaches the same destination as the Usage action, so the user can
   // inspect the balance the Harness could not load without leaving the app.
   await act(async () => { fireEvent.click(screen.getAllByRole('link', { name: en.balanceUnavailable })[0]!) })
   expect(platform.open).toHaveBeenCalledWith('usage', expect.anything())

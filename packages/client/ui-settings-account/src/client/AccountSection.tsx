@@ -90,7 +90,6 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const profile = details?.profile?.status === 'ready' ? details.profile.value : undefined
-  const wallets = details?.balance?.status === 'ready' ? details.balance.value : undefined
   const bonusWallets = details?.balance?.status === 'ready'
     ? details.balance.bonusWallets.filter(wallet => new Big(wallet.balance).gt(0)) : []
   const showBonusRow = details?.balance?.status !== 'ready' || bonusWallets.length > 0
@@ -174,18 +173,7 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
           onClick={() => { void run(() => cancel(attempt.id)) }}>{t('cancel')}</Button>
       </div>}
       <div className={css.balanceCard}>
-        <div className={css.row}>
-          <span>{t('balance')}</span>
-          {signedIn && wallets !== undefined && wallets.length > 0
-            ? <span className={css.amount}>{wallets.map(wallet => <span key={wallet.currency}>
-              {formatBalance(wallet.balance, wallet.currency === 'CNY' ? '¥' : '$')}
-            </span>)}</span>
-            : !signedIn || details?.balance === undefined
-              ? <span className={css.unavailable}>{t(!signedIn ? 'balanceSignedOut' : 'loading')}</span>
-              : platformLink(t('balanceUnavailable'), css.unavailableLink)}
-        </div>
         {signedIn && showBonusRow && <>
-          <div className={css.divider} />
           <div className={css.row}>
             <span>{t('bonusBalance')}</span>
             <span className={css.bonusValue}>
@@ -198,8 +186,8 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
                   : platformLink(t('balanceUnavailable'), css.unavailableLink)}
             </span>
           </div>
+          <div className={css.divider} />
         </>}
-        <div className={css.divider} />
         <div className={css.row}>
           <span className={css.secondary}>{t('more')}</span>
           <div className={css.links}>

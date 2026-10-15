@@ -9,12 +9,13 @@ import {
 
 describe('rworkLoginUrl', () => {
   it('carries the parameters the deployment expects on its sign-in page', () => {
-    const url = new URL(rworkLoginUrl('https://accounts.example.com', '7'))
+    const url = new URL(rworkLoginUrl('https://accounts.example.com', '7', 'https://app.example.com'))
     expect(url.pathname).toBe('/accounts/page/login')
     expect(url.searchParams.get('app_id')).toBe('7')
     expect(url.searchParams.get('no_trap')).toBe('1')
     expect(url.searchParams.get('query_scope')).toBe('all')
-    expect(url.searchParams.get('redirect_uri')).toBe('https://accounts.example.com/drive/home/')
+    // The workspace origin, not the sign-in origin: the latter answers 404 for this path.
+    expect(url.searchParams.get('redirect_uri')).toBe('https://app.example.com/drive/home/')
   })
 })
 

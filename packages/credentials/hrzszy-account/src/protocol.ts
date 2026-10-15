@@ -28,16 +28,22 @@ export class RworkProtocolError extends Error {
 /**
  * Build the page a human signs in on. The desktop shell loads exactly this URL
  * in its own window, so the deployment sees an ordinary browser login.
+ *
+ * The deployment redirects to `redirect_uri` once the password is accepted, and
+ * that page must live on the origin that actually serves the workspace: pointing
+ * it back at the sign-in origin lands the window on a `404 page not found` the
+ * employee reads as a failed login, even though the session cookie is already set.
  * @param loginOrigin - origin serving the sign-in page.
  * @param appId - deployment application id.
+ * @param apiOrigin - origin serving the signed-in workspace the redirect returns to.
  * @returns the sign-in page URL.
  */
-export function rworkLoginUrl(loginOrigin: string, appId: string): string {
+export function rworkLoginUrl(loginOrigin: string, appId: string, apiOrigin: string): string {
   const url = new URL('/accounts/page/login', loginOrigin)
   url.searchParams.set('app_id', appId)
   url.searchParams.set('no_trap', '1')
   url.searchParams.set('query_scope', 'all')
-  url.searchParams.set('redirect_uri', `${loginOrigin}/drive/home/`)
+  url.searchParams.set('redirect_uri', `${apiOrigin}/drive/home/`)
   return url.href
 }
 
