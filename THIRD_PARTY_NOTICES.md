@@ -87,6 +87,8 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`compression`](https://github.com/expressjs/compression) | MIT |
 | [`diff`](https://github.com/kpdecker/jsdiff) | BSD-3-Clause |
 | [`dompurify`](https://github.com/cure53/DOMPurify) | (MPL-2.0 OR Apache-2.0) |
+| [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar) | MIT |
+| [`dsh-notify-me`](https://github.com/chromoany/dsh-notify-me) | MIT |
 | [`dsh-zh-thinking`](https://github.com/yingjian666/dsh-zh-thinking) | MIT |
 | [`dshmarket`](https://github.com/dsh-market/dsh-market) | MIT |
 | [`electron-updater`](https://github.com/electron-userland/electron-builder) | MIT |

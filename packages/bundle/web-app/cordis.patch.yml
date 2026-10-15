@@ -582,6 +582,12 @@
     - id: superpowers-dsh
       name: superpowers-dsh
 
+    - id: better-sidebar
+      name: dsh-better-sidebar
+
+    - id: notify-me
+      name: dsh-notify-me
+
     - id: dsh-market
       name: dshmarket
 
