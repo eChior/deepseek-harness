@@ -4,4 +4,4 @@ Browser didn’t open automatically?
 Copy sign-in link
 Completing sign in… [disabled]
 Cancel
-Copy the sign-in link and open it in your browser to sign in.
+If the sign-in window did not appear, copy the link and open it in your browser.

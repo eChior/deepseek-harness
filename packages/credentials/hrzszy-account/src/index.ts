@@ -173,7 +173,12 @@ export default class RworkAccount extends DeepSeekAccount {
       expiresAt: Date.now() + this.attemptTimeout,
     }
     this.attempt = attempt
-    return this.view('signed-out')
+    // The desktop shell opens its sign-in window from the watched stream, not from this
+    // return value: without publishing, the new attempt never reaches the shell and the
+    // window is never opened.
+    const state = this.view('signed-out')
+    this.publish(state)
+    return state
   }
 
   /**
@@ -198,8 +203,13 @@ export default class RworkAccount extends DeepSeekAccount {
     return state
   }
 
-  override cancelSignIn(id: SignInAttemptId): Promise<AccountView> {
-    if (this.attempt?.view.id === id) this.attempt = { view: { ...this.attempt.view, phase: 'cancelled' }, expiresAt: this.attempt.expiresAt }
+  override async cancelSignIn(id: SignInAttemptId): Promise<AccountView> {
+    if (this.attempt?.view.id === id) {
+      this.attempt = { view: { ...this.attempt.view, phase: 'cancelled' }, expiresAt: this.attempt.expiresAt }
+      const state = await this.getState()
+      this.publish(state)
+      return state
+    }
     return this.getState()
   }
 
