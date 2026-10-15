@@ -19,9 +19,11 @@ permissions:
   contents: read
 
 env:
-  # tsdown builds every workspace member concurrently, and once this fork added its own packages
-  # the heap peaked just past Node's default ceiling. The runner has 16 GB, so raise it.
-  # 8 GB still ran out: the crash reported 8173 MB of live heap on a 16 GB runner.
+  # tsdown hands every resolved workspace config to a single Promise.all, so peak memory grew with
+  # this fork's package count until it overflowed every heap ceiling we could ask for (4090 MB at
+  # the Node default, 8173 MB at 8 GB, 12275 MB at 12 GB). patches/tsdown@0.22.2.patch bounds that
+  # batch instead; the heap ceiling stays as headroom for one batch.
+  DSH_BUILD_CONCURRENCY: '8'
   NODE_OPTIONS: '--max-old-space-size=12288'
   PRIMARY_NODE_VERSION: '24'
 

@@ -1,0 +1,25 @@
+diff --git a/dist/build-BxT2lm9L.mjs b/dist/build-BxT2lm9L.mjs
+index 2384015bea5fe85bf75d51697a1ac8939f07a036..c42876890d5b9d18c8d3a93b9936d8eb3088d0c2 100644
+--- a/dist/build-BxT2lm9L.mjs
++++ b/dist/build-BxT2lm9L.mjs	
+@@ -744,9 +744,17 @@ async function buildWithConfigs(configs, configDeps, _restart) {
+ 		return bundleDone(configChunksByPkg, bundle);
+ 	}
+ 	globalLogger.info("Build start");
+-	const bundles = await Promise.all(configs.map((options) => {
+-		return buildSingle(options, configDeps, options.pkg ? configChunksByPkg[options.pkg.packageJsonPath].formats.size > 1 : true, clean, restart, done);
+-	}));
++	// dsh: workspace builds hand every resolved config to a single Promise.all, so peak memory grows
++	// with the member count (~37 MB of heap per concurrent bundle) until it exceeds any heap limit.
++	// DSH_BUILD_CONCURRENCY bounds the batch; unset keeps upstream's unbounded behaviour.
++	const requestedConcurrency = Number(process.env.DSH_BUILD_CONCURRENCY);
++	const BUILD_CONCURRENCY = Number.isFinite(requestedConcurrency) && requestedConcurrency > 0 ? requestedConcurrency : configs.length;
++	const bundles = [];
++	for (let index = 0; index < configs.length; index += BUILD_CONCURRENCY) {
++		bundles.push(...await Promise.all(configs.slice(index, index + BUILD_CONCURRENCY).map((options) => {
++			return buildSingle(options, configDeps, options.pkg ? configChunksByPkg[options.pkg.packageJsonPath].formats.size > 1 : true, clean, restart, done);
++		})));
++	}
+ 	const firstDevtoolsConfig = configs.find((config) => config.devtools && config.devtools.ui);
+ 	if (configs.some((config) => config.watch)) {
+ 		disposeCbs.push(shortcuts(restart));
