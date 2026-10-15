@@ -75,7 +75,22 @@ No model request prefix changes.
 
 **Runtime invariant:** No runtime invariant companion is published; the plugin owns one status record and one sync entry point, and the mirror on disk is the only state either of them holds.
 
-- **No offline seeding** — a first run with no network and no existing mirror yields no distribution skills at all; the provider does not bake a fallback copy into the package.
+- **Bundled skills are a floor, not a snapshot** — a first run with no network falls back to the copy inside this package, which is only as new as the release that shipped it, and the provider reports it as `bundled` instead of fetching anything.
+
+-----
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Maintainer details — click to expand</summary>
+
+- The default remote points at the intranet gitea (`http://10.151.5.175:3000/ITPublic/dsh-skills.git`); a deployment on another host sets `url` in its own profile.
+- `assets/skills` holds the skills this build carries. It is refreshed by copying them out of the skills repository before a release rather than by a build step, so a release can deliberately carry a floor older than the repository.
+- The published-name manifest lives beside the mirror instead of inside it, because the mirror directory is replaced wholesale on every sync.
+- Tests: `pnpm vitest run packages/skill/skill-repo`.
+
+</details>
 - **Startup sync does not block the catalog** — the first scan of a cold machine can finish before the archive lands, so newly published skills appear on the session after the sync completes rather than in the one that started it.
 - **No revision reporting to the user** — `status.revision` is available to other plugins but is not surfaced in the client UI.
 - **Publishing owns only what it wrote** — the record of published names lives beside the mirror, so a skill directory dropped into `publishDirectory` by hand is never replaced, but neither is it removed when the repository later uses that name.

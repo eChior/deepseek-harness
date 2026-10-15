@@ -67,3 +67,15 @@ No model request prefix changes.
 - **No refresh or expiry handling** — a cookie the gateway later invalidates surfaces as a failed identity request, not as a sign-out, so the user sees the account they had until something else clears it.
 - **No tenant discovery** — `appId` is configuration, so a second tenant needs a second profile rather than a lookup.
 - **Balance and bonus surfaces stay empty** — the client renders them from the shared contract and shows nothing, which is intentional rather than unimplemented.
+
+-----
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Maintainer details — click to expand</summary>
+
+None.
+
+</details>

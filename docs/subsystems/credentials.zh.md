@@ -362,6 +362,19 @@ abstract getPlatformSession(): Promise<PlatformSession | null>
  * @returns optional device/account identifiers and the provider's OS version string.
  */
 abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>
+
+/**
+ * Commit a session captured outside the Host, in the provider's own format.
+ *
+ * Providers whose login finishes inside a browser callback never need this
+ * route. It exists for shells that own an identity cookie themselves — a
+ * native window running the deployment's own sign-in page, for instance —
+ * and the default refuses so a provider opts in explicitly instead of
+ * silently ignoring the call.
+ * @param session - provider-defined session payload, opaque to this seam.
+ * @returns state after the session is committed.
+ */
+async acceptExternalSession(session: unknown): Promise<AccountView>
 ```
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)

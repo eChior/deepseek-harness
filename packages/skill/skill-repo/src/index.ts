@@ -43,6 +43,7 @@ const PUBLISH_MANIFEST = '.dsh-skill-repo-published.json'
  */
 const BUNDLED_SKILLS = fileURLToPath(new URL('../assets/skills', import.meta.url))
 
+/** Fields a deployment can set for the skill mirror. */
 export interface Config {
   /** Set to false to keep the provider from touching the network at all. */
   enabled?: boolean
@@ -76,6 +77,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().default(120_000),
 })
 
+/** Where the mirror currently stands and which skills it published. */
 export interface SkillRepositoryStatus {
   readonly directory: string
   /** Directory inside the mirror that holds the skills the archive carries. */
@@ -89,11 +91,16 @@ export interface SkillRepositoryStatus {
   readonly detail: string | null
 }
 
-/** Path form of the mirror's skill directory, usable from a Loader `!!js` expression. */
+/**
+ * Path form of the mirror's skill directory, usable from a Loader `!!js` expression.
+ * @param config The same directory fields the plugin takes; defaults apply when omitted.
+ * @returns Absolute path of the directory inside the mirror that holds the skills.
+ */
 export function skillsDirectoryPath(config: Pick<Config, 'directory' | 'skillsDirectory'> = {}): string {
   return join(config.directory ?? dshHomePath('skills-repo'), config.skillsDirectory ?? 'skills')
 }
 
+/** Mirror a git-hosted skill repository into the DSH home and publish its skills. */
 export class SkillRepository extends Service {
   static inject: string[] = []
 
@@ -133,6 +140,7 @@ export class SkillRepository extends Service {
     }
   }
 
+  /** Where the mirror stands, which skills it published, and why the last sync failed. */
   get status(): SkillRepositoryStatus {
     return this.current
   }
@@ -144,6 +152,7 @@ export class SkillRepository extends Service {
    *
    * The constructor already starts one sync, so a caller that arrives while that
    * sync runs joins it rather than unpacking into the same directory twice.
+   * @returns The status after the attempt; `detail` carries any failure reason.
    */
   async sync(): Promise<SkillRepositoryStatus> {
     this.pending ??= this.mirror()

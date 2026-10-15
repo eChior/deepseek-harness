@@ -189,6 +189,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content.',
   },
   {
+    key: 'redaction',
+    pkg: 'redaction',
+    title: 'Prompt redaction before message creation',
+    mode: 'core',
+    note: 'Rewrites the text of an admitted prompt into per-category placeholders while it is still a plain part list, before any caller can append it to a session; the replacement map stays in memory so no file on disk can restore a value.',
+  },
+  {
     key: 'fileUploads',
     pkg: 'client-file-upload',
     title: 'Agent-scoped staged file uploads',
@@ -578,6 +585,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['sandbox-windows-acl', 'skill-badge', 'skill-filesystem', 'skill-office'],
     consumers: ['tool-skill'],
     note: 'Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies.',
+  },
+  {
+    key: 'skillRepo',
+    pkg: 'skill-repo',
+    title: 'Gitea-hosted skill mirror',
+    mode: 'service',
+    note: 'Mirrors a skill repository over the branch archive, publishes the synced skills into the user skill root that skill-filesystem scans, and falls back to the copy inside this package when the remote never answered.',
   },
   {
     key: 'agents',

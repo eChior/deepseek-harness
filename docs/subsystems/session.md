@@ -774,6 +774,48 @@ The optional `application` selects a registered file handler without changing th
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxredaction--redactionservice"></a>
+
+### `ctx.redaction` — `RedactionService`
+
+Rewrite the text of an admitted prompt into stable placeholders, so the values it replaced reach neither the session log nor a model request.
+
+```ts cordis-catalog
+/**
+ * Load the term list. Never throws: a missing or malformed file leaves the
+ * provider holding no rules, which replaces nothing, and records why in
+ * `detail` so the state is visible instead of silent.
+ * @returns The status after the attempt; `detail` carries any failure reason.
+ */
+async load(): Promise<RedactionStatus>
+
+/**
+ * Rewrite the text parts. Parts that carry no text — images, file references,
+ * anything this build does not understand — come back untouched, so a caller
+ * can hand the result to the next stage exactly as it would have handed the
+ * input.
+ * @param parts Parts a caller is about to turn into a message.
+ * @returns A new list in which every text part has been rewritten.
+ */
+redact<T extends RedactablePart>(parts: readonly T[]): T[]
+
+/**
+ * Rewrite one string, for callers holding text outside a part list.
+ * @param text Text to rewrite.
+ * @returns The rewritten text, or the input when no rule matched.
+ */
+redactText(text: string): string
+
+/**
+ * Turn the placeholders this session emitted back into the values they stand for.
+ * @param text Text that may carry placeholders.
+ * @returns The text with every placeholder this process issued restored.
+ */
+restore(text: string): string
+```
+
+Source: [`packages/security/redaction/src/plugin.ts`](../../packages/security/redaction/src/plugin.ts)
+
 <a id="ctxsessioncontroller--sessioncontroller"></a>
 
 ### `ctx.sessionController` — `SessionController`

@@ -10631,6 +10631,16 @@ importers:
         specifier: workspace:*
         version: link:../../subagent/subagent
 
+  packages/security/redaction:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
   packages/session-query/session-log-export:
     dependencies:
       '@deepseek-ai/dsh-brand':

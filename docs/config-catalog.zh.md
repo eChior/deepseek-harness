@@ -2135,7 +2135,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-office-to-pdf`
 
-- `source`: [`packages/document/office-to-pdf/src/index.ts:31`](../packages/document/office-to-pdf/src/index.ts)
+- `source`: [`packages/document/office-to-pdf/src/index.ts:32`](../packages/document/office-to-pdf/src/index.ts)
 
 ```ts config-catalog
 /** Provider concurrency and kit rendering/font configuration. */
@@ -2940,9 +2940,10 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-repo`
 
-- `source`: [`packages/skill/skill-repo/src/index.ts:35`](../packages/skill/skill-repo/src/index.ts)
+- `source`: [`packages/skill/skill-repo/src/index.ts:47`](../packages/skill/skill-repo/src/index.ts)
 
 ```ts config-catalog
+/** Fields a deployment can set for the skill mirror. */
 export interface Config {
   /** Set to false to keep the provider from touching the network at all. */
   enabled?: boolean
@@ -2954,6 +2955,13 @@ export interface Config {
   directory?: string
   /** Subdirectory of the mirror that holds the skills themselves. */
   skillsDirectory?: string
+  /** Skill root the synced skills are published into. Defaults to `$DSH_HOME/skills`. */
+  publishDirectory?: string
+  /**
+   * Skills this build carries, used while no mirror exists yet and the remote is
+   * unreachable. Defaults to the copy inside this package.
+   */
+  bundledDirectory?: string
   /** Per-request timeout for the archive download and the branch lookup. */
   timeoutMs?: number
 }
@@ -4544,6 +4552,7 @@ export interface Config {
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
+| `@deepseek-ai/dsh-redaction` | — | [`packages/security/redaction/src/index.ts`](../packages/security/redaction/src/index.ts) |
 | `@deepseek-ai/dsh-remote-mock` | — | [`packages/test-support/remote-mock/src/index.ts`](../packages/test-support/remote-mock/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-windows-acl` | — | [`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts) |
 | `@deepseek-ai/dsh-scope` | — | [`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts) |

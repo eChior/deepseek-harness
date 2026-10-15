@@ -142,6 +142,8 @@ export const SERVICE_PAGE: Record<string, string> = {
   workspaceChanges: 'deliverables.md',
   terminalController: 'workspace.md',
   directoryPickerController: 'workspace.md',
+  redaction: 'session.md',
+  skillRepo: 'skills.md',
 }
 
 /**
@@ -202,6 +204,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   sidebarRight: 'client-side right-Sidebar navigation face — packages/client/ui-sidebar-right/README.md owns the API',
   sidebarRightTabs: 'client-side right-Sidebar tab-type registry — packages/client/ui-sidebar-right/README.md owns the API',
   documentPreviews: 'client-side document renderer registry — docs/subsystems/sidebar-right.md owns the API',
+  settingsShell: 'client-side settings shell service — packages/client/ui-settings-shell/README.md owns the API',
 }
 
 /**
@@ -866,6 +869,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   PresetMetadata: 'preset display text is owned by packages/preset/agent-preset-registry/README.md',
   BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
   BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
+  RedactionStatus: 'provider status record is owned by packages/security/redaction/README.md',
+  RedactablePart: 'prompt part contract is owned by packages/security/redaction/README.md',
+  SkillRepositoryStatus: 'mirror status record is owned by packages/skill/skill-repo/README.md',
   CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',

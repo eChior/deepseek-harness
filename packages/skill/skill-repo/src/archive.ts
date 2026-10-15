@@ -22,6 +22,7 @@ const TAR_TYPE_OFFSET = 156
 const TAR_PREFIX_OFFSET = 345
 const TAR_PREFIX_BYTES = 155
 
+/** One entry read out of a tar stream. */
 export interface ArchiveEntry {
   /** Path relative to the archive root, with the leading directory stripped. */
   readonly path: string
@@ -30,13 +31,22 @@ export interface ArchiveEntry {
   readonly directory: boolean
 }
 
-/** URL of the branch archive published beside a git remote that ends in `.git`. */
+/**
+ * URL of the branch archive published beside a git remote that ends in `.git`.
+ * @param remote Remote URL of the repository.
+ * @param branch Branch whose tip the archive holds.
+ * @returns The archive URL for that branch.
+ */
 export function archiveUrl(remote: string, branch: string): string {
   const base = remote.endsWith('.git') ? remote.slice(0, -'.git'.length) : remote
   return `${base.replace(/\/+$/u, '')}/archive/${branch}.tar.gz`
 }
 
-/** Owner and repository of a gitea remote, or undefined when the remote is not one. */
+/**
+ * Owner and repository of a gitea remote, or undefined when the remote is not one.
+ * @param remote Remote URL of the repository.
+ * @returns The API origin and `owner/name`, or undefined when the remote is not a gitea one.
+ */
 export function archiveCoordinates(remote: string): { api: string; repository: string } | undefined {
   const base = remote.endsWith('.git') ? remote.slice(0, -'.git'.length) : remote
   const trimmed = base.replace(/\/+$/u, '')
@@ -76,6 +86,9 @@ function joinEntryPath(name: string, prefix: string): string {
  * Only the kinds this archive contains are honoured: directories, regular files
  * and the long-name and pax records git's archiver emits for deep paths. Anything
  * else (links, devices, sparse files) is skipped rather than materialised.
+ * @param tar Uncompressed tar bytes.
+ * @param stripComponents Leading path segments to drop from every entry.
+ * @returns Every honoured entry, in archive order.
  */
 export function readArchive(tar: Buffer, stripComponents: number): ArchiveEntry[] {
   const entries: ArchiveEntry[] = []
@@ -112,7 +125,13 @@ export function readArchive(tar: Buffer, stripComponents: number): ArchiveEntry[
   return entries.filter(entry => entry.path !== '')
 }
 
-/** Download the branch archive and return its uncompressed tar bytes. */
+/**
+ * Download the branch archive and return its uncompressed tar bytes.
+ * @param url Archive URL to fetch.
+ * @param timeoutMs Per-request timeout.
+ * @returns The uncompressed tar bytes.
+ * @throws If the host refuses the request, the body is empty, or the archive is over the size limit.
+ */
 export async function downloadArchive(url: string, timeoutMs: number): Promise<Buffer> {
   const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) })
   if (!response.ok) {
@@ -125,7 +144,11 @@ export async function downloadArchive(url: string, timeoutMs: number): Promise<B
   return gunzipSync(bytes)
 }
 
-/** Write every entry under `destination`, skipping paths that would escape it. */
+/**
+ * Write every entry under `destination`, skipping paths that would escape it.
+ * @param entries Entries to materialise.
+ * @param destination Directory the archive root becomes.
+ */
 export async function writeArchive(entries: readonly ArchiveEntry[], destination: string): Promise<void> {
   const root = resolve(destination)
   await mkdir(root, { recursive: true })
@@ -149,7 +172,13 @@ function revisionId(body: unknown): string | null {
   return typeof commit.id === 'string' ? commit.id : null
 }
 
-/** Commit the branch currently points at, or null when the host does not answer. */
+/**
+ * Commit the branch currently points at, or null when the host does not answer.
+ * @param remote Remote URL of the repository.
+ * @param branch Branch to read.
+ * @param timeoutMs Per-request timeout.
+ * @returns The commit id, or null when the remote is not a gitea one or does not answer.
+ */
 export async function branchRevision(remote: string, branch: string, timeoutMs: number): Promise<string | null> {
   const coordinates = archiveCoordinates(remote)
   if (coordinates === undefined) return null

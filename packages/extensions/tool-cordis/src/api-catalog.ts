@@ -925,6 +925,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
         returns: 'optional device/account identifiers and the provider\'s OS version string.',
       },
+      {
+        signature: 'async acceptExternalSession(session: unknown): Promise<AccountView>',
+        description: 'Commit a session captured outside the Host, in the provider\'s own format.\n\nProviders whose login finishes inside a browser callback never need this route. It exists for shells that own an identity cookie themselves — a native window running the deployment\'s own sign-in page, for instance — and the default refuses so a provider opts in explicitly instead of silently ignoring the call.',
+        parameters: [{ name: 'session', description: 'provider-defined session payload, opaque to this seam.' }],
+        returns: 'state after the session is committed.',
+      },
     ],
   },
   {
@@ -1817,6 +1823,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'redaction',
+    summary: 'Rewrite the text of an admitted prompt into stable placeholders, so the values it replaced reach neither the session log nor a model request.',
+    description: 'Rewrite the text of an admitted prompt into stable placeholders, so the values it replaced reach neither the session log nor a model request.',
+    methods: [
+      {
+        signature: 'async load(): Promise<RedactionStatus>',
+        description: 'Load the term list. Never throws: a missing or malformed file leaves the provider holding no rules, which replaces nothing, and records why in `detail` so the state is visible instead of silent.',
+        parameters: [],
+        returns: 'The status after the attempt; `detail` carries any failure reason.',
+      },
+      {
+        signature: 'redact<T extends RedactablePart>(parts: readonly T[]): T[]',
+        description: 'Rewrite the text parts. Parts that carry no text — images, file references, anything this build does not understand — come back untouched, so a caller can hand the result to the next stage exactly as it would have handed the input.',
+        parameters: [{ name: 'parts', description: 'Parts a caller is about to turn into a message.' }],
+        returns: 'A new list in which every text part has been rewritten.',
+      },
+      {
+        signature: 'redactText(text: string): string',
+        description: 'Rewrite one string, for callers holding text outside a part list.',
+        parameters: [{ name: 'text', description: 'Text to rewrite.' }],
+        returns: 'The rewritten text, or the input when no rule matched.',
+      },
+      {
+        signature: 'restore(text: string): string',
+        description: 'Turn the placeholders this session emitted back into the values they stand for.',
+        parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }],
+        returns: 'The text with every placeholder this process issued restored.',
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -2615,6 +2652,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Enumerate plugin-contributed variables without executing their resolvers.',
         parameters: [],
         returns: 'declarations sorted by environment variable name.',
+      },
+    ],
+  },
+  {
+    key: 'skillRepo',
+    summary: 'Mirror a git-hosted skill repository into the DSH home and publish its skills.',
+    description: 'Mirror a git-hosted skill repository into the DSH home and publish its skills.',
+    methods: [
+      {
+        signature: 'async sync(): Promise<SkillRepositoryStatus>',
+        description: 'Bring the mirror up to date. Never throws: an unreachable remote, a refused archive or a timeout all land in `status.detail` and leave whatever copy is already on disk in place.\n\nThe constructor already starts one sync, so a caller that arrives while that sync runs joins it rather than unpacking into the same directory twice.',
+        parameters: [],
+        returns: 'The status after the attempt; `detail` carries any failure reason.',
       },
     ],
   },
@@ -6166,8 +6216,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type RecurringScheduleRecord = EveryScheduleRecord | DailyScheduleRecord | WeeklyScheduleRecord | CronScheduleRecord;',
   },
   {
+    name: 'RedactablePart',
+    declaration: 'export interface RedactablePart {\n    readonly type: string;\n    readonly text?: string;\n}',
+  },
+  {
     name: 'RedactedSecret',
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'RedactionStatus',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly detail: string | null;\n}',
   },
   {
     name: 'Registry',
@@ -7088,6 +7146,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SkillRegistration',
     declaration: 'export type SkillRegistration = Omit<SkillDefinition, \'invocation\' | \'provider\'> & {\n    readonly invocation?: SkillInvocationPolicy;\n    readonly provider?: string;\n};',
+  },
+  {
+    name: 'SkillRepositoryStatus',
+    declaration: 'export interface SkillRepositoryStatus {\n    readonly directory: string;\n    readonly skillsDirectory: string;\n    readonly publishDirectory: string;\n    readonly revision: string | null;\n    readonly source: \'remote\' | \'bundled\' | \'none\';\n    readonly state: \'idle\' | \'syncing\' | \'ready\' | \'failed\';\n    readonly detail: string | null;\n}',
   },
   {
     name: 'SkillResourceBase',

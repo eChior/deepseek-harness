@@ -263,6 +263,27 @@ Host service backing `ctx.remote.skills` without activating a cold Agent.
 
 Source: [`packages/api/session-controller/src/skill-catalog.ts`](../../packages/api/session-controller/src/skill-catalog.ts)
 
+<a id="ctxskillrepo--skillrepository"></a>
+
+### `ctx.skillRepo` — `SkillRepository`
+
+Mirror a git-hosted skill repository into the DSH home and publish its skills.
+
+```ts cordis-catalog
+/**
+ * Bring the mirror up to date. Never throws: an unreachable remote, a refused
+ * archive or a timeout all land in `status.detail` and leave whatever copy is
+ * already on disk in place.
+ *
+ * The constructor already starts one sync, so a caller that arrives while that
+ * sync runs joins it rather than unpacking into the same directory twice.
+ * @returns The status after the attempt; `detail` carries any failure reason.
+ */
+async sync(): Promise<SkillRepositoryStatus>
+```
+
+Source: [`packages/skill/skill-repo/src/index.ts`](../../packages/skill/skill-repo/src/index.ts)
+
 <a id="ctxskills--skillregistry"></a>
 
 ### `ctx.skills` — `SkillRegistry`
