@@ -1,6 +1,6 @@
 /** Desktop Office skills and bundled authoring dependencies. */
 
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runtimeArchivePath } from './office-engine.ts'
@@ -33,6 +33,22 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   await ctx.plugin(officeSkills, {
     assetRoot: join(dirname(config.source), 'office-skills'),
     node: join(config.source, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
-    cli: join(packageRoot, 'lib', 'cli.js'),
+    cli: officeCli(config.source, packageRoot),
   })
+}
+
+/**
+ * Upstream publishes no LibreOffice engine for Linux, so the Linux build ships a WPS-backed CLI
+ * with the same command surface in `resources/wps`. `source` is `<resources>/runtime/primary-runtime`,
+ * so the sibling payload sits two levels up. Other platforms keep the packaged engine.
+ * @param source - Bundled payload directory of the running installation.
+ * @param packageRoot - Resolved `@deepseek-ai/libreoffice-kit` root inside the application.
+ * @returns Absolute path of the CLI the Office skill should invoke.
+ */
+function officeCli(source: string, packageRoot: string): string {
+  if (process.platform === 'linux') {
+    const shipped = join(source, '..', '..', 'wps', 'office-cli.mjs')
+    if (existsSync(shipped)) return shipped
+  }
+  return join(packageRoot, 'lib', 'cli.js')
 }

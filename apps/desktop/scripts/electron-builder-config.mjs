@@ -163,6 +163,9 @@ export function createElectronBuilderConfig(
       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
       // The Linux tray loads a PNG: a GTK/AppIndicator icon host cannot read the Windows ICO.
       ...(packagesLinux ? [{ from: fileURLToPath(new URL('../resources/tray.png', import.meta.url)), to: 'tray.png' }] : []),
+      // There is no LibreOffice engine for Linux, so the Office skill runs this WPS-backed CLI
+      // instead. The build compiles wps2pdf from the source next to the shim; sources are not shipped.
+      ...(packagesLinux ? [{ from: fileURLToPath(new URL('../resources/wps', import.meta.url)), to: 'wps', filter: ['**/*', '!**/*.cpp'] }] : []),
     ],
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),

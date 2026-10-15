@@ -64,7 +64,15 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           # libfuse2 runs the AppImage; rpm lets electron-builder build the deb payload.
-          sudo apt-get install -y --no-install-recommends libfuse2 rpm
+          sudo apt-get install -y --no-install-recommends libfuse2 rpm build-essential
+
+      - name: Build the WPS-backed Office converter
+        run: |
+          set -euo pipefail
+          # Upstream publishes no LibreOffice engine for Linux, so the Office skill runs the CLI in
+          # resources/wps against the WPS installation instead. Only the compiled binary ships.
+          g++ -O2 -o apps/desktop/resources/wps/wps2pdf apps/desktop/resources/wps/wps2pdf.cpp -ldl
+          ls -l apps/desktop/resources/wps/
 
       - name: Write apps/desktop/.env.linux
         run: |

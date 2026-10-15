@@ -47,3 +47,6 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+
+# The WPS-backed Office converter is compiled from the source beside it during packaging.
+apps/desktop/resources/wps/wps2pdf
