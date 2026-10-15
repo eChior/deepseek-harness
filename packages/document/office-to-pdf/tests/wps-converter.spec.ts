@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
-import type { Converter } from '@deepseek-ai/libreoffice-kit'
+import type { Converter, RenderImagesResult } from '@deepseek-ai/libreoffice-kit'
 import { createOfficeConverter, wpsOfficeCli } from '../src/wps-converter.ts'
 
 /** Engine stand-in the mock factory builds, so a routing test never instantiates WASM. */
@@ -20,7 +20,22 @@ vi.mock('@deepseek-ai/libreoffice-kit', async (importOriginal) => {
         backend: 'wasm',
         render: async () => { engines.calls.push('render'); return answer },
         convert: async () => { engines.calls.push('convert'); return answer },
-        renderImages: async () => { engines.calls.push('renderImages'); return { backend: 'wasm' as const, pages: [] } },
+        renderImages: async () => {
+          engines.calls.push('renderImages')
+          const images: RenderImagesResult = {
+            schemaVersion: 1,
+            backend: 'wasm',
+            rasterEngine: 'pdfium',
+            source: 'saved',
+            inputPath: 'book.xlsx',
+            sourceSha256: '0'.repeat(64),
+            dpi: 144,
+            pageCount: 0,
+            images: [],
+            missingFonts: [],
+          }
+          return images
+        },
         recalculate: async () => { engines.calls.push('recalculate'); return answer },
         dispose: async () => { engines.calls.push('dispose') },
       }
