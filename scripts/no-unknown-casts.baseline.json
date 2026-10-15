@@ -63,9 +63,6 @@
     "326597b335539db945b2e3b7c86638d40849d2077c0a5670d064e45486f4e407": 1,
     "69a4620ccedea854de695bc105dc5028ca85dc34ff0f9f762160207cf029dff6": 1
   },
-  "apps/desktop/tests/update-coordinator.spec.ts": {
-    "187ad4724635a2d845592799c3a2600437c0d2fe17e0d1c3018018d5e8b0b863": 1
-  },
   "apps/desktop/tests/update-dialog.spec.ts": {
     "3226b936a41e00f2cfd8b9563d3bfcc8eaef7cf04996abe74fb981169a07b91b": 1,
     "4000017f1f3dabd4bdf8eb91120cf4ff0dd09bad89d4683151f4785974d204a5": 1

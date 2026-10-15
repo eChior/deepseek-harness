@@ -5,7 +5,7 @@
  */
 
 import { existsSync, globSync, readFileSync, statSync } from 'node:fs'
-import { basename, dirname, extname, relative, resolve } from 'node:path'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import ts from 'typescript'
@@ -100,6 +100,19 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
     if (manifest?.exports?.['./locale/*.json'] === undefined) {
       failures.push(`${PROFILE_SOURCE}: optional bundle ${name} must export ./locale/*.json display metadata`)
     }
+  }
+
+  // A distribution fork preinstalls third-party plugins straight from npm rather than from this
+  // workspace. Read those names through the web-app bundle's own node_modules so the default Web
+  // layers below stay checkable, instead of reporting every preinstalled plugin as an undeclared
+  // bundle.
+  const preinstalled = resolve(root, 'packages/bundle/web-app/node_modules')
+  for (const name of [...(selection?.packages ?? []), ...(selection?.webBundles ?? [])]) {
+    if (packages.has(name)) continue
+    const manifestPath = join(preinstalled, name, 'package.json')
+    if (!existsSync(manifestPath)) continue
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
+    packages.set(name, { directory: dirname(manifestPath), manifest })
   }
 
   const queue: Package[] = []

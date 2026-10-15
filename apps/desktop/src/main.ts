@@ -32,6 +32,7 @@ import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
 import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
 import { readDeviceInfo } from './device-info.ts'
+import { adoptLinuxLaunchUser, resolveLinuxLaunchUser } from './linux-launch-user.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
@@ -61,6 +62,20 @@ import { DesktopQuitConfirmation } from './quit-confirmation.ts'
 import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
 import type { DesktopAccountBackend } from './account-backend.ts'
+
+// A launch that starts as root — a `sudo` invocation of the unpacked build, or a desktop session
+// that logged in as root — would otherwise create the profile, the workspace, and every file an
+// agent writes inside that workspace as root:root. Hand the process to the invoking account first.
+// A session that logged in as root directly has no invoking account, so it keeps running as it is.
+const launchUser = resolveLinuxLaunchUser(process.platform, process.getuid?.(), process.env)
+if (launchUser !== undefined) {
+  const adoption = adoptLinuxLaunchUser(launchUser, process.env)
+  if (adoption.adopted) {
+    console.warn(`desktop: adopted the invoking account ${String(adoption.username)}`)
+  } else {
+    console.warn(`desktop: running as root (${String(adoption.reason)}); created files stay owned by root`)
+  }
+}
 
 // Linux reports app.name as the window class, and the deb's desktop entry pins the same value;
 // matching them is what lets the shell attach the running window to its menu and taskbar icon.

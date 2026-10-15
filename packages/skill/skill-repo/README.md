@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-A distribution that ships skills inside its installer can only add one by cutting a new release. This provider instead keeps a mirror of a git-hosted skill repository under `$DSH_HOME/skills-repo` and refreshes it at startup, then hands that directory to `skill-filesystem` through `customSkillDirs`. Publishing a skill becomes a push to the repository followed by the next client launch. The mirror is a plain working tree on disk: when the remote is unreachable, the previous copy stays in place and the session starts with the skills it already had.
+A distribution that ships skills inside its installer can only add one by cutting a new release. This provider instead keeps a mirror of a git-hosted skill repository under `$DSH_HOME/skills-repo`, refreshes it at startup by reading the branch archive over HTTP, and hands that directory to `skill-filesystem` through `customSkillDirs`. Publishing a skill becomes a push to the repository followed by the next client launch. The mirror is a plain working tree, and no git binary is needed: when the remote is unreachable, the previous copy stays in place and the session starts with the skills it already had.
 
 ## Table of Contents
 
@@ -44,7 +44,7 @@ Mount the plugin next to `skill-filesystem`, and point the filesystem provider a
 | `branch` | `main` | Branch to track. |
 | `directory` | `$DSH_HOME/skills-repo` | Where the mirror lives. |
 | `skillsDirectory` | `skills` | Subdirectory of the mirror holding the skills. |
-| `timeoutMs` | `120000` | Per-command git timeout. |
+| `timeoutMs` | `120000` | Per-request timeout. |
 
 ### When to choose it
 
@@ -53,13 +53,13 @@ Choose it when the skill set is a moving target shared by many installs. Avoid i
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-`SkillRepository.sync()` runs once when the plugin loads and again on demand. It clones the configured branch at depth 1 when `directory` is not yet a working tree, and otherwise fetches that branch and hard-resets onto it, so a half-finished sync cannot leave a dirty tree behind. The result lands in `status`: `idle`, `syncing`, `ready`, or `failed`, alongside the mirror paths, the short revision, and a failure detail.
+`SkillRepository.sync()` runs once when the plugin loads and again on demand. It downloads the branch archive from the host that serves the remote, unpacks it into a staging directory beside the mirror, and swaps the finished copy in, so a half-finished sync cannot leave a dirty tree behind. The result lands in `status`: `idle`, `syncing`, `ready`, or `failed`, alongside the mirror paths, the short revision, and a failure detail.
 
-Concurrent calls share one in-flight sync, so a caller that arrives while startup sync runs joins it instead of cloning into the same directory twice.
+Concurrent calls share one in-flight sync, so a caller that arrives while startup sync runs joins it instead of unpacking into the same directory twice.
 
-Every git call runs without a shell, with `GIT_TERMINAL_PROMPT=0` and `GCM_INTERACTIVE=never`. A private remote that would otherwise prompt for a password fails fast instead of hanging the boot.
+The sync reads the archive over HTTP and never runs a git binary, so a client machine that has no git installed still receives the distribution's skills. The revision is read from the host's branch endpoint and is reported as `null` when that endpoint does not answer.
 
-The provider never throws. A missing git binary, an unreachable remote, or a timeout is logged as a warning and written to `status.detail`; `skill-filesystem` keeps scanning whatever the mirror already contains.
+The provider never throws. An unreachable host, a refused archive, or a timeout is logged as a warning and written to `status.detail`; `skill-filesystem` keeps scanning whatever the mirror already contains.
 
 ## Model Experience
 
@@ -76,5 +76,5 @@ No model request prefix changes.
 **Runtime invariant:** No runtime invariant companion is published; the plugin owns one status record and one sync entry point, and the mirror on disk is the only state either of them holds.
 
 - **No offline seeding** — a first run with no network and no existing mirror yields no distribution skills at all; the provider does not bake a fallback copy into the package.
-- **Startup sync does not block the catalog** — the first scan of a cold machine can finish before the clone does, so newly published skills appear on the session after the sync completes rather than in the one that started it.
+- **Startup sync does not block the catalog** — the first scan of a cold machine can finish before the archive lands, so newly published skills appear on the session after the sync completes rather than in the one that started it.
 - **No revision reporting to the user** — `status.revision` is available to other plugins but is not surfaced in the client UI.

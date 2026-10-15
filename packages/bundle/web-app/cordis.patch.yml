@@ -566,59 +566,8 @@
       config:
         default: standard
 
-# ---------------------------------------------------------------------------
-# Distribution additions: the third-party plugins this fork preinstalls.
-#
-# The rows below are copied verbatim from each package's own bundle patch
-# (`dsh.bundle.patch`), so every one of them stays addressable by id from a
-# later profile patch or `--patch` layer.
-- insert:
-    - id: bili-native
-      name: billion-context
-
-    - id: zh-thinking
-      name: dsh-zh-thinking
-
-    - id: superpowers-dsh
-      name: superpowers-dsh
-
-    - id: better-sidebar
-      name: dsh-better-sidebar
-
-    - id: notify-me
-      name: dsh-notify-me
-
-    - id: dsh-market
-      name: dshmarket
-
-    - id: skills-manager
-      name: '@michengai/dsh-skills-manager'
-
-    - id: ui-workspace-archive-manager
-      name: '@michengai/dsh-archive-manager'
-
-# billion-context: DSH's default retry whitelist omits MALFORMED_RESPONSE, so
-# one sampling flake that breaks a tool-call argument JSON kills the whole turn
-# unretried. A patch replaces the targeted row's WHOLE config (no deep merge),
-# so each row restates every default code plus MALFORMED_RESPONSE — dropping any
-# default code silently removes its retries.
-#
-# `compaction-basic` is disabled on this plane (see above), so `auto: false`
-# only reaches the host row; in a web-app profile the running compaction
-# instance lives inside the preset-owned row, which a bundle layer cannot
-# address by id.
-- id: compaction-basic
-  config:
-    auto: false
-
-- id: llm-deepseek
-  config:
-    retryPolicy:
-      mode: normal
-      retryableCodes: [EMPTY_RESPONSE, RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT, MALFORMED_RESPONSE]
-
-- id: llm-deepseek-account
-  config:
-    retryPolicy:
-      mode: normal
-      retryableCodes: [EMPTY_RESPONSE, RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT, MALFORMED_RESPONSE]
+# The preinstalled third-party plugins are declared as profile bundles in
+# `PROFILE_TEMPLATES.web.bundles` instead of being inserted here, so the plugin
+# manager reports them as installed community plugins. Each one carries its own
+# `dsh.bundle.patch`, applied when the profile loads it, so their rows stay
+# addressable by id exactly as before.

@@ -75,6 +75,43 @@ describe('desktop external plugin profile', () => {
     expect(lstatSync(path).isDirectory()).toBe(true)
     expect(lstatSync(join(profile, 'node_modules/plugin')).isDirectory()).toBe(true)
   })
+  it('folds newly shipped bundles into a profile an older release created', async () => {
+    const { manager } = setup()
+    await manager.applyRelease()
+    const manifestPath = join(manager.paths.profile, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      dependencies: Record<string, string>
+      dsh: { profile: { bundles: string[] } }
+    }
+    manifest.dsh.profile.bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
+    writeFileSync(manifestPath, JSON.stringify(manifest, undefined, 2))
+
+    await expect(manager.applyRelease()).resolves.toBeUndefined()
+
+    const updated = JSON.parse(readFileSync(manifestPath, 'utf8')) as { dsh: { profile: { bundles: string[] } } }
+    expect(updated.dsh.profile.bundles).toEqual([
+      '@deepseek-ai/dsh-base',
+      '@deepseek-ai/dsh-web-app',
+      'billion-context',
+      'dsh-zh-thinking',
+      'superpowers-dsh',
+      'dsh-better-sidebar',
+      'dsh-notify-me',
+      'dshmarket',
+      '@michengai/dsh-skills-manager',
+      '@michengai/dsh-archive-manager',
+    ])
+  })
+  it('leaves a profile that already names every shipped bundle untouched', async () => {
+    const { manager } = setup()
+    await manager.applyRelease()
+    const manifestPath = join(manager.paths.profile, 'package.json')
+    const before = readFileSync(manifestPath, 'utf8')
+
+    await expect(manager.applyRelease()).resolves.toBeUndefined()
+
+    expect(readFileSync(manifestPath, 'utf8')).toBe(before)
+  })
   it('reuses plugin files without scanning manifests and can disable them', async () => {
     const { manager } = setup()
     await manager.applyRelease()

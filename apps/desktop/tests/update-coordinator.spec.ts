@@ -65,7 +65,7 @@ function fixture() {
   const downloadResult = vi.fn()
   const releaseFeed = vi.fn(async () => 'https://releases.invalid/nightly')
   const states: DesktopUpdateState[] = []
-  const updater = Object.assign(events, { checkForUpdates, downloadUpdate, quitAndInstall, setFeedURL }) as unknown as AppUpdater
+  const updater = Object.assign(events, { checkForUpdates, downloadUpdate, quitAndInstall, setFeedURL }) as AppUpdater
   const coordinator = new DesktopUpdateCoordinator(
     (state) => { states.push(state); return state },
     beforeRestart, updater, () => true, () => '1.1.0-alpha.1', downloadResult, releaseFeed,

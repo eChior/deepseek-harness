@@ -1,18 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createServer, type Server } from 'node:http'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
+import { gzipSync } from 'node:zlib'
 import { Context } from '@deepseek-ai/cordis'
 import * as SkillRepo from '../src/index.ts'
-import { cloneRepository, describeRevision, isRepository, updateRepository } from '../src/git.ts'
-
-const run = promisify(execFile)
+import { archiveCoordinates, archiveUrl, branchRevision, readArchive, writeArchive } from '../src/archive.ts'
 
 /** Every temp dir created by this file, removed after each test. */
 const tempDirs: string[] = []
+/** Every HTTP server started by this file, closed after each test. */
+const servers: Server[] = []
 afterEach(async () => {
+  for (const server of servers.splice(0)) {
+    await new Promise<void>((done) => { server.close(() => { done() }) })
+  }
   for (const dir of tempDirs.splice(0)) await rm(dir, { recursive: true, force: true, maxRetries: 5 })
 })
 
@@ -22,18 +25,159 @@ async function tempDir(name: string): Promise<string> {
   return dir
 }
 
-/** A local repository holding one skill, usable as a clone source. */
-async function originRepo(): Promise<string> {
-  const dir = await tempDir('skill-origin')
-  await run('git', ['init', '--quiet', '--initial-branch=main', dir])
-  await run('git', ['-C', dir, 'config', 'user.email', 'test@example.com'])
-  await run('git', ['-C', dir, 'config', 'user.name', 'Test'])
-  await mkdir(join(dir, 'skills', 'demo'), { recursive: true })
-  await writeFile(join(dir, 'skills', 'demo', 'SKILL.md'), '---\nname: demo\ndescription: A demo skill.\n---\n\nBody.\n')
-  await run('git', ['-C', dir, 'add', '-A'])
-  await run('git', ['-C', dir, 'commit', '--quiet', '-m', 'initial'])
-  return dir
+/** NUL byte, spelled without an octal escape that an ES module rejects. */
+const NUL = String.fromCharCode(0)
+
+/** One tar header plus its padded payload, enough for this reader's fields. */
+function tarEntry(name: string, content: Buffer, kind = '0'): Buffer {
+  const header = Buffer.alloc(512)
+  header.write(name, 0, 100, 'utf8')
+  header.write('0000644\0', 100, 8, 'utf8')
+  header.write('0000000\0', 108, 8, 'utf8')
+  header.write('0000000\0', 116, 8, 'utf8')
+  header.write(`${content.byteLength.toString(8).padStart(11, '0')}\0`, 124, 12, 'utf8')
+  header.write('00000000000\0', 136, 12, 'utf8')
+  header.write(kind, 156, 1, 'utf8')
+  header.write(`ustar${NUL}`, 257, 6, 'latin1')
+  header.write('00', 263, 2, 'utf8')
+  const padded = Buffer.alloc(Math.ceil(content.byteLength / 512) * 512)
+  content.copy(padded)
+  return Buffer.concat([header, padded])
 }
+
+/** A `<repository>-<branch>/…` archive holding one skill, as gitea serves it. */
+function giteaArchive(): Buffer {
+  return Buffer.concat([
+    tarEntry('dsh-skills-main/', Buffer.alloc(0), '5'),
+    tarEntry('dsh-skills-main/README.md', Buffer.from('# skills\n', 'utf8')),
+    tarEntry('dsh-skills-main/skills/', Buffer.alloc(0), '5'),
+    tarEntry('dsh-skills-main/skills/demo/', Buffer.alloc(0), '5'),
+    tarEntry('dsh-skills-main/skills/demo/SKILL.md', Buffer.from('---\nname: demo\n---\n', 'utf8')),
+    Buffer.alloc(1024),
+  ])
+}
+
+interface Origin {
+  readonly remote: string
+  readonly archiveRequests: string[]
+}
+
+/** A local gitea stand-in serving one archive and one branch record. */
+async function origin(): Promise<Origin> {
+  const archiveRequests: string[] = []
+  const server = createServer((request, response) => {
+    if (request.url === '/api/v1/repos/ITPublic/dsh-skills/branches/main') {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ commit: { id: 'abc1234def' } }))
+      return
+    }
+    archiveRequests.push(request.url ?? '')
+    if (request.url === '/ITPublic/dsh-skills/archive/main.tar.gz') {
+      response.writeHead(200, { 'content-type': 'application/gzip' })
+      response.end(gzipSync(giteaArchive()))
+      return
+    }
+    response.writeHead(404)
+    response.end()
+  })
+  servers.push(server)
+  await new Promise<void>((ready) => { server.listen(0, '127.0.0.1', ready) })
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('the test origin has no port')
+  return { remote: `http://127.0.0.1:${String(address.port)}/ITPublic/dsh-skills.git`, archiveRequests }
+}
+
+describe('archiveUrl', () => {
+  it('turns a git remote into the branch archive beside it', () => {
+    expect(archiveUrl('http://host:3000/ITPublic/dsh-skills.git', 'main'))
+      .toBe('http://host:3000/ITPublic/dsh-skills/archive/main.tar.gz')
+  })
+
+  it('accepts a remote without the .git suffix', () => {
+    expect(archiveUrl('http://host:3000/ITPublic/dsh-skills/', 'dev'))
+      .toBe('http://host:3000/ITPublic/dsh-skills/archive/dev.tar.gz')
+  })
+})
+
+describe('archiveCoordinates', () => {
+  it('splits a remote into the API origin and the repository path', () => {
+    expect(archiveCoordinates('http://host:3000/ITPublic/dsh-skills.git'))
+      .toEqual({ api: 'http://host:3000', repository: 'ITPublic/dsh-skills' })
+  })
+
+  it('reports nothing for a remote it cannot address', () => {
+    expect(archiveCoordinates('/srv/git/skills.git')).toBeUndefined()
+  })
+})
+
+describe('readArchive', () => {
+  it('strips the wrapping directory and reports directories separately', () => {
+    const entries = readArchive(giteaArchive(), 0)
+    expect(entries.map(entry => entry.path)).toEqual([
+      'dsh-skills-main',
+      'dsh-skills-main/README.md',
+      'dsh-skills-main/skills',
+      'dsh-skills-main/skills/demo',
+      'dsh-skills-main/skills/demo/SKILL.md',
+    ])
+    expect(entries[0]?.directory).toBe(true)
+    expect(entries[4]?.directory).toBe(false)
+    expect(entries[4]?.content.toString('utf8')).toBe('---\nname: demo\n---\n')
+  })
+
+  it('honours long names recorded in a separate record', () => {
+    const long = 'dsh-skills-main/skills/demo/'.padEnd(120, 'x')
+    const tar = Buffer.concat([
+      tarEntry('././@LongLink', Buffer.from(`${long}/SKILL.md\0`, 'utf8'), 'L'),
+      tarEntry('dsh-skills-main/skills/demo/placeholder', Buffer.from('body\n', 'utf8')),
+      Buffer.alloc(1024),
+    ])
+    const entries = readArchive(tar, 1)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.path.endsWith('SKILL.md')).toBe(true)
+  })
+
+  it('drops every path inside the stripped components', () => {
+    const tar = Buffer.concat([tarEntry('dsh-skills-main/', Buffer.alloc(0), '5'), Buffer.alloc(1024)])
+    expect(readArchive(tar, 1)).toEqual([])
+  })
+
+  it('stops at the first blank block pair', () => {
+    const tar = Buffer.concat([
+      tarEntry('root/keep.md', Buffer.from('kept\n', 'utf8')),
+      Buffer.alloc(512),
+      Buffer.alloc(512),
+      tarEntry('root/ignored.md', Buffer.from('ignored\n', 'utf8')),
+    ])
+    expect(readArchive(tar, 1).map(entry => entry.path)).toEqual(['keep.md'])
+  })
+})
+
+describe('writeArchive', () => {
+  it('creates directories and files below the destination', async () => {
+    const root = await tempDir('skill-write')
+    await writeArchive(readArchive(giteaArchive(), 1), root)
+    expect((await stat(join(root, 'skills', 'demo'))).isDirectory()).toBe(true)
+    expect(await readFile(join(root, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('---\nname: demo\n---\n')
+  })
+
+  it('refuses entries that would escape the destination', async () => {
+    const root = await tempDir('skill-escape')
+    await writeArchive([{ path: '../outside.md', content: Buffer.from('nope\n', 'utf8'), directory: false }], root)
+    await expect(readFile(join(root, '..', 'outside.md'), 'utf8')).rejects.toThrow()
+  })
+})
+
+describe('branchRevision', () => {
+  it('reads the commit the branch points at', async () => {
+    const { remote } = await origin()
+    expect(await branchRevision(remote, 'main', 5_000)).toBe('abc1234def')
+  })
+
+  it('reports nothing when the host does not answer', async () => {
+    expect(await branchRevision('http://127.0.0.1:1/nobody/nothing.git', 'main', 500)).toBeNull()
+  })
+})
 
 describe('skillsDirectoryPath', () => {
   it('joins the mirror and the skills subdirectory', () => {
@@ -56,41 +200,32 @@ describe('Config', () => {
   })
 })
 
-describe('git helpers', () => {
-  it('clones a branch and reports its revision', async () => {
-    const origin = await originRepo()
-    const mirror = join(await tempDir('skill-mirror'), 'repo')
-    expect(isRepository(mirror)).toBe(false)
-    await cloneRepository(origin, mirror, 'main', 60_000)
-    expect(isRepository(mirror)).toBe(true)
-    expect(await describeRevision(mirror, 60_000)).toMatch(/^[0-9a-f]{7,}$/u)
-  })
-
-  it('fast-forwards an existing mirror onto the remote tip', async () => {
-    const origin = await originRepo()
-    const mirror = join(await tempDir('skill-mirror'), 'repo')
-    await cloneRepository(origin, mirror, 'main', 60_000)
-    const before = await describeRevision(mirror, 60_000)
-    await writeFile(join(origin, 'skills', 'demo', 'SKILL.md'), '---\nname: demo\ndescription: Changed.\n---\n\nBody.\n')
-    await run('git', ['-C', origin, 'add', '-A'])
-    await run('git', ['-C', origin, 'commit', '--quiet', '-m', 'second'])
-    await updateRepository(mirror, 'main', 60_000)
-    expect(await describeRevision(mirror, 60_000)).not.toBe(before)
-  })
-})
-
 describe('SkillRepository', () => {
-  it('mirrors the repository named in its configuration', async () => {
-    const origin = await originRepo()
+  it('unpacks the branch archive into the mirror without a git binary', async () => {
+    const { remote, archiveRequests } = await origin()
     const directory = join(await tempDir('skill-home'), 'skills-repo')
     const ctx = new Context()
-    const fiber = await ctx.plugin(SkillRepo.default, { url: origin, directory, skillsDirectory: 'skills' })
-    const repo = ctx.skillRepo
-    const status = await repo.sync()
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory, skillsDirectory: 'skills' })
+    const status = await ctx.skillRepo.sync()
     expect(status.state).toBe('ready')
-    expect(status.revision).not.toBeNull()
-    expect(isRepository(directory)).toBe(true)
-    expect(repo.status.skillsDirectory).toBe(join(directory, 'skills'))
+    expect(status.revision).toBe('abc1234def')
+    expect(archiveRequests).toEqual(['/ITPublic/dsh-skills/archive/main.tar.gz'])
+    expect(await readFile(join(directory, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('---\nname: demo\n---\n')
+    expect(status.skillsDirectory).toBe(join(directory, 'skills'))
+    await fiber.dispose()
+  })
+
+  it('replaces an older mirror and leaves no staging directory behind', async () => {
+    const { remote } = await origin()
+    const home = await tempDir('skill-home')
+    const directory = join(home, 'skills-repo')
+    await writeFile(join(home, 'placeholder'), '')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory, skillsDirectory: 'skills' })
+    await ctx.skillRepo.sync()
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('ready')
+    await expect(stat(`${directory}.staging`)).rejects.toThrow()
     await fiber.dispose()
   })
 
@@ -104,11 +239,24 @@ describe('SkillRepository', () => {
     await fiber.dispose()
   })
 
+  it('keeps the existing mirror when a later sync fails', async () => {
+    const home = await tempDir('skill-home')
+    const directory = join(home, 'skills-repo')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, { url: 'http://127.0.0.1:1/none.git', directory })
+    await ctx.skillRepo.sync()
+    await writeArchive([{ path: 'skills/demo/SKILL.md', content: Buffer.from('kept\n', 'utf8'), directory: false }], directory)
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('failed')
+    expect(await readFile(join(directory, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('kept\n')
+    await fiber.dispose()
+  })
+
   it('touches nothing when disabled', async () => {
     const directory = join(await tempDir('skill-home'), 'skills-repo')
     const ctx = new Context()
     const fiber = await ctx.plugin(SkillRepo.default, { enabled: false, directory, url: '/does/not/exist' })
-    expect(isRepository(directory)).toBe(false)
+    await expect(stat(directory)).rejects.toThrow()
     expect(ctx.skillRepo.status.state).toBe('idle')
     await fiber.dispose()
   })

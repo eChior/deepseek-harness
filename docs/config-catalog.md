@@ -1513,6 +1513,31 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-hrzszy-account -->
+<a id="deepseek-aidsh-hrzszy-account"></a>
+
+## `@deepseek-ai/dsh-hrzszy-account`
+
+- `inject`: `credentials`
+- `source`: [`packages/credentials/hrzszy-account/src/index.ts:48`](../packages/credentials/hrzszy-account/src/index.ts)
+
+```ts config-catalog
+/** Deployment endpoints and request deadlines. */
+export interface Config {
+  /** Origin serving identity JSON. */
+  apiOrigin?: string
+  /** Origin serving the browser sign-in page. */
+  loginOrigin?: string
+  /** Deployment application id every identity request carries. */
+  appId?: string
+  /** Deadline for each identity request. */
+  requestTimeoutMs?: number
+  /** Upper bound for one local attempt, even when its window stays open longer. */
+  attemptTimeoutMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-hrzszy-account -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-invariants -->
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -2907,6 +2932,31 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-skill-repo -->
+<a id="deepseek-aidsh-skill-repo"></a>
+
+## `@deepseek-ai/dsh-skill-repo`
+
+- `source`: [`packages/skill/skill-repo/src/index.ts:35`](../packages/skill/skill-repo/src/index.ts)
+
+```ts config-catalog
+export interface Config {
+  /** Set to false to keep the provider from touching the network at all. */
+  enabled?: boolean
+  /** Remote to mirror. */
+  url?: string
+  /** Branch to mirror. Defaults to `main`. */
+  branch?: string
+  /** Where the mirror lives. Defaults to `$DSH_HOME/skills-repo`. */
+  directory?: string
+  /** Subdirectory of the mirror that holds the skills themselves. */
+  skillsDirectory?: string
+  /** Per-request timeout for the archive download and the branch lookup. */
+  timeoutMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-repo -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-spill-local -->
 <a id="deepseek-aidsh-spill-local"></a>

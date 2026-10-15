@@ -57,6 +57,33 @@ function migrateProfileSettings(projectDir: string): void {
   }
 }
 
+/**
+ * Fold newly shipped profile bundles into a profile an older release created.
+ *
+ * `initProfile` writes the manifest only when it is absent, so a machine that already ran an
+ * earlier build keeps the bundle list it was created with. The plugin manager reports a plugin as
+ * installed by reading `dsh.profile.bundles`, so a bundle added by a later release stays invisible
+ * there until it is named in this list.
+ * @param projectDir - Profile directory holding the manifest.
+ */
+function reconcileProfileBundles(projectDir: string): void {
+  const path = join(projectDir, 'package.json')
+  if (!existsSync(path)) return
+  let manifest: { dsh?: { profile?: { bundles?: unknown } } }
+  try {
+    manifest = JSON.parse(readFileSync(path, 'utf8')) as typeof manifest
+  } catch {
+    return
+  }
+  const current = manifest.dsh?.profile?.bundles
+  if (!Array.isArray(current)) return
+  const names = current.filter((name): name is string => typeof name === 'string')
+  const missing = WEB_PROFILE.bundles.filter(name => !names.includes(name))
+  if (missing.length === 0) return
+  const profile = { ...manifest.dsh?.profile, bundles: [...names, ...missing] }
+  writeJson(path, { ...manifest, dsh: { ...manifest.dsh, profile } })
+}
+
 /** Initializes the Desktop profile and disables third-party bundles during recovery. */
 export class DesktopProjectManager {
   /**
@@ -86,6 +113,7 @@ export class DesktopProjectManager {
       readDesktopRuntime(this.runtime.dsh)
       migrateProfileSettings(this.paths.profile)
       createPluginProfile(this.paths.profile)
+      reconcileProfileBundles(this.paths.profile)
       removeLinkProjections(this.paths.profile)
     })
   }

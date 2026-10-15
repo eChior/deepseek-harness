@@ -20,21 +20,21 @@ describe('release feed resolution', () => {
   })
 
   it('resolves the newest published release into a feed URL', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify([
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify([
       { draft: false, tag_name: 'v0.2.0-rc.2-hrzszy' },
     ]), { status: 200 }))
-    await expect(resolveReleaseFeed('http://host:3000', 'ITPublic/deepseek-harness', fetchImpl as unknown as typeof fetch))
+    await expect(resolveReleaseFeed('http://host:3000', 'ITPublic/deepseek-harness', fetchImpl))
       .resolves.toBe('http://host:3000/ITPublic/deepseek-harness/releases/download/v0.2.0-rc.2-hrzszy')
-    expect(String((fetchImpl.mock.calls[0] as unknown[])[0]))
+    expect(String(fetchImpl.mock.calls[0]?.[0]))
       .toBe('http://host:3000/api/v1/repos/ITPublic/deepseek-harness/releases?limit=20')
   })
 
   it('rejects a failing lookup and an empty release list', async () => {
-    const failing = vi.fn(async () => new Response('nope', { status: 404 }))
-    await expect(resolveReleaseFeed('http://host:3000', 'ITPublic/deepseek-harness', failing as unknown as typeof fetch))
+    const failing = vi.fn<typeof fetch>(async () => new Response('nope', { status: 404 }))
+    await expect(resolveReleaseFeed('http://host:3000', 'ITPublic/deepseek-harness', failing))
       .rejects.toThrow(/release lookup failed with 404/u)
-    const empty = vi.fn(async () => new Response('[]', { status: 200 }))
-    await expect(resolveReleaseFeed('http://host:3000', 'ITPublic/deepseek-harness', empty as unknown as typeof fetch))
+    const empty = vi.fn<typeof fetch>(async () => new Response('[]', { status: 200 }))
+    await expect(resolveReleaseFeed('http://host:3000', 'ITPublic/deepseek-harness', empty))
       .rejects.toThrow(/publishes no release/u)
   })
 })
