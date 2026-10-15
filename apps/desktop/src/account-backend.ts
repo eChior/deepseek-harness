@@ -7,6 +7,17 @@ import type { AccountClientMetadata, AccountView, SignInAttemptId } from '@deeps
 /** Authenticated unary caller shared with native onboarding. */
 export type AccountInvoke = (request: { namespace: string; method: string; args: Record<string, unknown> }) => Promise<unknown>
 
+/**
+ * Session a native sign-in window captured, handed to the account provider.
+ * Declared here rather than imported so the renderer boundary stays JSON-encodable on both sides.
+ */
+export interface ExternalSessionInput {
+  /** Provider that owns the payload and understands its credential, such as `rwork`. */
+  readonly provider: string
+  /** Provider-defined credential, such as the cookie header of the captured session. */
+  readonly cookie: string
+}
+
 /** Decode the UI-safe state received across HTTP or WebSocket. @param value - wire value. @returns account projection. */
 export function accountView(value: unknown): AccountView {
   if (typeof value !== 'object' || value === null || !('status' in value)
@@ -65,7 +76,7 @@ export interface DesktopAccountBackend {
    * @param session - provider-defined session a native sign-in window captured.
    * @returns state after the session is committed.
    */
-  acceptExternalSession(session: Record<string, unknown>): Promise<AccountView>
+  acceptExternalSession(session: ExternalSessionInput): Promise<AccountView>
   /** @param client - this window's identity. @returns state after local sign-out. */
   signOut(client: AccountClientMetadata): Promise<AccountView>
   /**

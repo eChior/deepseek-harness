@@ -6,6 +6,17 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type { AccountBonusBatch, AccountBonusOrderId, AccountClientMetadata, AccountDetails, AccountUserId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { AccountView, SignInAttemptId } from './types.ts'
 
+/**
+ * Session a desktop shell captured in its own sign-in window and hands to the account provider.
+ * The Remote boundary has to stay JSON-encodable, so this cannot be an unconstrained record.
+ */
+export interface ExternalSessionInput {
+  /** Provider that owns the payload and understands its credential, such as `rwork`. */
+  readonly provider: string
+  /** Provider-defined credential, such as the cookie header of the captured session. */
+  readonly cookie: string
+}
+
 /** Account commands and reconnect-safe state stream. */
 export class AccountController extends TypertRemoteService {
   static inject = ['deepseekAccount', 'agents']
@@ -79,7 +90,7 @@ export class AccountController extends TypertRemoteService {
    * @returns state after the session is committed.
    */
   @Remote
-  acceptExternalSession(session: Record<string, unknown>): Promise<AccountView> {
+  acceptExternalSession(session: ExternalSessionInput): Promise<AccountView> {
     return this.ctx.deepseekAccount.acceptExternalSession(session)
   }
   /**
