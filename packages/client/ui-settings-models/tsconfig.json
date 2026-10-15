@@ -40,6 +40,12 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-sidebar"
+    },
+    {
+      "path": "../ui-settings-general/tsconfig.client.json"
     }
   ]
 }

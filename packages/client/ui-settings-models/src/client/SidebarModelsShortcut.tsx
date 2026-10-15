@@ -1,72 +1,42 @@
 /**
  * Sidebar shortcut for the Models settings, browser half.
  *
- * The settings panel owns its own navigation, and that panel lives in a package
- * this workspace does not carry the source of. Rather than reach into it, the
- * shortcut renders the Models section it already owns into a portal, so the
- * control sits above the account row in the sidebar foot and opens in place.
+ * The settings panel owns its own navigation: its sections are rendered by
+ * the shell that declares `sidebar.settings`, and that section seat is not
+ * this package's to render. The shortcut therefore drives the panel through
+ * the `settingsShell` service ui-settings-general provides, opening the panel
+ * directly on this feature's section.
  */
-import { useEffect, useState, type ReactElement } from 'react'
-import { ModelsSection } from './ModelsSection.tsx'
-import type { ModelsSectionInjected } from './ModelsSection.tsx'
+import { IconSparkleRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+// Type-only: pulls the sidebar shell's SlotMap merge (the
+// 'sidebar.footer.action' entry this component is registered against).
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import css from './SidebarModelsShortcut.module.css'
 
-/**
- * The Models section injects itself through its own apply, which runs before any
- * occupant renders; the shortcut therefore reads the live thunk through this
- * registration seam instead of taking it from slot owner props, which carry only
- * the sidebar column state.
- */
-let readInjected: (() => ModelsSectionInjected) | undefined
-
-/**
- * Publish the section's inject thunk for the sidebar occupant.
- * @param injected - Thunk built by this plugin's apply.
- */
-export function publishModelsShortcutInjected(injected: () => ModelsSectionInjected): void {
-  readInjected = injected
+/** Injected share of the sidebar shortcut (this plugin's register factory). */
+export interface ModelsShortcutInjected {
+  /** Open the Settings panel on this feature's registered section. */
+  openModelsSection: () => void
 }
 
-/** Geometry and copy supplied by the sidebar foot slot. */
-export interface ModelsShortcutProps {
-  /** Whether the sidebar shows labels. */
-  wide: boolean
-  /** Locale-bound translator; the slot binds it from this plugin's namespace. */
-  t: (key: 'shortcut') => string
-}
+/** Full props composed by the sidebar foot action seat. */
+export type ModelsShortcutProps =
+  PropsRuntime<'sidebar.footer.action'> & InjectFace<ModelsShortcutInjected> & PropsLocale<'settings.models'>
 
 /**
- * Render the Models shortcut and, while open, the section itself.
- * @param props - Sidebar geometry and translator.
+ * Render the Models shortcut: the sidebar foot keeps the account row last, and
+ * this seat sits directly above the Settings row so the models that drive every
+ * session stay reachable without opening Settings first.
+ * @param props - sidebar geometry, the panel driver, and the translator.
+ * @returns the sidebar foot action.
  */
-export function ModelsShortcut({ wide, t }: ModelsShortcutProps): ReactElement {
-  const [open, setOpen] = useState(false)
+export function ModelsShortcut({ wide, t, openModelsSection }: ModelsShortcutProps) {
   const label = t('shortcut')
-  // A closed shortcut must not keep listening for the Escape key.
-  useEffect(() => {
-    if (!open) return undefined
-    const close = (event: KeyboardEvent): void => { if (event.key === 'Escape') setOpen(false) }
-    window.addEventListener('keydown', close)
-    return () => { window.removeEventListener('keydown', close) }
-  }, [open])
-
-  const injected = readInjected
   return (
-    <>
-      <button
-        type="button"
-        className="dsh-models-shortcut"
-        aria-label={label}
-        title={label}
-        onClick={() => { setOpen(value => !value) }}
-      >
-        {wide ? <span>{label}</span> : <span aria-hidden="true">◇</span>}
-      </button>
-      {open && injected !== undefined && (
-        <div className="dsh-models-shortcut-panel" role="dialog" aria-modal="true" aria-label={label}>
-          <button type="button" className="dsh-models-shortcut-close" aria-label={label} onClick={() => { setOpen(false) }}>×</button>
-          <ModelsSection {...injected()} />
-        </div>
-      )}
-    </>
+    <button type="button" className={css.action} aria-label={label} title={label} onClick={openModelsSection}>
+      <IconSparkleRegular size={wide ? 16 : 18} />
+      {wide && <span className={css.label}>{label}</span>}
+    </button>
   )
 }

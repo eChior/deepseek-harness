@@ -57,6 +57,30 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
+/**
+ * Cross-plugin driver for the Settings panel's navigation. The panel's
+ * sections are registered by feature plugins into this shell's
+ * `settings.section` seat, and a feature that wants its own section reachable
+ * from outside the panel (the sidebar foot, for one) opens it through here
+ * instead of rendering the section out of its seat.
+ */
+export interface SettingsShellHandle {
+  /** Open the panel on whichever section it showed last. */
+  open(): void
+  /**
+   * Open the panel on one registered section.
+   * @param id - the `settings.section` entry id to activate.
+   */
+  openSection(id: string): void
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Settings panel navigation, provided by this plugin's apply. */
+    settingsShell: SettingsShellHandle
+  }
+}
+
 /** Dictionary namespace owned by this plugin (shell chrome + General copy). */
 const NS = 'settings'
 
@@ -172,10 +196,17 @@ export function apply(ctx: ClientContext): void {
       },
     },
   })
+  // One panel instance serves both the sidebar occupant and the navigation
+  // service: whichever plugin owns a section drives the panel through it, so a
+  // feature entry outside the panel never renders a section out of its seat.
+  const shellHandle = createSettingsShellStore()
+  const shellInstance = shellHandle.create()
+  const shellStore: typeof shellHandle = { ...shellHandle, create: () => shellInstance }
+  ctx.provide('settingsShell', {
+    open: (): void => { shellInstance.actions.open() },
+    openSection: (id: string): void => { shellInstance.actions.openSection(id) },
+  })
   ctx.slots.inject('sidebar.settings', () => {
-    const shellHandle = createSettingsShellStore()
-    const shellInstance = shellHandle.create()
-    const shellStore: typeof shellHandle = { ...shellHandle, create: () => shellInstance }
     const disposeCommand = ctx.shortcuts.register({
       id: 'settings.open' as ShortcutCommandId, label: () => t('shortcut.open'), aliases: ['settings', 'preferences'],
       defaults: {
