@@ -1,11 +1,13 @@
 /**
  * WPS-backed converter for installations that carry no LibreOffice engine.
  *
- * The kit publishes native engines for darwin and win32 only, so a Linux installation has no
- * renderer at all. This deployment ships `resources/wps/office-cli.mjs`, which drives WPS through
- * its own automation interface while keeping the kit CLI's command surface. When the desktop
- * application points `DSH_WPS_OFFICE_CLI` at that script, conversions run through it instead of
- * through the engine; every other deployment keeps the stock factory.
+ * The kit publishes native engines for darwin and win32 only, so a Linux installation falls back
+ * to the WASM engine. That engine works, but it starts slowly and renders through its own font and
+ * layout stack; a Kylin desktop ships WPS Office, whose Writer engine converts word-processing
+ * documents natively. This deployment ships `resources/wps/office-cli.mjs`, which drives WPS
+ * through its automation interface while keeping the kit CLI's command surface. When the desktop
+ * application points `DSH_WPS_OFFICE_CLI` at that script, Writer documents convert through WPS and
+ * every other format keeps the engine the kit would have chosen.
  */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -50,17 +52,118 @@ export function wpsOfficeCli(environment: NodeJS.ProcessEnv = process.env): stri
 
 /**
  * Create the converter this installation can actually run.
+ *
+ * A configured WPS CLI only takes over the formats its Writer engine handles; everything else —
+ * spreadsheets, presentations, and the images and recalculation calls — goes to the engine the kit
+ * would have chosen. That engine is built on first use, because instantiating it is the expensive
+ * half of a conversion and most documents never reach it.
  * @param options - Host limits shared with the engine-backed factory.
- * @returns A WPS-backed converter when one is configured, otherwise the kit's own converter.
+ * @returns A converter routing Writer documents to WPS when one is configured, otherwise the
+ *   kit's own converter.
  */
 export function createOfficeConverter(options?: ConverterOptions): Promise<Converter> {
   const cli = wpsOfficeCli()
   if (cli === undefined) return createConverter(options)
-  return Promise.resolve(new WpsConverter(cli, options?.timeoutMs ?? 120_000))
+  return Promise.resolve(new RoutedConverter(new WpsConverter(cli, options?.timeoutMs ?? 120_000), options))
 }
 
-/** Document formats the WPS CLI converts; anything else is refused before a process starts. */
-const CONVERTIBLE = new Set(['doc', 'docx', 'rtf', 'odt', 'txt', 'xls', 'xlsx', 'ods', 'csv', 'ppt', 'pptx', 'odp'])
+/** Document formats the WPS Writer engine converts; every other format keeps the kit's engine. */
+const WPS_FORMATS = new Set(['doc', 'docx', 'rtf', 'odt', 'txt'])
+
+/**
+ * Send Writer documents to WPS and everything else to the kit's own engine.
+ *
+ * The split exists because the two engines trade off differently: WPS converts word-processing
+ * documents natively with the fonts the desktop already ships, while the kit's fallback engine
+ * covers the remaining formats at the cost of a slow first conversion.
+ */
+class RoutedConverter implements Converter {
+  private delegate: Converter | undefined
+  private opening: Promise<Converter> | undefined
+
+  /**
+   * @param wps - Converter driving the WPS CLI.
+   * @param options - Host limits handed to the engine-backed converter when it is built.
+   */
+  constructor(private readonly wps: WpsConverter, private readonly options: ConverterOptions | undefined) {}
+
+  /** Engine actually in use once the fallback has been built; WPS reports itself as native. */
+  get backend(): 'native' | 'wasm' {
+    return this.delegate?.backend ?? 'native'
+  }
+
+  /**
+   * Convert one document, choosing the engine from the input extension.
+   * @param request - Absolute input path and a fresh PDF output path.
+   * @param signal - Cancellation for whichever engine runs.
+   * @returns The engine choice and the missing declared families.
+   */
+  async render(request: { inputPath: string; outputPath: string }, signal?: AbortSignal): Promise<RenderResult> {
+    if (routesToWps(request.inputPath)) return await this.wps.render(request, signal)
+    return await (await this.engine()).render(request, signal)
+  }
+
+  /**
+   * Convert to the requested format, choosing the engine from the input extension.
+   * @param request - Absolute input path and the requested output path.
+   * @param signal - Cancellation for whichever engine runs.
+   * @returns The engine choice and the missing declared families.
+   */
+  async convert(request: ConversionRequest, signal?: AbortSignal): Promise<RenderResult> {
+    if (routesToWps(request.inputPath)) return await this.wps.convert(request, signal)
+    return await (await this.engine()).convert(request, signal)
+  }
+
+  /**
+   * Rasterise through the kit's engine, which is the only side that supports it.
+   * @param request - Absolute input path and output directory.
+   * @param signal - Cancellation for the engine.
+   * @returns The rendered pages.
+   */
+  async renderImages(request: RenderImagesRequest, signal?: AbortSignal): Promise<RenderImagesResult> {
+    return await (await this.engine()).renderImages(request, signal)
+  }
+
+  /**
+   * Recalculate through the kit's engine, which owns every workbook format.
+   * @param request - Absolute input and output paths.
+   * @param signal - Cancellation for the engine.
+   * @returns The recalculation outcome.
+   */
+  async recalculate(request: Omit<ConversionRequest, 'sheet'>, signal?: AbortSignal): Promise<RenderResult> {
+    return await (await this.engine()).recalculate(request, signal)
+  }
+
+  /** Release both engines; the fallback is only built when something asked for it. */
+  async dispose(): Promise<void> {
+    const delegate = this.delegate
+    this.delegate = undefined
+    await this.wps.dispose()
+    await delegate?.dispose()
+  }
+
+  /** Build the kit's converter once, sharing the in-flight promise across concurrent callers. */
+  private async engine(): Promise<Converter> {
+    if (this.delegate !== undefined) return this.delegate
+    this.opening ??= createConverter(this.options)
+    try {
+      const opened = await this.opening
+      this.delegate = opened
+      return opened
+    } finally {
+      this.opening = undefined
+    }
+  }
+}
+
+/**
+ * Decide whether one input belongs to the WPS side of the split.
+ * @param inputPath - Absolute source path.
+ * @returns True when the extension is one the Writer engine converts.
+ */
+function routesToWps(inputPath: string): boolean {
+  return WPS_FORMATS.has(extname(inputPath).slice(1).toLowerCase())
+}
 
 /**
  * One serial converter driving the WPS CLI.
@@ -140,7 +243,7 @@ class WpsConverter implements Converter {
   private async run(inputPath: string, outputPath: string, signal?: AbortSignal): Promise<void> {
     if (this.disposed) throw new ConversionError('unavailable', 'The WPS converter is disposed.')
     const extension = extname(inputPath).slice(1).toLowerCase()
-    if (!CONVERTIBLE.has(extension)) {
+    if (!WPS_FORMATS.has(extension)) {
       throw new ConversionError('unsupported-format', `The WPS converter does not open .${extension} files.`)
     }
     signal?.throwIfAborted()

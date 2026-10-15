@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在宿主计算机上将 Office 文档转换为 PDF。声明了原生 LibreOffice 引擎的目标使用原生引擎，其余目标使用 Node WASM。在 Linux 上 kit 不发布任何引擎，提供方改为驱动已安装的 WPS Office 的命令行垫片。提供方支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX。OOXML 转换返回缺失字体名称；二进制 Office 转换返回空列表。
+在宿主计算机上将 Office 文档转换为 PDF。声明了原生 LibreOffice 引擎的目标使用原生引擎，其余目标使用 Node WASM。Linux 上 kit 回落 WASM；当桌面应用把 `DSH_WPS_OFFICE_CLI` 指向内置的 WPS Office 垫片时，文字处理文档改由 WPS 转换。提供方支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX。OOXML 转换返回缺失字体名称；二进制 Office 转换返回空列表。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 调用方通过 `ctx.officeToPdf.convert()` 提交已授权源的标识、版本、可选字节数、延迟的有界读取、Office 扩展名和调度优先级。源版本变化会拒绝转换。结果包含调用方拥有的 PDF 字节、缺失字体、缓存键和转换 generation；配置替换后 generation 随之改变。取消以原因为拒绝值，转换失败使用 `OfficeToPdfError`。
 
-此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit/tree/main/packages/entry) npm API，kit 版本为 `0.1.5`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。桌面壳另外把内置的 WPS Office 垫片路径发布在 `DSH_WPS_OFFICE_CLI`；当该变量指向一个存在的绝对文件时，provider 改走它而不是 kit —— 这是 Linux 上唯一可用的引擎。[平台引擎决策](../../../.agents/notes/implemented/architecture/2026-09-15-platform-office-engines.zh.md)定义安装与打包策略；[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
+此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit/tree/main/packages/entry) npm API，kit 版本为 `0.1.5`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。桌面壳另外把内置的 WPS Office 垫片路径发布在 `DSH_WPS_OFFICE_CLI`；当该变量指向一个存在的绝对文件时，文字处理文档改走它，其余格式仍使用 kit 选定的引擎。[平台引擎决策](../../../.agents/notes/implemented/architecture/2026-09-15-platform-office-engines.zh.md)定义安装与打包策略；[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
 
 浏览器通过 `officeToPdf.render` Remote 方法请求 PDF，参数为 Session 标识、Office 路径和优先级。此入口使用 `workspaceFiles` 完成授权和源版本检查，再通过 `fs.readBytes` 在转换预留容量内读取原始字节。进程内 `convert()` 不要求这些服务。响应保留源文件路径与版本，通过二进制 Remote 的 multipart 传输携带原生 PDF 字节，并携带缺失字体和转换 generation。`officeToPdf.generation` Remote 方法返回当前提供方 generation；`api/remotes` 负责挂载生成的 Client 描述符。
 
@@ -60,7 +60,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部细节 — 点击展开</summary>
 
-引擎元数据无效、必需资源缺失和转换错误会拒绝请求，不会切换引擎。共享的 WASM 引擎使用 LibreOffice 的 CPU 图像过滤器。原生转换使用独立的平台引擎。WPS 分支实现同一套 `Converter` 契约，通过 `process.execPath` 把垫片作为子进程运行，输入与输出路径作为参数传入；对 kit 支持而垫片不支持的光栅图像与重算请求报告 `unsupported-format`。
+引擎元数据无效、必需资源缺失和转换错误会拒绝请求，不会切换引擎。共享的 WASM 引擎使用 LibreOffice 的 CPU 图像过滤器。原生转换使用独立的平台引擎。WPS 分支实现同一套 `Converter` 契约，通过 `process.execPath` 把垫片作为子进程运行，输入与输出路径作为参数传入。它只接管文字处理格式，因为该垫片仅驱动 WPS Writer 引擎；电子表格、演示文稿、光栅图像与重算仍交给 kit 的引擎，后者在首次使用时才构建，因此只转换文字处理文档的部署不必为它付出代价。
 
 每个并发槽按需创建并复用一个 kit 转换器。提供方将已授权输入写入私有临时目录，读取有大小上限的普通 PDF 文件，并在完成前删除目录。取消已准入的读取方不会阻塞后续排队工作。读取方取消只会释放该读取方；最后一个读取方和提供方卸载会取消共享工作。卸载向未完成读取方报告 `unavailable`，并等待转换及转换器清理结束。活跃操作和临时目录清理由同一生命周期负责，因此不发布运行时不变量伴随入口。
 
@@ -92,7 +92,7 @@ Remote 文件读取在查询转换缓存前重新检查内容读取授权和源�
 <a id="known-limitations-and-deferred-work"></a>
 
 - 转换保真度和已安装的原生/WASM 资产由 `@deepseek-ai/libreoffice-kit` 负责；此提供方不查找系统 LibreOffice，也不在运行时下载引擎。
-- WPS 垫片只经由 Writer 引擎转换；该分支下图像与重算请求报告 `unsupported-format`，不再回退到 kit。
+- WPS 垫片只经由 Writer 引擎转换，因此文字处理文档走该分支，其余格式（含光栅图像与重算）仍使用 kit 选定的引擎。
 - `timeoutMs` 仅在 kit 开始转换时计时，不限制队列等待时间。
 
 <a id="dev-note"></a>
