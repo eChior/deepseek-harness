@@ -12,6 +12,39 @@ import { resolveReleaseFeed } from './update-source.ts'
 
 const { autoUpdater } = electronUpdater
 
+/**
+ * The slice of `electron-updater` this coordinator drives: the flags it sets, the three events it
+ * listens for, and the calls it makes. `electron-updater` exports a class that keeps private
+ * state, so a test cannot assert a plain emitter to `AppUpdater`; naming the members here keeps
+ * the network/platform test boundary typed without an assertion to `unknown`.
+ */
+export interface DesktopUpdaterAdapter {
+  /** Whether a check downloads without asking; this coordinator always drives both steps itself. */
+  autoDownload: boolean
+  /** Whether a quit installs whatever finished downloading; installation stays explicit. */
+  autoInstallOnAppQuit: boolean
+  /** Release channel reported to the feed. */
+  channel: string | null
+  /** Whether prerelease versions are eligible. */
+  allowPrerelease: boolean
+  /** Whether a lower version may replace the installed one. */
+  allowDowngrade: boolean
+  on(event: string, listener: (...args: never[]) => void): unknown
+  off(event: string, listener: (...args: never[]) => void): unknown
+  emit(event: string, ...args: unknown[]): boolean
+  /** Points the updater at this distribution's release feed. */
+  setFeedURL(options: Parameters<AppUpdater['setFeedURL']>[0]): void
+  /** Resolves the feed's newest release, or `null` when the updater reports none. */
+  checkForUpdates(): Promise<{ isUpdateAvailable: boolean; updateInfo: { version: string } } | null>
+  /** Downloads the candidate release and resolves with the verified artefact paths. */
+  downloadUpdate(): Promise<readonly string[]>
+  /** Quits the application and starts the downloaded installer. */
+  quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void
+}
+
+/** The packaged updater, viewed through the adapter the coordinator drives. */
+const packagedUpdater: DesktopUpdaterAdapter = autoUpdater
+
 /** Owns one updater target until its download and installation settle. */
 export class DesktopUpdateCoordinator {
   private current: DesktopUpdateState = { phase: 'idle' }
@@ -51,16 +84,16 @@ export class DesktopUpdateCoordinator {
   constructor(
     private readonly publish: (state: DesktopUpdateState) => DesktopUpdateState,
     private readonly beforeRestart: () => Promise<boolean>,
-    private readonly updater: AppUpdater = autoUpdater,
+    private readonly updater: DesktopUpdaterAdapter = packagedUpdater,
     private readonly enabled: () => boolean = () => app.isPackaged && existsSync(join(process.resourcesPath, 'app-update.yml')),
     private readonly currentVersion: () => string = () => app.getVersion(),
     private readonly downloadResult?: (success: boolean, reason?: string) => void,
     private readonly releaseFeed: () => Promise<string> = () => resolveReleaseFeed(),
   ) {
-    if (updater === autoUpdater) {
+    if (updater === packagedUpdater) {
       // electron-updater omits this internal transport property from its public declarations.
       // Real-Electron qualification exercises the pinned dependency integration.
-      const transportOwner = updater as AppUpdater & { httpExecutor: DesktopUpdateHttpExecutor }
+      const transportOwner = updater as DesktopUpdaterAdapter & { httpExecutor: DesktopUpdateHttpExecutor }
       transportOwner.httpExecutor = new DesktopUpdateHttpExecutor(
         Number(process.env.DSH_DESKTOP_UPDATE_HTTP_IDLE_TIMEOUT_MS ?? 60_000),
         (authInfo, callback) => { updater.emit('login', authInfo, callback) },

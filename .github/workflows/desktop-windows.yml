@@ -85,13 +85,16 @@ jobs:
         shell: pwsh
         run: |
           # Git ignores this file, so the lane writes the release settings the packaging
-          # preflight reads: an application id, a mandatory-update policy for the default
-          # `test` deployment, and the signature-cache concurrency. Unsigned packaging
-          # resolves no signing certificate and no update credentials.
+          # preflight reads: an application id, the update feed a `test` deployment requires,
+          # a mandatory-update policy, and the signature-cache concurrency. The download
+          # origin is a placeholder — the packaged application replaces the feed with the
+          # release listing it reads from Gitea. Unsigned packaging resolves no certificate.
           $path = Join-Path $PWD 'apps/desktop/.env.windows'
           @(
             'DSH_DESKTOP_APP_ID=com.deepseek.harness'
             'DSH_DESKTOP_AUTO_UPDATE_ENV=test'
+            'DOWNLOAD_TEST_ORIGIN=https://download.local.invalid'
+            'DOWNLOAD_TEST_RELEASE_ID=0123456789abcdef0123456789abcdef'
             'DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://update.local.invalid'
             'DSH_DESKTOP_MANDATORY_UPDATE_CONFIG={"allowedAuthOrigins":["https://login.local.invalid"]}'
             'DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_CONCURRENCY=4'

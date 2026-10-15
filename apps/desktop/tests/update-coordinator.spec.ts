@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppUpdater } from 'electron-updater'
+import type { DesktopUpdaterAdapter } from '../src/update-coordinator.ts'
 import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
 import { parseDesktopRelease } from '../src/release.ts'
 import type { DesktopUpdateState } from '../src/ipc.ts'
@@ -65,7 +65,10 @@ function fixture() {
   const downloadResult = vi.fn()
   const releaseFeed = vi.fn(async () => 'https://releases.invalid/nightly')
   const states: DesktopUpdateState[] = []
-  const updater = Object.assign(events, { checkForUpdates, downloadUpdate, quitAndInstall, setFeedURL }) as AppUpdater
+  const updater: DesktopUpdaterAdapter = Object.assign(events, {
+    checkForUpdates, downloadUpdate, quitAndInstall, setFeedURL,
+    autoDownload: false, autoInstallOnAppQuit: false, channel: null, allowPrerelease: true, allowDowngrade: false,
+  })
   const coordinator = new DesktopUpdateCoordinator(
     (state) => { states.push(state); return state },
     beforeRestart, updater, () => true, () => '1.1.0-alpha.1', downloadResult, releaseFeed,
