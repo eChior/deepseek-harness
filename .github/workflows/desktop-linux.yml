@@ -76,12 +76,15 @@ jobs:
           # image rather than on the runner: linking against the runner's newer libc records
           # GLIBC_2.34 and GLIBC_2.38 symbol versions, and the binary then refuses to start on the
           # target with "version `GLIBC_2.38' not found".
-          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -w /work ubuntu:20.04 bash -c '
+          # The container runs as root because apt refuses any other account, and the binary is
+          # handed back to the runner account before the job continues.
+          docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -v "$PWD:/work" -w /work ubuntu:20.04 bash -c '
             set -euo pipefail
             export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq >/dev/null 2>&1
-            apt-get install -y -qq g++ >/dev/null 2>&1
+            apt-get update -qq
+            apt-get install -y -qq g++
             g++ -O2 -o apps/desktop/resources/wps/wps2pdf apps/desktop/resources/wps/wps2pdf.cpp -ldl
+            chown "$HOST_UID:$HOST_GID" apps/desktop/resources/wps/wps2pdf
             ldd apps/desktop/resources/wps/wps2pdf | head -5'
           ls -l apps/desktop/resources/wps/
 
