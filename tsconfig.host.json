@@ -235,6 +235,7 @@
     { "path": "./packages/document/office-to-pdf" },
 
     { "path": "./packages/api/account-controller" },
+    { "path": "./packages/api/redaction-controller" },
     { "path": "./packages/credentials/deepseek-account-platform" },
     { "path": "./packages/credentials/hrzszy-account" },
     { "path": "./packages/credentials/deepseek-account" },

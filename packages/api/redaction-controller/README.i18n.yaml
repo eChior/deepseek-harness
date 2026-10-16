@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/api/redaction-controller/README.md
+/:
+  en: a5556f21b734fa30
+  zh: 840c6d197e2c65c6
+/redaction-controller:
+  en: 79ef9070005a945e
+  zh: 5a2f9c9d3b5ef739
+/redaction-controller/summary:
+  en: 6b1bd6210e5b40e5
+  zh: c3eb569e8cd1fb80
+/redaction-controller/table-of-contents:
+  en: 4e53164159b5ce41
+  zh: 1e7d2e37b6eba4ea
+/redaction-controller/use-this-package:
+  en: beceafe7913e4e4b
+  zh: cb6d0c5ba7f98c4b
+/redaction-controller/model-experience:
+  en: 3c3e0a1df3a18b03
+  zh: 16e7b9d16c5be819
+/redaction-controller/model-experience/kv-cache-effect:
+  en: 0e4392b8f75e4708
+  zh: 68a22d565c40d64a
+/redaction-controller/known-limitations-and-deferred-work:
+  en: 2079499d0de2980a
+  zh: 10c825fb27aebce7
+/redaction-controller/known-limitations-and-deferred-work/dev-note:
+  en: dba3366668b46cc6
+  zh: a22f358559dcd0d5

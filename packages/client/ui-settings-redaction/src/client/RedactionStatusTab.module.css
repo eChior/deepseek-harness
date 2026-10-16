@@ -1,0 +1,81 @@
+/* The tab's own width, not the window's, decides the panel below. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 760px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.status,
+.failure p {
+  margin: 0;
+}
+
+.status,
+.failure {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.failure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 0.5px solid var(--dsw-alias-border-secondary);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-fill-secondary);
+}
+
+.heading {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.hint,
+.note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.note {
+  color: var(--dsw-alias-state-warning-primary);
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.term {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.value {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}

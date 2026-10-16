@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-settings-redaction/README.md
+/:
+  en: 9ae24b7184c34969
+  zh: d674af03685e1f0f
+/deepseek-ai-dsh-client-ui-settings-redaction:
+  en: c94ba0b40ae31f32
+  zh: cac69c8ac844078b
+/deepseek-ai-dsh-client-ui-settings-redaction/summary:
+  en: 6e34796d435c2238
+  zh: 705a93c594ec58c2
+/deepseek-ai-dsh-client-ui-settings-redaction/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-settings-redaction/use-this-package:
+  en: effea959854093b7
+  zh: 1ca705ebd2114fd9
+/deepseek-ai-dsh-client-ui-settings-redaction/use-this-package/what-each-row-means:
+  en: 6b7b1ba9b3ec1c51
+  zh: 88caf8a7be8980ab
+/deepseek-ai-dsh-client-ui-settings-redaction/understand-the-implementation:
+  en: 4db60bc21ad7c393
+  zh: 0811e6751119e903
+/deepseek-ai-dsh-client-ui-settings-redaction/understand-the-implementation/registration:
+  en: eda98274b32e82bf
+  zh: 3f5be1e098e3aed5
+/deepseek-ai-dsh-client-ui-settings-redaction/understand-the-implementation/reading-the-status:
+  en: b8e5d52f5709e1b2
+  zh: bd2a7994ab91a47c
+/deepseek-ai-dsh-client-ui-settings-redaction/understand-the-implementation/why-the-view-type-is-declared-on-the-host:
+  en: 8128e41b83deff03
+  zh: 5855a40a53dd99f9
+/deepseek-ai-dsh-client-ui-settings-redaction/further-exploration:
+  en: aca7532dffefbb30
+  zh: d300a89f40f8b0c9
+/deepseek-ai-dsh-client-ui-settings-redaction/model-experience:
+  en: 8c0707a2ae438b46
+  zh: 6c370db8778fa842
+/deepseek-ai-dsh-client-ui-settings-redaction/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-client-ui-settings-redaction/known-limitations-and-deferred-work:
+  en: fb000e37527b27ac
+  zh: e96099b720162eb7
+/deepseek-ai-dsh-client-ui-settings-redaction/known-limitations-and-deferred-work/dev-note:
+  en: 7516b7e39304e5b3
+  zh: 8961c0cefb89ee12

@@ -145,6 +145,12 @@
     - id: settings-controller
       name: '@deepseek-ai/dsh-api-settings-controller'
 
+    # Read-only status of the redaction provider, for the Settings page. The
+    # provider itself is mounted by the base profile; this row only republishes
+    # its record over Typert Remote.
+    - id: redaction-controller
+      name: '@deepseek-ai/dsh-api-redaction-controller'
+
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
@@ -306,6 +312,12 @@
     # bundles the sidebar page leaves out are inspected here.
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
+
+    # Read-only redaction status tab in the same section: the term-list revision
+    # the provider loaded, its compiled rule counts, and this process's
+    # replacement counter.
+    - id: ui-settings-redaction
+      name: '@deepseek-ai/dsh-client-ui-settings-redaction'
 
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'

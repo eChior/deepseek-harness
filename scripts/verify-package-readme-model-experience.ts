@@ -69,7 +69,9 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/credentials/deepseek-account-platform': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
   'packages/credentials/hrzszy-account': { kind: 'none', reason: 'The identity gateway registers no model context or tools; the session cookie affects host HTTP authentication only.' },
   'packages/api/account-controller': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
+  'packages/api/redaction-controller': { kind: 'none', reason: 'The namespace republishes the provider record, which counts rewrites and never carries the text that was rewritten.' },
   'packages/client/ui-settings-account': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
+  'packages/client/ui-settings-redaction': { kind: 'none', reason: 'The tab reads the provider status over Remote and renders it in the browser; it registers nothing model-facing.' },
 
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },
