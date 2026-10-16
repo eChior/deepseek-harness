@@ -32,7 +32,7 @@ import type { Volatile } from '@deepseek-ai/cordis'
 
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-attachment'
+import type { LocalImageReader } from '@deepseek-ai/dsh-attachment'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
@@ -448,7 +448,13 @@ export class SubagentRuntime extends TypertRemoteService {
       } else {
         const attachments = this.ctx.get('attachments')
         if (attachments === undefined) throw new Error('subagent image prompt requires an attachment store')
-        content = await attachments.admitPromptContent(request.content)
+        // A deployment with a local image reader turns each image into text, so a
+        // subagent prompt carries the same redacted text the parent session saw
+        // instead of pixels the child's model would receive unredacted.
+        content = await attachments.admitPromptContent(
+          request.content,
+          this.ctx.get('redaction') as LocalImageReader | undefined,
+        )
       }
       return {
         messageId: await this[deliverSubagentPrompt](

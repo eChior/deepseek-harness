@@ -432,9 +432,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'durable normalized attachment references in the same order after every member succeeds.',
       },
       {
-        signature: 'async admitPromptContent( content: readonly AttachmentAdmissionPart[], ): Promise<AdmittedPromptContentPart[]>',
-        description: 'Admit one Host prompt and replace each uploaded image with its durable reference. Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.',
-        parameters: [{ name: 'content', description: 'prompt parts in message order after file receipt resolution.' }],
+        signature: 'async admitPromptContent( content: readonly AttachmentAdmissionPart[], reader?: LocalImageReader, ): Promise<AdmittedPromptContentPart[]>',
+        description: 'Admit one Host prompt: give every uploaded image the reader\'s text, or replace it with its durable reference when the caller supplies no reader. Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.',
+        parameters: [{ name: 'content', description: 'prompt parts in message order after file receipt resolution.' }, { name: 'reader', description: 'local image reader; without one an image is stored as pixels.' }],
         returns: 'admitted prompt parts in the same order as `content`.',
         throws: ['AttachmentError when the image batch is refused.'],
       },
@@ -1829,9 +1829,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async load(): Promise<RedactionStatus>',
-        description: 'Load the term list. Never throws: a missing or malformed file leaves the provider holding no rules, which replaces nothing, and records why in `detail` so the state is visible instead of silent.',
+        description: 'Load a term list and start refreshing it.\n\nThe cached copy loads first because it is the one this machine last saw a publisher confirm; the copy inside the package is the fallback for an install that has never reached the publisher. A refresh follows whenever a list was loaded and the deployment tracks a repository.',
         parameters: [],
         returns: 'The status after the attempt; `detail` carries any failure reason.',
+      },
+      {
+        signature: 'async refresh(): Promise<RedactionStatus>',
+        description: 'Ask the publisher for the list and adopt it when it changed.\n\nA refresh that fails or times out keeps the rules already in hand: a client that cannot reach the repository must go on replacing what it replaced before, which is the reason the list is cached at all.',
+        parameters: [],
+        returns: 'The status after the attempt; `lastError` carries a failure reason.',
       },
       {
         signature: 'redact<T extends RedactablePart>(parts: readonly T[]): T[]',
@@ -1844,6 +1850,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Rewrite one string, for callers holding text outside a part list.',
         parameters: [{ name: 'text', description: 'Text to rewrite.' }],
         returns: 'The rewritten text, or the input when no rule matched.',
+      },
+      {
+        signature: 'redactValue(value: JsonValue): JsonValue',
+        description: 'Rewrite every string inside a presentation payload.\n\nA UI renders the call from this payload and the session log keeps it, so a value that survives here is readable in a transcript even when the model never saw it.',
+        parameters: [{ name: 'value', description: 'The payload, as the tool projected it.' }],
+        returns: 'The same shape with every string rewritten.',
+      },
+      {
+        signature: 'async recognizeImage(data: string, mediaType: string): Promise<string | undefined>',
+        description: 'Read the text out of one encoded image on this machine and redact it.\n\nThe image is decoded in memory and read by a local recognizer: it is never stored, never returned, and never sent to a model, so a screenshot reaches the session as the text it held and nothing else. A caller that gets `undefined` reports the failure and keeps the image out of the session — handing the pixels to the model is the one outcome this must not produce.',
+        parameters: [{ name: 'data', description: 'The image as canonical base64.' }, { name: 'mediaType', description: 'Its media type, for the log.' }],
+        returns: 'The redacted text, or `undefined` when no text could be read.',
       },
       {
         signature: 'restore(text: string): string',
@@ -5696,6 +5714,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface LocalAtInput {\n    readonly date: string;\n    readonly time: string;\n    readonly time_zone: string;\n}',
   },
   {
+    name: 'LocalImageReader',
+    declaration: 'export interface LocalImageReader {\n    recognizeImage(data: string, mediaType: string): Promise<string | undefined>;\n}',
+  },
+  {
     name: 'LocalizedText',
     declaration: 'export type LocalizedText = string | {\n    readonly en: string;\n    readonly [locale: string]: string;\n};',
   },
@@ -6029,7 +6051,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PostToolDecision',
-    declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    additionalContexts?: UserMessage[];\n};',
+    declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    meta?: JsonValue;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    meta?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    additionalContexts?: UserMessage[];\n};',
   },
   {
     name: 'PreparedAdapterCall',
@@ -6225,7 +6247,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly detail: string | null;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n}',
   },
   {
     name: 'Registry',
@@ -7614,6 +7636,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalWaitReason',
     declaration: 'export type TerminalWaitReason = \'stdin_read\' | \'inferred_idle\' | \'timeout\' | \'session_exit\';',
+  },
+  {
+    name: 'TermSourceKind',
+    declaration: 'export type TermSourceKind = \'bundled\' | \'cache\' | \'remote\';',
   },
   {
     name: 'TimedUserQuestionResult',

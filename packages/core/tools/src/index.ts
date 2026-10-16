@@ -613,10 +613,16 @@ export type PreToolDecision =
 /**
  * Post-dispatch decision: accept, replace one projection, attach context for the
  * next request, or block by turning corrective feedback into an error result.
+ *
+ * `accept` may replace `content` (what the model reads), `value` (what the tool
+ * reported), or `meta` (the payload a UI renders the call from). A policy that
+ * rewrites model-facing text replaces `content` and `meta` together: the payload
+ * is persisted beside the text, so replacing one alone still leaves the other in
+ * the session log.
  */
 export type PostToolDecision =
-  | { kind: 'accept'; content?: ContentBlock[]; value?: never; additionalContexts?: UserMessage[] }
-  | { kind: 'accept'; value: JsonValue; content?: never; additionalContexts?: UserMessage[] }
+  | { kind: 'accept'; content?: ContentBlock[]; value?: never; meta?: JsonValue; additionalContexts?: UserMessage[] }
+  | { kind: 'accept'; value: JsonValue; content?: never; meta?: never; additionalContexts?: UserMessage[] }
   | { kind: 'block'; feedback: ContentBlock[]; additionalContexts?: UserMessage[] }
 
 /**
@@ -1815,6 +1821,7 @@ export class ToolRuntime extends Service {
     return this.markCanonical(exec, {
       ...result,
       ...decision.content !== undefined ? { content: decision.content } : {},
+      ...decision.meta !== undefined ? { meta: decision.meta } : {},
       ...additionalContexts.length > 0 ? { additionalContexts } : {},
     })
   }

@@ -871,6 +871,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
   RedactionStatus: 'provider status record is owned by packages/security/redaction/README.md',
   RedactablePart: 'prompt part contract is owned by packages/security/redaction/README.md',
+  LocalImageReader: 'caller-supplied reader contract is owned by packages/attachment/attachment/README.md',
   SkillRepositoryStatus: 'mirror status record is owned by packages/skill/skill-repo/README.md',
   CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',

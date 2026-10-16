@@ -68,7 +68,13 @@ async function wiredInbox(rawId: string): Promise<{ ctx: Context; inbox: ReactLo
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   ctx.sessionProjections.register(inboxProjectionDefinition)
-  await ctx.plugin(RedactionService, { termsPath })
+  await ctx.plugin(RedactionService, {
+    termsPath,
+    cacheDirectory: join(directory, 'cache'),
+    remote: '',
+    refreshMinutes: 0,
+    vision: false,
+  })
   await ctx.redaction.load()
   const id = SessionId(rawId)
   const session = ctx.sessions.create(id)

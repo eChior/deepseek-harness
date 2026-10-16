@@ -782,12 +782,25 @@ Rewrite the text of an admitted prompt into stable placeholders, so the values i
 
 ```ts cordis-catalog
 /**
- * Load the term list. Never throws: a missing or malformed file leaves the
- * provider holding no rules, which replaces nothing, and records why in
- * `detail` so the state is visible instead of silent.
+ * Load a term list and start refreshing it.
+ *
+ * The cached copy loads first because it is the one this machine last saw a
+ * publisher confirm; the copy inside the package is the fallback for an install
+ * that has never reached the publisher. A refresh follows whenever a list was
+ * loaded and the deployment tracks a repository.
  * @returns The status after the attempt; `detail` carries any failure reason.
  */
 async load(): Promise<RedactionStatus>
+
+/**
+ * Ask the publisher for the list and adopt it when it changed.
+ *
+ * A refresh that fails or times out keeps the rules already in hand: a client
+ * that cannot reach the repository must go on replacing what it replaced before,
+ * which is the reason the list is cached at all.
+ * @returns The status after the attempt; `lastError` carries a failure reason.
+ */
+async refresh(): Promise<RedactionStatus>
 
 /**
  * Rewrite the text parts. Parts that carry no text — images, file references,
@@ -805,6 +818,31 @@ redact<T extends RedactablePart>(parts: readonly T[]): T[]
  * @returns The rewritten text, or the input when no rule matched.
  */
 redactText(text: string): string
+
+/**
+ * Rewrite every string inside a presentation payload.
+ *
+ * A UI renders the call from this payload and the session log keeps it, so a
+ * value that survives here is readable in a transcript even when the model
+ * never saw it.
+ * @param value The payload, as the tool projected it.
+ * @returns The same shape with every string rewritten.
+ */
+redactValue(value: JsonValue): JsonValue
+
+/**
+ * Read the text out of one encoded image on this machine and redact it.
+ *
+ * The image is decoded in memory and read by a local recognizer: it is never
+ * stored, never returned, and never sent to a model, so a screenshot reaches
+ * the session as the text it held and nothing else. A caller that gets
+ * `undefined` reports the failure and keeps the image out of the session —
+ * handing the pixels to the model is the one outcome this must not produce.
+ * @param data The image as canonical base64.
+ * @param mediaType Its media type, for the log.
+ * @returns The redacted text, or `undefined` when no text could be read.
+ */
+async recognizeImage(data: string, mediaType: string): Promise<string | undefined>
 
 /**
  * Turn the placeholders this session emitted back into the values they stand for.

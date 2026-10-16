@@ -7,7 +7,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type {
-  AttachmentAdmissionPart, FileAttachmentRef, ImageAttachmentRef,
+  AttachmentAdmissionPart, FileAttachmentRef, ImageAttachmentRef, LocalImageReader,
 } from '@deepseek-ai/dsh-attachment'
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
@@ -334,9 +334,14 @@ export class SessionCommandController {
       ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
     }
     const hasImage = request.content.some(part => part.type === 'image')
+    // A deployment with a local image reader turns each image into text before a
+    // model ever sees it, so a text-only model is no reason to refuse the prompt.
+    // The modality check is for the images that would be sent as images.
+    const imageReader = this.ctx.get('redaction') as LocalImageReader | undefined
+    const sendsImages = hasImage && imageReader === undefined
     const admit = async (): Promise<SessionPromptValue> => {
       try {
-        if (hasImage) {
+        if (sendsImages) {
           const current = this.agents.selectionFor(agent).current
           const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model)
           if (model.inputModalities !== undefined && !model.inputModalities.includes('image')) {
@@ -351,7 +356,7 @@ export class SessionCommandController {
           request.content,
           receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
         )
-        const content = await this.ctx.attachments.admitPromptContent(admission.content)
+        const content = await this.ctx.attachments.admitPromptContent(admission.content, imageReader)
         const message: UserMessage = createUserMessage({ content, source })
         if (this.ctx.agents.get(agent.id) !== agent) {
           throw new RemoteError(

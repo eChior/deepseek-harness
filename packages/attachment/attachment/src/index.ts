@@ -43,6 +43,26 @@ export type {
   StoredImageAttachment,
 } from './types.ts'
 
+/**
+ * What this store needs from a local image reader.
+ *
+ * Declared here instead of imported so the attachment layer stays independent of
+ * whichever plugin reads images: a deployment without one stores images as before.
+ * A reader is expected to hand back text that has already been redacted.
+ */
+export interface LocalImageReader {
+  /**
+   * Read one encoded image and return the text it held.
+   * @param data The image as canonical base64.
+   * @param mediaType Its declared media type.
+   * @returns The text, or undefined when this machine cannot read the image.
+   */
+  recognizeImage(data: string, mediaType: string): Promise<string | undefined>
+}
+
+/** What a session records in place of an image this machine could not read. */
+const UNREAD_IMAGE_PLACEHOLDER = '[图片-未能识别]'
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     attachments: AttachmentStore
@@ -105,19 +125,38 @@ export abstract class AttachmentStore extends Service {
   }
 
   /**
-   * Admit one Host prompt and replace each uploaded image with its durable reference.
+   * Admit one Host prompt: give every uploaded image the reader's text, or replace it
+   * with its durable reference when the caller supplies no reader.
    * Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.
    * @param content - prompt parts in message order after file receipt resolution.
+   * @param reader - local image reader; without one an image is stored as pixels.
    * @returns admitted prompt parts in the same order as `content`.
    * @throws AttachmentError when the image batch is refused.
    */
   async admitPromptContent(
     content: readonly AttachmentAdmissionPart[],
+    reader?: LocalImageReader,
   ): Promise<AdmittedPromptContentPart[]> {
     if (content.every(part => part.type !== 'image')) {
       return content.map(part => part.type === 'text'
         ? { type: 'text', text: part.text }
         : { type: 'file', attachment: part.attachment })
+    }
+    // A caller with a reader never stores the image: each one becomes the text it
+    // held, so the pixels stay out of the store and out of every model request,
+    // and what the session keeps has already been redacted.
+    if (reader !== undefined) {
+      const texts = await Promise.all(
+        content
+          .filter(part => part.type === 'image')
+          .map(image => reader.recognizeImage(image.data, image.mediaType)),
+      )
+      let read = 0
+      return content.map((part) => {
+        if (part.type === 'text') return { type: 'text', text: part.text }
+        if (part.type === 'file') return { type: 'file', attachment: part.attachment }
+        return { type: 'text', text: texts[read++] ?? UNREAD_IMAGE_PLACEHOLDER }
+      })
     }
     const refs = await admitEncodedImages(this, content.filter(part => part.type === 'image'))
     let next = 0

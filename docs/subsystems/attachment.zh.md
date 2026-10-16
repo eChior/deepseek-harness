@@ -200,13 +200,15 @@ abstract validateImage(input: SaveImageAttachment): Promise<void>
 async saveImages(inputs: readonly SaveImageAttachment[]): Promise<readonly ImageAttachmentRef[]>
 
 /**
- * Admit one Host prompt and replace each uploaded image with its durable reference.
+ * Admit one Host prompt: give every uploaded image the reader's text, or replace it
+ * with its durable reference when the caller supplies no reader.
  * Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.
  * @param content - prompt parts in message order after file receipt resolution.
+ * @param reader - local image reader; without one an image is stored as pixels.
  * @returns admitted prompt parts in the same order as `content`.
  * @throws AttachmentError when the image batch is refused.
  */
-async admitPromptContent( content: readonly AttachmentAdmissionPart[], ): Promise<AdmittedPromptContentPart[]>
+async admitPromptContent( content: readonly AttachmentAdmissionPart[], reader?: LocalImageReader, ): Promise<AdmittedPromptContentPart[]>
 
 /**
  * Decode and durably commit one canonical base64 file upload.

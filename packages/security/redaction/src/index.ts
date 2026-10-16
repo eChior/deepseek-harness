@@ -33,3 +33,13 @@ export {
   type RedactionHit,
   type RedactionResult,
 } from './redact.ts'
+export {
+  CURRENT_POINTER,
+  fetchTermList,
+  readCachedTermList,
+  termListUrl,
+  writeCachedTermList,
+  type TermSourceConfig,
+  type TermSourceKind,
+} from './source.ts'
+export { DEFAULT_VISION_TIMEOUT_MS, normalizeRecognized, recognizeImageText } from './vision.ts'

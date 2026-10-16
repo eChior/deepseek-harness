@@ -46,7 +46,13 @@ async function harness(): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(RedactionService, { termsPath })
+  await ctx.plugin(RedactionService, {
+    termsPath,
+    cacheDirectory: join(directory, 'cache'),
+    remote: '',
+    refreshMinutes: 0,
+    vision: false,
+  })
   await ctx.redaction.load()
   ctx.tools.register(defineContentToolFixture({
     name: 'lookup',
