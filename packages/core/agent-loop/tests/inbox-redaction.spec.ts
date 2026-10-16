@@ -91,7 +91,7 @@ describe('inbox redaction', () => {
     const { inbox } = await wiredInbox('redaction-term')
     inbox.splice('next-turn', Infinity, 0, [userMessage('结晶温度为什么偏低')])
     const stored = inbox.nextTurn[0]
-    expect(stored.content).toEqual([{ type: 'text', text: '[工艺-1]为什么偏低' }])
+    expect(stored?.content).toEqual([{ type: 'text', text: '[工艺-1]为什么偏低' }])
     expect(JSON.stringify(stored)).not.toContain('结晶温度')
   })
 
@@ -99,7 +99,7 @@ describe('inbox redaction', () => {
     const { inbox } = await wiredInbox('redaction-pattern')
     inbox.splice('next-turn', Infinity, 0, [userMessage('DEV-2026 与 DEV-2026 是同一单')])
     const stored = inbox.nextTurn[0]
-    expect(stored.content).toEqual([{ type: 'text', text: '[编号-1] 与 [编号-1] 是同一单' }])
+    expect(stored?.content).toEqual([{ type: 'text', text: '[编号-1] 与 [编号-1] 是同一单' }])
   })
 
   it('leaves the message untouched when no provider is loaded', async () => {
@@ -115,7 +115,7 @@ describe('inbox redaction', () => {
     const message = userMessage('结晶温度为什么偏低')
     inbox.splice('next-turn', Infinity, 0, [message])
     expect(message.content).toEqual([{ type: 'text', text: '结晶温度为什么偏低' }])
-    expect(inbox.nextTurn[0].content).toEqual([{ type: 'text', text: '结晶温度为什么偏低' }])
+    expect(inbox.nextTurn[0]?.content).toEqual([{ type: 'text', text: '结晶温度为什么偏低' }])
   })
 
   it('restores a placeholder to the value this process saw', async () => {
