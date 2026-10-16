@@ -1157,6 +1157,10 @@ importers:
         version: link:../../typert/registry
 
   packages/api/redaction-controller:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
