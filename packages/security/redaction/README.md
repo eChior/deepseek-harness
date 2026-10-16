@@ -35,7 +35,7 @@ Mount the plugin, then call `redact()` on the parts a consumer is about to turn 
 | Field | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | Set to `false` to leave every message exactly as typed. |
-| `termsPath` | the `assets/terms.yaml` inside this package | Term list to load when the cache holds nothing usable. |
+| `termsPath` | the `assets/terms.yaml` inside this package | Term list this build carries; used when the cache holds nothing usable, or holds something older. |
 | `remote` | the published term-list repository on the intranet Gitea | Archive URL the cache refreshes from; an empty string turns every network call off. |
 | `branch` | `main` | Branch to pull the archive from. |
 | `file` | `terms.yaml` | File to read inside that archive. |
@@ -56,7 +56,7 @@ Images never reach the model as pixels. This package is also the reader the atta
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-The plugin resolves its list through `cacheDirectory`. A pointer file named `current` names the revision in use, `terms-<revision>.yaml` holds that revision's text, and `terms.fallback.yaml` keeps the last list that loaded. A pull that fails leaves the list in hand and retries later, so a machine that cannot reach the intranet keeps working with the list it already has. Loading never throws: a missing file, a structural problem, or a pattern that does not compile leaves the rule set empty and writes the reason into `status.detail`, so a deployment that ships a broken list keeps working with redaction off and a visible cause.
+The plugin resolves its list through `cacheDirectory`. A pointer file named `current` names the revision in use, `terms-<revision>.yaml` holds that revision's text, and `terms.fallback.yaml` keeps the last list that loaded. A pull that fails leaves the list in hand and retries later, so a machine that cannot reach the intranet keeps working with the list it already has. A list carried by this build wins over a cached one when its revision reads as a later date, so upgrading the package cannot be silently cancelled by a cache left by the previous release; revisions that do not read as dates leave the cache in place. Loading never throws: a missing file, a structural problem, or a pattern that does not compile leaves the rule set empty and writes the reason into `status.detail`, so a deployment that ships a broken list keeps working with redaction off and a visible cause.
 
 Each `terms.yaml` entry is either a term — matched literally, escaped before it becomes a regular expression — or a pattern, compiled as written. One piece of text routinely matches several rules at once, so hits are reduced to a non-overlapping set before anything is written: longest match first, then category priority (`identifier` outranks a person's name), then leftmost. A run of digits inside a longer identifier therefore never produces a second placeholder.
 

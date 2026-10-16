@@ -2415,6 +2415,40 @@ export type Config = LocalConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-pwsh-sandbox -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-redaction -->
+<a id="deepseek-aidsh-redaction"></a>
+
+## `@deepseek-ai/dsh-redaction`
+
+- `source`: [`packages/security/redaction/src/plugin.ts:82`](../packages/security/redaction/src/plugin.ts)
+
+```ts config-catalog
+/** Fields a deployment can set for this provider. */
+export interface Config {
+  /** Set to false to leave every message exactly as the user typed it. */
+  enabled?: boolean
+  /** Term list to load when nothing is cached. Defaults to the copy inside this package. */
+  termsPath?: string
+  /** Repository that publishes the list. An empty string keeps this build's copy in place. */
+  remote?: string
+  /** Branch whose tip is the published list. */
+  branch?: string
+  /** Path of the list inside that branch. */
+  file?: string
+  /** Directory holding this machine's copies of the list. */
+  cacheDirectory?: string
+  /** Minutes between refreshes. 0 loads the list once and never contacts the repository. */
+  refreshMinutes?: number
+  /** Per-request timeout, in milliseconds, for one refresh. */
+  timeoutMs?: number
+  /** Set to false to report no text for an image instead of reading it locally. */
+  vision?: boolean
+  /** How long one local recognition may take, in milliseconds. */
+  visionTimeoutMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-repeat-tool-reminder -->
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
@@ -4552,7 +4586,6 @@ export interface Config {
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
-| `@deepseek-ai/dsh-redaction` | — | [`packages/security/redaction/src/index.ts`](../packages/security/redaction/src/index.ts) |
 | `@deepseek-ai/dsh-remote-mock` | — | [`packages/test-support/remote-mock/src/index.ts`](../packages/test-support/remote-mock/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-windows-acl` | — | [`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts) |
 | `@deepseek-ai/dsh-scope` | — | [`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts) |

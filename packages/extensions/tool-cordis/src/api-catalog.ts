@@ -1829,7 +1829,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async load(): Promise<RedactionStatus>',
-        description: 'Load a term list and start refreshing it.\n\nThe cached copy loads first because it is the one this machine last saw a publisher confirm; the copy inside the package is the fallback for an install that has never reached the publisher. A refresh follows whenever a list was loaded and the deployment tracks a repository.',
+        description: 'Load a term list and start refreshing it.\n\nThe cached copy is preferred because it is the one this machine last saw a publisher confirm, and the copy inside the package is the fallback for an install that never reached the publisher — except when the package carries a later revision, which is what an upgrade looks like. A refresh follows whenever a list was loaded and the deployment tracks a repository.',
         parameters: [],
         returns: 'The status after the attempt; `detail` carries any failure reason.',
       },

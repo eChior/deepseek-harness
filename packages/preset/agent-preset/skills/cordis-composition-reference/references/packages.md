@@ -348,6 +348,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-sdk-jsonrpc-server` | yes | Stdio JSON-RPC server plugin for out-of-process DeepSeek Harness SDK clients |
 
+## security
+
+| Package | Config | Description |
+|---|---|---|
+| `@deepseek-ai/dsh-redaction` | yes | Replace sensitive identifiers and figures with placeholders before they can reach a session, a log, or a model |
+
 ## session
 
 | Package | Config | Description |

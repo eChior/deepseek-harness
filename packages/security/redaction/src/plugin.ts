@@ -44,6 +44,30 @@ const TERMS_PATH = fileURLToPath(new URL('../assets/terms.yaml', import.meta.url
 /** Repository a deployment publishes the list in, read at start and every few minutes. */
 const PUBLISHED_TERMS = 'http://10.151.5.175:3000/ITPublic/dsh-redaction-terms'
 
+/** Revisions that compare as dates; anything else is left to the cache. */
+const DATED_REVISION = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Decide whether the list carried by this package outranks a cached one.
+ *
+ * The cache exists so a machine that cannot reach the publisher keeps replacing
+ * what it replaced yesterday. It must not outrank an upgrade: adopting an older
+ * cache over a newer shipped list would silently drop every term the release
+ * added, and the client would look configured while replacing less than before.
+ * Revisions compare only when both read as dates; anything else leaves the cache
+ * in place, which is the behaviour every install had before this check existed.
+ * @param shipped The list inside the package, absent when it cannot be read.
+ * @param held The list read from the cache.
+ * @returns True when the shipped list declares a later revision.
+ */
+function supersedes(shipped: string | undefined, held: string): boolean {
+  if (shipped === undefined) return false
+  const next = parseTermList(shipped).revision
+  const current = parseTermList(held).revision
+  if (!DATED_REVISION.test(next) || !DATED_REVISION.test(current)) return false
+  return next > current
+}
+
 /**
  * What a caller has to look like for this provider to rewrite it. Prompts carry
  * more than text; the provider touches the parts that hold text and hands every
@@ -206,22 +230,31 @@ export class RedactionService extends Service {
   /**
    * Load a term list and start refreshing it.
    *
-   * The cached copy loads first because it is the one this machine last saw a
-   * publisher confirm; the copy inside the package is the fallback for an install
-   * that has never reached the publisher. A refresh follows whenever a list was
-   * loaded and the deployment tracks a repository.
+   * The cached copy is preferred because it is the one this machine last saw a
+   * publisher confirm, and the copy inside the package is the fallback for an
+   * install that never reached the publisher — except when the package carries a
+   * later revision, which is what an upgrade looks like. A refresh follows
+   * whenever a list was loaded and the deployment tracks a repository.
    * @returns The status after the attempt; `detail` carries any failure reason.
    */
   async load(): Promise<RedactionStatus> {
     if (!this.config.enabled) return this.current
     const cached = await readCachedTermList(this.config.cacheDirectory)
-    let adopted = cached !== undefined && this.tryAdopt(cached.text, cached.path, 'cache')
-    if (!adopted) {
-      try {
-        adopted = this.tryAdopt(await readFile(this.config.termsPath, 'utf8'), this.config.termsPath, 'bundled')
-      } catch (error) {
-        this.record(error)
-      }
+    let shipped: string | undefined
+    try {
+      shipped = await readFile(this.config.termsPath, 'utf8')
+    } catch (error) {
+      if (cached === undefined) this.record(error)
+    }
+    let adopted = false
+    if (cached !== undefined && !supersedes(shipped, cached.text)) {
+      adopted = this.tryAdopt(cached.text, cached.path, 'cache')
+    }
+    if (!adopted && shipped !== undefined) {
+      adopted = this.tryAdopt(shipped, this.config.termsPath, 'bundled')
+    }
+    if (!adopted && cached !== undefined) {
+      adopted = this.tryAdopt(cached.text, cached.path, 'cache')
     }
     if (adopted && this.config.refreshMinutes > 0 && this.config.remote !== '') void this.refresh()
     return this.current
