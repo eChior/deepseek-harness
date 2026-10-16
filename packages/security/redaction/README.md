@@ -35,18 +35,28 @@ Mount the plugin, then call `redact()` on the parts a consumer is about to turn 
 | Field | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | Set to `false` to leave every message exactly as typed. |
-| `termsPath` | the `assets/terms.yaml` inside this package | Term list to load; point it at another file to override the shipped copy. |
+| `termsPath` | the `assets/terms.yaml` inside this package | Term list to load when the cache holds nothing usable. |
+| `remote` | the published term-list repository on the intranet Gitea | Archive URL the cache refreshes from; an empty string turns every network call off. |
+| `branch` | `main` | Branch to pull the archive from. |
+| `file` | `terms.yaml` | File to read inside that archive. |
+| `cacheDirectory` | `$DSH_HOME/redaction` | Where `current`, `terms-<revision>.yaml`, and `terms.fallback.yaml` live. |
+| `refreshMinutes` | `5` | Minutes between background pulls; `0` disables polling and keeps the list already in hand. |
+| `timeoutMs` | `3000` | Per-request timeout for one pull. |
+| `vision` | `true` | Run local recognition over admitted images and substitute the redacted text. |
+| `visionTimeoutMs` | `20000` | Give up on one image after this long and substitute a blocked marker. |
 
 `redact(parts)` copies the list and rewrites only the parts whose `type` is `text`. Images, file references, and anything else come back as they arrived, so a caller can pass the result to the next stage exactly as it would have passed the input. `redactText(text)` does the same for one string held outside a part list.
 
+Images never reach the model as pixels. This package is also the reader the attachment store calls: it recognizes the text inside an admitted image, redacts that text, and hands the text back for the image part. Nothing is written to disk, and a recognition that fails or times out substitutes a blocked marker instead of the image. A caller that admits attachments on its own can pass the reader down — `admitPromptContent(parts, ctx.get('redaction'))` — and get the same treatment for a child agent's read.
+
 `restore(text)` swaps the placeholders this process issued back for their values. It belongs where a human reads text, never on the way into a session.
 
-`status` reports the revision the loaded list declares, how many terms and patterns it carries, how many replacements this process has made, and a failure detail. A term list that cannot be read leaves no rules loaded, which replaces nothing, and the reason stays visible in `status.detail` instead of failing the plugin load.
+`status` reports the revision the loaded list declares, where it came from, how many terms and patterns it carries, how many replacements this process has made, and a failure detail. A term list that cannot be read leaves no rules loaded, which replaces nothing, and the reason stays visible in `status.detail` instead of failing the plugin load.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-The plugin loads `termsPath` once at mount and keeps the compiled rules. Loading never throws: a missing file, a structural problem, or a pattern that does not compile leaves the rule set empty and writes the reason into `status.detail`, so a deployment that ships a broken list keeps working with redaction off and a visible cause.
+The plugin resolves its list through `cacheDirectory`. A pointer file named `current` names the revision in use, `terms-<revision>.yaml` holds that revision's text, and `terms.fallback.yaml` keeps the last list that loaded. A pull that fails leaves the list in hand and retries later, so a machine that cannot reach the intranet keeps working with the list it already has. Loading never throws: a missing file, a structural problem, or a pattern that does not compile leaves the rule set empty and writes the reason into `status.detail`, so a deployment that ships a broken list keeps working with redaction off and a visible cause.
 
 Each `terms.yaml` entry is either a term — matched literally, escaped before it becomes a regular expression — or a pattern, compiled as written. One piece of text routinely matches several rules at once, so hits are reduced to a non-overlapping set before anything is written: longest match first, then category priority (`identifier` outranks a person's name), then leftmost. A run of digits inside a longer identifier therefore never produces a second placeholder.
 
