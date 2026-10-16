@@ -23,15 +23,15 @@ python3 scripts/tsd_reader.py --check
 ```json
 {
   "platform": "win32",
-  "wps_home": "D:\\WPS Office\\12.1.0.29158\\office6",
-  "docpermission": "D:\\WPS Office\\12.1.0.29158\\office6\\addons\\docpermission\\docpermission.dll",
+  "wps_home": "D:\\WPS Office\\12.8.2.21215\\office6",
+  "docpermission": "D:\\WPS Office\\12.8.2.21215\\office6\\addons\\docpermission\\docpermission.dll",
   "keyservice_home": "C:\\ChinaResources\\KeyService",
   "keyservice_required": false,
   "pywin32": true
 }
 ```
 
-`keyserviceRunning: false` 不影响读取——见下文「KeyService 无关性」。
+`keyservice_required: false` 是设计结论，不是"没找到"——见下文「KeyService 无关性」。
 
 ---
 
@@ -72,7 +72,7 @@ python3 scripts/tsd_reader.py --check
 
 同一条解密能力，走 GUI 有三个无法回避的问题：会占用用户屏幕、抢焦点、按键模拟在有窗口管理器的真实桌面上并不可靠；而麒麟这台机器甚至没有窗口管理器。控制通道是进程内协议调用，稳定且完全静默。
 
-### 麒麟实测记录（v3.0.0）
+### 麒麟实测记录（真机）
 
 | 样本 | 大小 | 结果 |
 |------|------|------|
@@ -125,11 +125,11 @@ netstat -ano | Select-String '10021|10022'   # 无输出 = 未监听
 2. 常见路径 `D:\WPS Office`、`C:\Program Files\WPS Office`、`C:\Program Files (x86)\WPS Office`
 3. 取版本号最大的子目录 → 定位其下 `office6`
 
-实测本机：`D:\WPS Office\12.1.0.29158\office6`，
-插件在 `D:\WPS Office\12.1.0.29158\office6\addons\docpermission\docpermission.dll`（4.7 MB）。
-**版本目录名随安装版本变化，不要把它写进任何脚本。**
+实测本机：`D:\WPS Office\12.8.2.21215\office6`，
+插件在 `D:\WPS Office\12.8.2.21215\office6\addons\docpermission\docpermission.dll`（4.7 MB）。
 注册表 `HKLM\SOFTWARE\Kingsoft\Office`、`HKCU\SOFTWARE\Kingsoft\Office` 存在，
 但**版本子目录名与注册表值不一定可直接拼接**，以文件系统 glob 为准。
+**版本目录名随安装版本变化，不要把它写进任何脚本。**
 
 ### 华润证书服务路径自动检测（仅用于报告，不影响读取）
 
@@ -192,23 +192,22 @@ Microsoft Office 打开 TSD 文件只会看到乱码二进制数据：`docpermis
 
 ### 在协作环境里怎么用（输出纪律）
 
-**默认模式就把正文写进临时文件**（麒麟的 `/tmp` 是 tmpfs，Windows 是 `%TEMP%`），
-stdout 只剩路径与元数据。所以正文走的是「文件读取」而不是「命令输出」：
+`--text` 与裸 JSON 模式都会把正文写进**工具调用的输出块**。正确姿势是让正文
+走「文件读取」而不是「命令输出」：
 
 | 场景 | 命令 | 正文在哪 |
 |------|------|---------|
-| **取正文（默认）** | `tsd_reader.py "<加密文件>"` + `read` + 删除 | 自动生成的临时 `.log` 里 |
-| 指定落地路径 | `--out <临时.log>` | 调用方指定的文件里 |
+| **取正文（首选）** | `--out <临时.log>` + `read` + 删除 | 临时文件里，经 read 进入上下文 |
 | 只做校验/体检 | `--meta` | 不出现 |
 | 查环境 | `--check` | 不出现 |
 | 直出 stdout | `--text` | ⚠️ 会进工具输出块，尽量避免 |
 
-三步走（两平台同一条命令）：
+三步走：
 
-```bash
-python3 scripts/tsd_reader.py "<加密文件>"      # ① 输出只有 out 路径 + 元数据
-# ② 用 read 工具读 JSON 里的 out 路径，完整正文原样进入上下文
-rm "<out 路径>"                                 # ③ 立刻删除（Windows: Remove-Item -Force）
+```powershell
+python scripts/tsd_reader.py --out <临时文件.log> "<加密文件>"   # ① 命令输出只有路径+元数据
+# ② 用 read 工具读 <临时文件.log>，完整正文原样进入上下文
+Remove-Item <临时文件.log> -Force                               # ③ 立刻删除
 ```
 
 不要走子代理，也不要把正文概括成要点——`read` 出来的就是原文，直接用。
@@ -218,9 +217,8 @@ rm "<out 路径>"                                 # ③ 立刻删除（Windows: 
 ## 安全约束（两平台共同）
 
 1. **原文只读**：解密前备份到 `$TMPDIR`（麒麟上是 tmpfs），`finally` 里还原，属主/权限/时间戳保持一致，并比对 sha256 确认未被改写。
-2. **明文只经文件读取**：默认模式与 `--out` 都把正文落文件，由宿主 `read` 进上下文，
-   命令输出里不出现正文；临时文件写完即设为 `0600`，用完立即删除。明文落到受管路径若
-   扩展名不对会被安全箱重新加密（实测 `.txt` 写出即变 `%TSD` 头），故落地路径会自动
-   改成 `.log`。
+2. **明文只经文件读取**：正文用 `--out <临时.log>` 落文件，由宿主 `read` 进上下文，
+   命令输出里不出现正文；临时文件用完立即删除。明文落到受管路径若扩展名不对会被安全箱
+   重新加密（实测 `.txt` 写出即变 `%TSD` 头），故 `--out` 会自动改用 `.log`。
 3. **用完即删**：备份文件在还原后立即删除。
 4. **授权边界**：只能解密签发给当前用户的文件；跨用户读取会被服务端拒绝，这是设计而非缺陷。

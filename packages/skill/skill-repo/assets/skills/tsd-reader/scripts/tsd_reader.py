@@ -8,16 +8,16 @@
     磁盘上的原文件始终保持 `%TSD` 密文；**不需要启动 KeyService**。
   * **零第三方解析依赖**：docx/xlsx/pptx 都是 ZIP 容器，直接解包读 XML；
     加密文件才交给 WPS/TSD 引擎。
-  * **正文不进工具输出**：默认就把正文写进临时文件（麒麟落 tmpfs，Windows 落 %TEMP%），
-    stdout 只留路径与元数据；宿主 read 该文件后立即删除。`--text` 会把正文刷进工具
-    输出块，只在没有文件读取手段时才用。**不要**用子代理绕路，也**不要**把正文概括成要点。
+  * **正文不进工具输出**：用 `--out <临时文件.log>` 把正文落文件，由宿主 read 该文件，
+    用完删除；命令输出里只留路径与元数据。`--text`/裸 JSON 会把正文刷进工具输出块，
+    尽量别用。**不要**用子代理绕路，也**不要**把正文概括成要点。
   * **失败必还原**：解密前先备份，任何路径（含异常、超时、Ctrl-C）都恢复成密文，
     并通过 sha256 前后比对确认磁盘原文未被改写。
 
 用法：
-    tsd_reader.py <文件> [<文件> ...]           # 【默认】正文落临时文件，stdout 只有路径+元数据
-    tsd_reader.py --out <临时文件.log> <文件>   # 指定正文落地路径（扩展名不安全时自动改 .log）
+    tsd_reader.py --out <临时文件.log> <文件>   # 【首选】正文落文件，stdout 只有路径+元数据
     tsd_reader.py --meta <文件>                # 只给校验元数据，不含正文
+    tsd_reader.py <文件> [<文件> ...]           # 输出 JSON（含正文）
     tsd_reader.py --text <文件>                # 只输出正文到 stdout（会进工具输出块）
     tsd_reader.py --check                     # 只做环境检查
 """
@@ -836,26 +836,6 @@ def _safe_out_path(path: str) -> str:
     return stem + ".log"
 
 
-def _default_out_path(payload: List[dict]) -> str:
-    """默认模式的正文落地路径：临时目录里的 .log。
-
-    麒麟的 /tmp 是 tmpfs，明文不落普通磁盘；Windows 落在 %TEMP%。
-    默认模式与 --out 共用同一条落地逻辑，区别只是路径由脚本挑而不是调用方给。
-    """
-    name = os.path.basename(str(payload[0].get("path", "document"))) if payload else "document"
-    stem = os.path.splitext(name)[0] or "document"
-    safe = re.sub(r"[^A-Za-z0-9._\u4e00-\u9fff-]", "_", stem)
-    return os.path.join(tempfile.gettempdir(), f"tsd-out-{os.getpid()}-{safe}.log")
-
-
-def _restrict(path: str) -> None:
-    """把落地文件收到属主可读写（0600）：/tmp 同机其它账号本来就能读到明文。"""
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-
-
 def main(argv: Optional[List[str]] = None) -> int:
     _force_utf8_stdout()
 
@@ -875,8 +855,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--out",
         metavar="路径",
         help="把正文写入该文件而不打印到 stdout（stdout 只留路径与元数据），"
-        "供宿主用文件读取的方式取正文；扩展名若容易被安全箱二次加密会自动改 .log。"
-        "不指定时脚本自己写临时目录，行为与默认模式一致",
+        "供宿主用文件读取的方式取正文；扩展名若容易被安全箱二次加密会自动改 .log",
     )
     options = parser.parse_args(argv)
 
@@ -890,9 +869,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     payload = [extract(path) for path in options.paths]
 
-    if not options.meta and not options.text:
-        # 默认路径：正文落到临时文件，stdout 只回路径 + 校验元数据。
-        target = _safe_out_path(options.out) if options.out else _default_out_path(payload)
+    if options.out:
+        # 正文落到调用方指定的文件，stdout 只回路径 + 校验元数据。
+        target = _safe_out_path(options.out)
         parent = os.path.dirname(target)
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -906,7 +885,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 chunks.append(f"[读取失败 {item.get('code')}] {item.get('detail', '')}")
         with open(target, "w", encoding="utf-8", newline="\n") as handle:
             handle.write("\n".join(chunks))
-        _restrict(target)
         summary = []
         for item in payload:
             entry = {key: value for key, value in item.items() if key != "text"}
@@ -921,7 +899,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             entry.setdefault("characters", len(item.get("text") or ""))
             meta.append(entry)
         print(json.dumps(meta, ensure_ascii=False, indent=2))
-    else:  # options.text：唯一的直出通道，调用方明确要求才走
+    elif options.text:
         chunks = []
         for item in payload:
             if len(payload) > 1:
@@ -931,6 +909,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 chunks.append(f"[读取失败 {item.get('code')}] {item.get('detail', '')}")
         print("\n".join(chunks))
+    else:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
 
     # Qt/COM 清理可能挂住；工作已完成，直接退出
     sys.stdout.flush()
