@@ -37,6 +37,22 @@
  * CreateProcessAsUserW, verified empirically). Read-only leaves the ambient
  * temp entries untouched (writes there are denied anyway).
  *
+ * Host console: `./host-console.ts` is the FIRST import below, on purpose.
+ * Console ownership decides whether a restricted child survives — a child
+ * inherits the console of its creator and never builds one, but when the host
+ * owns NO console Windows must build a fresh conhost under the child's
+ * ALREADY-RESTRICTED token, and that path dies during DLL initialization with
+ * STATUS_DLL_INIT_FAILED (`0xC0000142`, read back as 3221225794) before the
+ * child writes a byte. The upstream notes document the child side of that mode
+ * but not the caller-side precondition — the HOST process must own a console —
+ * which Electron (GUI subsystem, no console) cannot satisfy. Importing that
+ * module first makes its top-level allocation run before every other runner
+ * module, so restricted children here always inherit an existing console. It
+ * never throws and never fails the run: a host that cannot own a console gets a
+ * `windows-acl-console:` warning below and keeps going. The DACL, the SID
+ * lists, and the creation flags (CREATE_NO_WINDOW / CREATE_NEW_CONSOLE stay
+ * absent) are untouched by it.
+ *
  * Failure contract: every runner-side failure (bad args, missing
  * directories, token/grant/spawn errors) prints `windows-acl-run: <detail>`
  * to stderr and exits 127 — the seam's RUNNER_FAILURE_RULES matches that
@@ -44,6 +60,7 @@
  * @module @deepseek-ai/dsh-sandbox-windows-acl/runner
  */
 
+import { hostConsole } from './host-console.ts'
 import { SUBPROCESS_CONTROL_ENV, SUBPROCESS_CONTROL_FD } from '@deepseek-ai/dsh-subprocess/control'
 import { closeSync, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -129,6 +146,18 @@ async function main(): Promise<number> {
   }
   if (parsed.mode === 'workspace-write') {
     assertTempRootOutsideWorkspace(parsed.workspace, parsed.temp)
+  }
+
+  // Everything below this point needs a deliverable spawn, so this is where a
+  // degraded console belongs: host-console.ts already allocated one at import,
+  // and a host that could not own one only degrades the GUI-subsystem case
+  // (every host with a console is unaffected). It must NOT fail the run — and
+  // must not use the `windows-acl-run: ` signature, which the seam treats as
+  // fatal — so it is one warning line and the run continues.
+  if (hostConsole.platform === 'win32' && !hostConsole.owned) {
+    process.stderr.write(
+      'windows-acl-console: no host console owned; a confined child may fail with STATUS_DLL_INIT_FAILED (0xC0000142)\n',
+    )
   }
 
   const api = await win32()

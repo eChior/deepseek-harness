@@ -75,7 +75,7 @@ rmSync(tempDir, { recursive: true, force: true })
 
 ### 失败与恢复
 
-`init()` 在任何 Win32 失败时抛出——子进程绝不会不受限制地 spawn。执行命令前失败的 runner 会向 stderr 打印 `windows-acl-run: <detail>` 并以 127 退出，seam 的 runner 失败规则将其归类为损坏的沙箱，而非拒绝。清理按设计尽力而为：`dispose()` 会尝试全部临时撤销并把失败聚合为 `AggregateError`。
+`init()` 在任何 Win32 失败时抛出——子进程绝不会不受限制地 spawn。执行命令前失败的 runner 会向 stderr 打印 `windows-acl-run: <detail>` 并以 127 退出，seam 的 runner 失败规则将其归类为损坏的沙箱，而非拒绝。清理按设计尽力而为：`dispose()` 会尝试全部临时撤销并把失败聚合为 `AggregateError`。宿主进程无法拥有控制台也不算 runner 失败：runner 会以 `windows-acl-console:` 告警并继续。
 
 此后端无法解释的拒绝交给 `assets/` 中随包发布的 `diagnose-windows-sandbox-acl` 技能诊断。当 `dsh-sandbox-local` 使用内置 Windows runner 且技能注册表可用时，`registerAclDiagnosisSkill` 会注册它。注册时提取供外部 PowerShell 使用的资源，ASAR 和 SEA 部署也适用；fiber 释放时注销提供者并删除副本。缺少资源会导致注册失败。
 
@@ -109,7 +109,7 @@ Authenticated Users 在两种列表中都不存在——WMI 命名空间安全�
 
 ### 隔离 runner
 
-面向 seam 的形态是 runner 入口（`./runner`）：`dsh-sandbox-local` 在调用者命令的位置 spawn 的 argv 前缀包装——与 bwrap/landlock-run/sandbox-exec 同一架构。runner 创建受限令牌，在它之下 spawn 包装后的 argv，调用者的 stdio 直接透传，把子进程包进 `KILL_ON_JOB_CLOSE` job，镜像子进程的退出码，并在退出时撤销其自行管理的临时授权。每个 runner 侧失败都会向 stderr 打印 `windows-acl-run: <detail>` 并以 127 退出——seam 的 runner 失败规则匹配该签名。
+面向 seam 的形态是 runner 入口（`./runner`）：`dsh-sandbox-local` 在调用者命令的位置 spawn 的 argv 前缀包装——与 bwrap/landlock-run/sandbox-exec 同一架构。runner 创建受限令牌，在它之下 spawn 包装后的 argv，调用者的 stdio 直接透传，把子进程包进 `KILL_ON_JOB_CLOSE` job，镜像子进程的退出码，并在退出时撤销其自行管理的临时授权。每个 runner 侧失败都会向 stderr 打印 `windows-acl-run: <detail>` 并以 127 退出——seam 的 runner 失败规则匹配该签名。runner 的第一条 import [`src/host-console.ts`](src/host-console.ts) 会在任何其他 runner 模块求值之前让宿主进程拥有自己的控制台；受限子进程于是继承该控制台，而不是在受限令牌下自行构建一个（见下文控制台边界）。
 
 ```sh
 node runner.js --workspace <dir> --temp <dir> --mode <read-only|workspace-write> [--write-sid <S-1-4-…> --temp-write-sid <S-1-4-…>] -- <argv...>
@@ -126,7 +126,7 @@ seam 先把确定性工作区 SID 的 ACE 常驻物化（每个工作区每服�
 - **拒绝项只继承到子目录，且子目录的 FullControl 打开会被拒。** `FILE_DELETE_CHILD` 只在目录上被评估，因此该 ACE 带 `CONTAINER_INHERIT_ACE`、绝不落到文件上（它的位 `0x40` 属于 `FILE_ALL_ACCESS`，若落到文件上会让用户、Administrators、SYSTEM 或 DSH host 的每次 `GENERIC_ALL`／`FullControl` 打开都被拒绝）。授权根内的目录保留该拒绝项，因而会拒绝这类打开；基于 `DELETE` 的删除、`MAXIMUM_ALLOWED` 与常规读写打开不受影响——两种结果都已被 runner 套件钉住。
 - **写入与删除受限；读取、网络与进程可见性不受限。** 两层都不交叉检查读取，因此受限子进程可以读取调用者可读的任何文件（包括其他工作区中的文件）并打开套接字；`read-only` 因而需要读侧策略才能表达。
 - **硬链接是文件对象别名，而非路径别名。** 传播到已有硬链接上的可继承工作区授权会标记并授权底层同一文件的安全描述符，因此同一对象也可通过外部别名写入；拒绝工作区中的所有多链接文件不具可行性，因为普通 pnpm 安装会使用硬链接。
-- **控制台隔离不可用。** 以 `CREATE_NO_WINDOW` / `CREATE_NEW_CONSOLE` 创建的子进程在 DLL 初始化期间以 `STATUS_DLL_INIT_FAILED`（`0xC0000142`）死亡；子进程共享宿主控制台，基于管道的 stdio 重定向不受影响。
+- **runner 为自己 spawn 的子进程持有一个隐藏的宿主控制台。** 受限子进程继承创建它的进程的控制台，绝不自行构建；而宿主进程若**没有**控制台，Windows 就必须用子进程已被限制的令牌新建一个 conhost，那条路径会在 DLL 初始化期间以 `STATUS_DLL_INIT_FAILED`（`0xC0000142`，读回为 3221225794）结束，stdout 与 stderr 上什么都不留。[`src/host-console.ts`](src/host-console.ts) 会丢弃继承来的控制台、分配一个宿主自己拥有的控制台并隐藏其窗口（`SW_HIDE`——`AllocConsole` 的窗口默认可见），因此调用方前提始终成立，Electron 的 GUI 子系统进程也不例外——它本身就没有控制台。`CREATE_NO_WINDOW` / `CREATE_NEW_CONSOLE` 仍然不使用（以它们创建的子进程同样会在 DLL 初始化期间结束），基于管道的 stdio 重定向不受影响。若分配本身失败，runner 会以 `windows-acl-console:` 告警并继续运行：受限 spawn 仍会尝试，只是缺少这层缓解。
 - **安全描述符改动是对真实目录的驻留改动。** 工作区 ACE、拒绝项与标签按设计常驻（复用缓存，绝不撤销）；临时改动由 `dispose()` 撤销——但若该目录上仍留有其他能力授权，撤销会保留共享的 Low 标签——撤销后残留的那条拒绝项会随临时目录本身一并消失；手工 `icacls` 清理无法在本平台回收它们（`ERROR_NONE_MAPPED` 1332），请通过本模块回收。
 - **常驻 Low 标签的生命期长于 DSH，并会向其他 Low 完整性的进程放宽该目录树。** 工作区的可继承标签在会话结束后（以及同卷移动后）依然存在，因此任何以同一用户身份运行在 Low 完整性的其他进程——别家产品的 Low-IL 沙箱、受保护模式阅读器——都能写入与删除工作区内的内容，而在 Medium 标签下这会被拒绝。这个标签是写边界的代价：没有它受限子进程根本无法写入，而按会话回收会导致每次供给都要重新传播整棵树。
 - **被授权目录必须由调用者拥有并授予 `WRITE_OWNER`。** 所有者隐式获得的只有 `READ_CONTROL` 与 `WRITE_DAC`；标签位于 SACL，因此合并应用还需要 `WRITE_OWNER`（完全控制目录——即正常工作区情形——本就具备）。DACL 只授予 Modify 的目录现在会大声失败，而不是静默跳过隔离。
@@ -142,6 +142,7 @@ seam 先把确定性工作区 SID 的 ACE 常驻物化（每个工作区每服�
 |---|---|
 | [`src/index.ts`](src/index.ts) | `AclSandbox`：受限令牌策略、DACL 授权、fail-closed 的 spawn 与 dispose |
 | [`src/runner.ts`](src/runner.ts) | 基于共享 Win32 进程原语的 runner 入口 |
+| [`src/host-console.ts`](src/host-console.ts) | runner 的第一条 import：分配隐藏的宿主控制台，使受限子进程得以继承 |
 | [`src/grant.ts`](src/grant.ts) | `AclWriteGrant`：服务端授权物化与撤销 |
 | [`src/token.ts`](src/token.ts) + [`src/acl.ts`](src/acl.ts) | 沙箱背后的 Win32 令牌与 DACL 原语 |
 
