@@ -46,10 +46,14 @@ export const DEFAULT_PRIORITY: readonly string[] = ['identifier', 'person']
 export function findHits(text: string, rules: readonly RedactionRule[]): RedactionHit[] {
   const hits: RedactionHit[] = []
   for (const rule of rules) {
+    // A term is a literal, so its membership test is a substring search. Tool
+    // results run to hundreds of kilobytes and most rules are terms; skipping
+    // the ones that cannot match keeps a large result off the regex engine.
+    if (rule.kind === 'term' && !text.includes(rule.source)) continue
     for (const match of text.matchAll(rule.regex)) {
       const matched = match[0]
       if (matched === '') continue
-      const start = match.index ?? 0
+      const start = match.index
       hits.push({
         start,
         end: start + matched.length,

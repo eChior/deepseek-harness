@@ -293,6 +293,15 @@
       config:
         maxBytes: 65536
 
+    # Rewrites the sensitive values a prompt or a tool result carries into stable
+    # placeholders, before the session log keeps them. The map tying a placeholder
+    # back to its value lives in process memory only: after a restart the old
+    # placeholders stay placeholders, which is the point of the feature.
+    - id: redaction
+      name: '@deepseek-ai/dsh-redaction'
+      config:
+        enabled: true
+
     - id: skill
       name: '@deepseek-ai/dsh-skill'
 

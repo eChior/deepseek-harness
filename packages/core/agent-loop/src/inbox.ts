@@ -65,17 +65,29 @@ export const inboxProjectionDefinition = {
 } satisfies ProjectionDefinition<'inbox', InboxState>
 
 /**
+ * Rewrites one message on its way into the inbox. A session redaction provider
+ * supplies it; a loop without one keeps the identity rewriter.
+ */
+export type InboxMessageRewriter = (message: UserMessage) => UserMessage
+
+/** The rewriter a loop uses when nothing wants to change an incoming message. */
+const keepMessage: InboxMessageRewriter = message => message
+
+/**
  * Driver-owned durable Inbox implementation used by ReactLoopAgent and focused
  * provider tests.
  * @param projections - registry with the standard Inbox projection registered by AgentLoop.
  * @param session - session whose durable events store pending input.
  * @param dispatch - agent-scoped notifications for Inbox lifecycle events.
+ * @param rewrite - applied to every message this inbox stores, before the
+ *   durable event carrying it is built.
  */
 export class ReactLoopInbox implements InboxContract {
   constructor(
     private readonly projections: SessionProjectionRegistry,
     private readonly session: Session,
     private readonly dispatch: AgentEventDispatch,
+    private readonly rewrite: InboxMessageRewriter = keepMessage,
   ) {}
 
   /** Prompts awaiting individual turns. */
@@ -204,6 +216,10 @@ export class ReactLoopInbox implements InboxContract {
   ): UserMessage[] {
     const state = this.current()
     const inbox = state[target]
+    // Rewrite before anything below sees the messages: the durable event built
+    // from `inserted` is what a later request replays, so a value that reaches it
+    // has reached the session log.
+    const insertedSafe = inserted.map(message => this.rewrite(message))
     const truncatedStart = Math.trunc(start)
     const offset = Number.isNaN(truncatedStart) ? 0 : truncatedStart
     const actualStart = offset < 0
@@ -214,8 +230,8 @@ export class ReactLoopInbox implements InboxContract {
       Math.max(Number.isNaN(truncatedDeleteCount) ? 0 : truncatedDeleteCount, 0),
       inbox.length - actualStart,
     )
-    if (actualDeleteCount === 0 && inserted.length === 0) return []
-    const candidate = inbox.toSpliced(actualStart, actualDeleteCount, ...inserted)
+    if (actualDeleteCount === 0 && insertedSafe.length === 0) return []
+    const candidate = inbox.toSpliced(actualStart, actualDeleteCount, ...insertedSafe)
     const ids = new Set<string>()
     for (const message of target === 'next-turn'
       ? [...candidate, ...state['next-step']]
@@ -228,7 +244,7 @@ export class ReactLoopInbox implements InboxContract {
       target,
       start: actualStart,
       ...(actualDeleteCount === 0 ? {} : { removedCount: actualDeleteCount }),
-      inserted,
+      inserted: insertedSafe,
       ...(outcome === undefined ? {} : { outcome }),
     }
     const removed = inbox.slice(actualStart, actualStart + actualDeleteCount)

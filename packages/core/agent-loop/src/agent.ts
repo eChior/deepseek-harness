@@ -51,6 +51,31 @@ type Phase =
 
 type StepEndReason = Extract<TurnEndReason, { kind: 'completed' | 'max-tokens' }>
 
+/**
+ * The slice of a redaction provider this loop uses. The provider lives in another
+ * package, so the loop looks it up by service name and keeps no dependency on it.
+ */
+export interface TextPartRedactor {
+  redact<T extends { readonly type: string; readonly text?: string }>(parts: readonly T[]): T[]
+}
+
+/**
+ * Rewrite the values an incoming message carries, using a redaction provider when
+ * one is loaded. The session log is plain text that later requests replay
+ * verbatim, so this is the last point where the values a user typed can still be
+ * dropped instead of stored.
+ * @param redaction Provider to apply, or undefined when none is loaded.
+ * @param message Message a caller is about to queue.
+ * @returns The message to queue; the input verbatim when nothing matched.
+ */
+export function rewriteMessage(redaction: TextPartRedactor | undefined, message: UserMessage): UserMessage {
+  if (redaction === undefined) return message
+  const content = redaction.redact(message.content)
+  return content.some((part, index) => part !== message.content[index])
+    ? { ...message, content }
+    : message
+}
+
 type PreparedStep =
   | { kind: 'reject' }
   | {
@@ -129,7 +154,12 @@ export class ReactLoopAgent implements Agent {
     this.dispatch = agentEvents(loopCtx, this)
     this.scope = createScope(loopCtx, this)
     this.ctx = this.scope.ctx
-    this.inbox = new ReactLoopInbox(this.ctx.sessionProjections, session, this.dispatch)
+    this.inbox = new ReactLoopInbox(
+      this.ctx.sessionProjections,
+      session,
+      this.dispatch,
+      message => this.rewriteIncoming(message),
+    )
     /* v8 ignore next -- the loop registers its own turnBoundary unit, so the key is always present */
     const lastTurn = this.loopCtx.sessionProjections.stateOf(session, 'turnBoundary')?.lastTurn ?? 0
     this.phase = { kind: 'idle', lastTurn }
@@ -149,6 +179,16 @@ export class ReactLoopAgent implements Agent {
     if (status !== previousStatus) {
       this.dispatch.emit('agent/status', { status })
     }
+  }
+
+  /**
+   * Rewrite the values an incoming message carries, using the redaction provider
+   * when this context has one loaded.
+   * @param message Message a caller is about to queue.
+   * @returns The message to queue; the input verbatim when no provider is loaded.
+   */
+  private rewriteIncoming(message: UserMessage): UserMessage {
+    return rewriteMessage(this.ctx.get('redaction') as TextPartRedactor | undefined, message)
   }
 
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void {

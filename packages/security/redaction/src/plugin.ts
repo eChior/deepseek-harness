@@ -12,6 +12,7 @@
  * one file into the complete plaintext of everything this feature protects.
  */
 import { Context, Service } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -97,6 +98,25 @@ export class RedactionService extends Service {
       void this.load()
       return () => {}
     }, 'redaction: load the term list')
+    // A tool result is the second way a value reaches the session log: reading a
+    // data file, running a query, listing a directory. The decision this handler
+    // returns is what the loop commits, so rewriting it here happens before the
+    // text is appended anywhere. Registered after every other listener of this
+    // event, so it rewrites the text they produced rather than the other way round.
+    ctx.on('tools/post-execute', async (_exec, result, next) => {
+      const decision = await next()
+      if (!this.config.enabled || this.rules.length === 0) return decision
+      if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
+      if (decision.content !== undefined) {
+        return {
+          kind: 'accept',
+          content: this.redact(decision.content),
+          ...decision.additionalContexts === undefined ? {} : { additionalContexts: decision.additionalContexts },
+        }
+      }
+      if (decision.value !== undefined) return decision
+      return { kind: 'accept', content: this.redact(result.content) }
+    })
   }
 
   /** What the term list declares and how many replacements this process has made. */
@@ -145,9 +165,11 @@ export class RedactionService extends Service {
    */
   redact<T extends RedactablePart>(parts: readonly T[]): T[] {
     if (!this.config.enabled || this.rules.length === 0) return [...parts]
-    return parts.map(part => part.type === 'text' && typeof part.text === 'string'
-      ? { ...part, text: this.redactText(part.text) }
-      : part)
+    return parts.map((part) => {
+      if (part.type !== 'text' || typeof part.text !== 'string') return part
+      const text = this.redactText(part.text)
+      return text === part.text ? part : { ...part, text }
+    })
   }
 
   /**

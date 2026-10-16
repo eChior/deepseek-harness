@@ -2031,6 +2031,9 @@ importers:
       '@deepseek-ai/dsh-pwsh-sandbox':
         specifier: workspace:*
         version: link:../../shell/pwsh-sandbox
+      '@deepseek-ai/dsh-redaction':
+        specifier: workspace:*
+        version: link:../../security/redaction
       '@deepseek-ai/dsh-repeat-tool-reminder':
         specifier: workspace:*
         version: link:../../guard/repeat-tool-reminder
@@ -6898,6 +6901,9 @@ importers:
       '@deepseek-ai/dsh-llm-pi-ai':
         specifier: workspace:*
         version: link:../../llm/llm-pi-ai
+      '@deepseek-ai/dsh-redaction':
+        specifier: workspace:*
+        version: link:../../security/redaction
       '@deepseek-ai/dsh-scope':
         specifier: workspace:*
         version: link:../scope
@@ -10640,6 +10646,24 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
 
   packages/session-query/session-log-export:
     dependencies:
