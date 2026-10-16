@@ -9,15 +9,16 @@
   * **零第三方解析依赖**：docx/xlsx/pptx 都是 ZIP 容器，直接解包读 XML；
     加密文件才交给 WPS/TSD 引擎。
   * **正文不进工具输出**：用 `--out <临时文件.log>` 把正文落文件，由宿主 read 该文件，
-    用完删除；命令输出里只留路径与元数据。`--text`/裸 JSON 会把正文刷进工具输出块，
-    尽量别用。**不要**用子代理绕路，也**不要**把正文概括成要点。
+    用完删除；命令输出里只留路径与元数据。不给 `--out`/`--meta`/`--text` 时也只给校验
+    元数据——正文永远不落到 stdout，除非显式要 `--text`。**不要**用子代理绕路，
+    也**不要**把正文概括成要点。
   * **失败必还原**：解密前先备份，任何路径（含异常、超时、Ctrl-C）都恢复成密文，
     并通过 sha256 前后比对确认磁盘原文未被改写。
 
 用法：
     tsd_reader.py --out <临时文件.log> <文件>   # 【首选】正文落文件，stdout 只有路径+元数据
     tsd_reader.py --meta <文件>                # 只给校验元数据，不含正文
-    tsd_reader.py <文件> [<文件> ...]           # 输出 JSON（含正文）
+    tsd_reader.py <文件> [<文件> ...]           # 只输出校验元数据（安全默认，不含正文）
     tsd_reader.py --text <文件>                # 只输出正文到 stdout（会进工具输出块）
     tsd_reader.py --check                     # 只做环境检查
 """
@@ -910,7 +911,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 chunks.append(f"[读取失败 {item.get('code')}] {item.get('detail', '')}")
         print("\n".join(chunks))
     else:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        # 安全默认：不给 --out/--meta/--text 时，正文绝不落到 stdout。
+        meta = []
+        for item in payload:
+            entry = {key: value for key, value in item.items() if key != "text"}
+            entry.setdefault("characters", len(item.get("text") or ""))
+            meta.append(entry)
+        print(json.dumps({
+            "files": meta,
+            "hint": "正文没有输出。要正文请用 --out <临时文件.log>（推荐）或 --text。",
+        }, ensure_ascii=False, indent=2))
 
     # Qt/COM 清理可能挂住；工作已完成，直接退出
     sys.stdout.flush()
