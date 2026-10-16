@@ -180,7 +180,7 @@
     "@deepseek-ai/dsh-host-product-telemetry-otel": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings-session-log": "workspace:*",
     "@michengai/dsh-archive-manager": "1.0.19",
-    "@michengai/dsh-skills-manager": "1.1.21",
+    "@michengai/dsh-skills-manager": "1.1.22",
     "billion-context": "^0.1.197",
     "dsh-better-sidebar": "0.26.0",
     "dsh-notify-me": "1.5.3",
