@@ -167,7 +167,11 @@ export class DesktopUpdateCoordinator {
       try {
         if (!await this.beforeRestart()) return this.setState({ phase: 'ready', version })
         this.assertLive()
-        this.updater.quitAndInstall(true, true)
+        // A silent install leaves no window on screen between this process exiting and the
+        // app reopening, so the user cannot tell whether the install is running or stuck.
+        // The builder ships a non-oneClick NSIS wizard, so an interactive install shows its
+        // own progress and completion page while the app is gone.
+        this.updater.quitAndInstall(false, true)
         return this.current
       } catch (error) {
         if (this.current.phase === 'error' && this.current.failedOperation === 'install') return this.current

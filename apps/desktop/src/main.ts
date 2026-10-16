@@ -47,7 +47,7 @@ import { DesktopUpdateJournal } from './update-journal.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import { DesktopUpdateSchedule, resolveDesktopUpdateScheduleConfig } from './update-schedule.ts'
 import { desktopUpdateErrorSummary, presentDesktopUpdate } from './update-presentation.ts'
-import { resolveReleasePage } from './update-source.ts'
+import { resolveReleaseAsset } from './update-source.ts'
 import { desktopErrorState } from './startup-error.ts'
 import { readDesktopLoginShellEnvironment, resolveDesktopLoginShellConfig } from './login-shell-environment.ts'
 import { DesktopMandatoryUpdatePolicy, resolveDesktopPolicyConfig, type DesktopPolicyState } from './mandatory-update-policy.ts'
@@ -913,7 +913,10 @@ async function main(): Promise<void> {
   })
   ipcMain.handle(DESKTOP_IPC.updatesOpen, async (event) => {
     assertProductSender(event)
-    await openUpdatePrompt()
+    // On Linux only the manual path opens the release page, so a click on the badge must not fall
+    // into the automatic branch and do nothing. Elsewhere a click already means "download this",
+    // and the manual path would insert a confirmation the automatic path never asked for.
+    await openUpdatePrompt(process.platform === 'linux')
   })
 
   let promptOperation: Promise<void> | undefined
@@ -966,14 +969,14 @@ async function main(): Promise<void> {
         if (process.platform === 'linux') {
           // electron-builder names an AppImage in the Linux channel metadata, and this lane packages
           // only a deb, so a packaged download would ask for a file that was never published. The
-          // release page carries the deb the user installs by hand instead.
+          // published deb is opened directly instead of routing the user through the release page.
           if (!manual) return
           const result = await ordinaryMessageBox({ title: locale.messages.updateCheckTitle,
             message: formatDesktopMessage(locale.messages.updateAvailable, { version: state.version ?? '' }),
             detail: locale.messages.updateOpenPageDetail,
             buttons: [locale.messages.updateOpenPage], cancelId: 1 })
           if (result.response !== 0) return
-          await shell.openExternal(await resolveReleasePage())
+          await shell.openExternal(await resolveReleaseAsset('.deb'))
           return
         }
         if (manual) {
@@ -1420,6 +1423,10 @@ async function main(): Promise<void> {
       mandatoryUI?.dispose()
       // Installation preparation already awaited Platform storage cleanup.
       void platformView.dispose().catch((error: unknown) => { console.error(error) })
+      // A window or a child process that refuses to close keeps this process alive, and the
+      // installer then reports the app as still running and never starts. Nothing is left to
+      // clean up after the handoff above, so the exit is forced when the normal path stalls.
+      setTimeout(() => { app.exit(0) }, 10_000).unref()
       return
     }
     if (quitting) return

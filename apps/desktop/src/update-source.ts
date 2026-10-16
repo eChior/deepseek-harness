@@ -117,3 +117,54 @@ export async function resolveReleasePage(
 ): Promise<string> {
   return releasePageUrl(origin, repository, await newestTag(origin, repository, fetchImpl))
 }
+
+/** File names published with one release, or nothing when the payload is not a release. */
+function releaseAssets(entry: unknown): string[] | undefined {
+  if (typeof entry !== 'object' || entry === null) return undefined
+  const assets = (entry as Record<string, unknown>).assets
+  if (!Array.isArray(assets)) return undefined
+  const names: string[] = []
+  for (const asset of assets) {
+    const name = stringField(asset, 'name')
+    if (name !== undefined) names.push(name)
+  }
+  return names
+}
+
+/**
+ * Absolute URL of one published installer file.
+ *
+ * The Linux lane names its package after the build stamp, so the channel metadata cannot be used
+ * to predict the file name; the release's own asset list is the only place the name is stated.
+ *
+ * @param suffix - File-name ending that identifies the installer, for example `.deb`.
+ * @param origin - Release origin; defaults to this build's own Gitea instance.
+ * @param repository - `owner/name` of the release repository.
+ * @param fetchImpl - Transport seam; tests replace it instead of reaching the network.
+ * @returns Absolute URL of the published installer.
+ * @throws {Error} When the origin answers with a non-success status, publishes no release, or
+ * publishes no file with that ending.
+ */
+export async function resolveReleaseAsset(
+  suffix: string,
+  origin: string = RELEASE_ORIGIN,
+  repository: string = RELEASE_REPOSITORY,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  const endpoint = `${trimOrigin(origin)}${RELEASES_SEGMENT}/${repository}/releases?limit=20`
+  const response = await fetchImpl(endpoint, { headers: { accept: 'application/json' } })
+  if (!response.ok) {
+    throw new Error(`desktop update: release lookup failed with ${String(response.status)}`)
+  }
+  const payload: unknown = await response.json()
+  if (!Array.isArray(payload)) throw new Error('desktop update: the release repository publishes no release')
+  for (const entry of payload) {
+    if (typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>).draft === true) continue
+    const tag = stringField(entry, 'tag_name')
+    if (tag === undefined) continue
+    const name = releaseAssets(entry)?.find(asset => asset.endsWith(suffix))
+    if (name === undefined) continue
+    return `${releaseDownloadUrl(origin, repository, tag)}/${name}`
+  }
+  throw new Error(`desktop update: no published release carries a ${suffix} file`)
+}
