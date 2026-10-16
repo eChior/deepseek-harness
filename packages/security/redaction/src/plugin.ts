@@ -25,6 +25,7 @@ import z from '@deepseek-ai/schemastery'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { RedactionMap } from './map.ts'
+import { queueTermRequest, readTermRequests, settleTermRequest, type TermRequest } from './queue.ts'
 import { fetchTermList, readCachedTermList, writeCachedTermList, type TermSourceConfig, type TermSourceKind } from './source.ts'
 import { compileRules, isUsable, parseTermList, type RedactionRule } from './terms.ts'
 import { redactText as applyRules } from './redact.ts'
@@ -78,10 +79,17 @@ export interface RedactablePart {
   readonly text?: string
 }
 
-/** Fields a deployment can set for this provider. */
+/**
+ * Fields a deployment can set for this provider.
+ *
+ * There is deliberately no switch that turns the provider off. Redaction is the
+ * one feature whose failure is silent: a disabled provider writes the very
+ * values this feature exists to keep out of the session log, and neither the
+ * user nor the model would see it happen. A rule that over-matches is corrected
+ * on the publishing side, where the fix reaches every machine by itself — so the
+ * escape hatch for a bad rule is the rule list, never a per-machine switch.
+ */
 export interface Config {
-  /** Set to false to leave every message exactly as the user typed it. */
-  enabled?: boolean
   /** Term list to load when nothing is cached. Defaults to the copy inside this package. */
   termsPath?: string
   /** Repository that publishes the list. An empty string keeps this build's copy in place. */
@@ -103,7 +111,6 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  enabled: z.boolean().default(true),
   termsPath: z.string().default(TERMS_PATH),
   remote: z.string().default(PUBLISHED_TERMS),
   branch: z.string().default('main'),
@@ -117,6 +124,7 @@ export const Config: z<Config> = z.object({
 
 /** What the provider has loaded and how much it has replaced so far. */
 export interface RedactionStatus {
+  /** Always true: this provider has no off switch. */
   readonly enabled: boolean
   /** Revision the loaded term list declares. */
   readonly revision: string | null
@@ -134,6 +142,39 @@ export interface RedactionStatus {
   readonly lastError: string | null
   /** Why nothing is being replaced, when a list could not be loaded at all. */
   readonly detail: string | null
+  /** Term requests waiting on this machine for a delivery target. */
+  readonly pending: number
+}
+
+/**
+ * A destination that can take a term request off this machine.
+ *
+ * Nothing in this package implements one: the deployment decides whether a
+ * request reaches the publisher through an intranet endpoint, a repository
+ * issue, or a person copying a file. Exposing the shape lets a deployment wire
+ * its own without this package knowing which one it is.
+ */
+export interface TermRequestSink {
+  /** Name reported back with each delivery. */
+  readonly name: string
+  /**
+   * Hand one request to the publisher.
+   * @param request - the request to deliver.
+   * @throws When the publisher refused it; the message becomes the request's detail.
+   */
+  send(request: TermRequest): Promise<void>
+}
+
+/** What one delivery attempt did with the requests it was offered. */
+export interface TermRequestDelivery {
+  /** Sink the requests were offered to, or null when no sink is configured. */
+  readonly sink: string | null
+  /** Requests the publisher accepted. */
+  readonly sent: number
+  /** Requests the publisher refused, each recorded with its reason. */
+  readonly failed: number
+  /** Requests still waiting, which is every one of them when no sink is configured. */
+  readonly pending: number
 }
 
 /**
@@ -151,7 +192,6 @@ export class RedactionService extends Service {
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'redaction')
     this.config = {
-      enabled: config.enabled ?? true,
       termsPath: config.termsPath ?? TERMS_PATH,
       remote: config.remote ?? PUBLISHED_TERMS,
       branch: config.branch ?? 'main',
@@ -163,7 +203,7 @@ export class RedactionService extends Service {
       visionTimeoutMs: config.visionTimeoutMs ?? DEFAULT_VISION_TIMEOUT_MS,
     }
     this.current = {
-      enabled: this.config.enabled,
+      enabled: true,
       revision: null,
       terms: 0,
       patterns: 0,
@@ -172,9 +212,11 @@ export class RedactionService extends Service {
       lastChecked: null,
       lastError: null,
       detail: null,
+      pending: 0,
     }
     ctx.effect(() => {
       void this.load()
+      void this.countPending()
       const minutes = this.config.refreshMinutes
       if (minutes <= 0 || this.config.remote === '') return () => {}
       const timer: NodeJS.Timeout = setInterval(() => {
@@ -193,7 +235,7 @@ export class RedactionService extends Service {
     // event, so it rewrites the text they produced rather than the other way round.
     ctx.on('tools/post-execute', async (_exec, result, next) => {
       const decision = await next()
-      if (!this.config.enabled || this.rules.length === 0) return decision
+      if (this.rules.length === 0) return decision
       if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
       if (decision.value !== undefined) return decision
       const content = this.redact(decision.content ?? result.content)
@@ -238,7 +280,6 @@ export class RedactionService extends Service {
    * @returns The status after the attempt; `detail` carries any failure reason.
    */
   async load(): Promise<RedactionStatus> {
-    if (!this.config.enabled) return this.current
     const cached = await readCachedTermList(this.config.cacheDirectory)
     let shipped: string | undefined
     try {
@@ -269,7 +310,7 @@ export class RedactionService extends Service {
    * @returns The status after the attempt; `lastError` carries a failure reason.
    */
   async refresh(): Promise<RedactionStatus> {
-    if (!this.config.enabled || this.config.remote === '') return this.current
+    if (this.config.remote === '') return this.current
     const checked = new Date().toISOString()
     try {
       const text = await fetchTermList(this.source)
@@ -346,7 +387,7 @@ export class RedactionService extends Service {
    * @returns A new list in which every text part has been rewritten.
    */
   redact<T extends RedactablePart>(parts: readonly T[]): T[] {
-    if (!this.config.enabled || this.rules.length === 0) return [...parts]
+    if (this.rules.length === 0) return [...parts]
     return parts.map((part) => {
       if (part.type !== 'text' || typeof part.text !== 'string') return part
       const text = this.redactText(part.text)
@@ -360,7 +401,7 @@ export class RedactionService extends Service {
    * @returns The rewritten text, or the input when no rule matched.
    */
   redactText(text: string): string {
-    if (!this.config.enabled || this.rules.length === 0) return text
+    if (this.rules.length === 0) return text
     const result = applyRules(text, this.rules, this.map)
     if (result.hits.length > 0) {
       this.current = { ...this.current, replacements: this.current.replacements + result.hits.length }
@@ -401,7 +442,7 @@ export class RedactionService extends Service {
    * @returns The redacted text, or `undefined` when no text could be read.
    */
   async recognizeImage(data: string, mediaType: string): Promise<string | undefined> {
-    if (!this.config.enabled || !this.config.vision || this.rules.length === 0) return undefined
+    if (!this.config.vision || this.rules.length === 0) return undefined
     try {
       const text = await recognizeImageText(Buffer.from(data, 'base64'), this.config.visionTimeoutMs)
       return text === '' ? '[图片-无文字]' : this.redactText(text)
@@ -410,6 +451,77 @@ export class RedactionService extends Service {
       this.ctx.logger.warn(`redaction: could not read a ${mediaType} image locally: ${detail}`)
       return undefined
     }
+  }
+
+  /**
+   * Ask the publisher to add a term to the list.
+   *
+   * The request is queued on this machine first, so a machine that cannot reach
+   * the publisher loses nothing by asking: the term waits in the queue file and
+   * a later delivery carries it. A request never holds a value a session
+   * matched — it is the missing term itself, which is what a publisher adds.
+   * @param term - the term to add to the list.
+   * @param note - why the term belongs in the list.
+   * @returns The queued request.
+   * @throws Error when the term breaks the shape a list entry can hold.
+   */
+  async requestTerm(term: string, note?: string): Promise<TermRequest> {
+    const request = await queueTermRequest(this.config.cacheDirectory, term, note)
+    await this.countPending()
+    return request
+  }
+
+  /**
+   * Everything this machine has queued, oldest first.
+   * @returns every request the queue file holds, whatever state each one is in.
+   */
+  async pendingRequests(): Promise<TermRequest[]> {
+    return await readTermRequests(this.config.cacheDirectory)
+  }
+
+  /**
+   * Offer every pending request to a sink and record how each one ended.
+   *
+   * A sink is optional because the default deployment delivers nothing: the
+   * queue exists so a machine can hold a request until someone wires a
+   * destination, and this method is the seam that destination plugs into. A
+   * request the sink refuses stays on disk as rejected with its reason, so the
+   * next reader sees what happened instead of watching the entry disappear.
+   * @param sink - destination to offer the requests to; omitted means none is configured.
+   * @returns What the attempt did with the queue.
+   */
+  async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery> {
+    const requests = await readTermRequests(this.config.cacheDirectory)
+    const waiting = requests.filter(request => request.state === 'pending')
+    if (sink === undefined || waiting.length === 0) {
+      const pending = waiting.length
+      this.current = { ...this.current, pending }
+      return { sink: sink?.name ?? null, sent: 0, failed: 0, pending }
+    }
+    let sent = 0
+    let failed = 0
+    for (const request of waiting) {
+      try {
+        await sink.send(request)
+        await settleTermRequest(this.config.cacheDirectory, request.id, 'uploaded')
+        sent += 1
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        await settleTermRequest(this.config.cacheDirectory, request.id, 'rejected', detail)
+        failed += 1
+      }
+    }
+    const pending = await this.countPending()
+    this.ctx.logger.info(`redaction: ${sink.name} took ${String(sent)} term request(s) and refused ${String(failed)}`)
+    return { sink: sink.name, sent, failed, pending }
+  }
+
+  /** Record how many requests are still waiting, for {@link RedactionStatus}. */
+  private async countPending(): Promise<number> {
+    const requests = await readTermRequests(this.config.cacheDirectory)
+    const pending = requests.filter(request => request.state === 'pending').length
+    if (pending !== this.current.pending) this.current = { ...this.current, pending }
+    return pending
   }
 
   /**

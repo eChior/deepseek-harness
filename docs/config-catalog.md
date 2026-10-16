@@ -2418,13 +2418,20 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:82`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:92`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
-/** Fields a deployment can set for this provider. */
+/**
+ * Fields a deployment can set for this provider.
+ *
+ * There is deliberately no switch that turns the provider off. Redaction is the
+ * one feature whose failure is silent: a disabled provider writes the very
+ * values this feature exists to keep out of the session log, and neither the
+ * user nor the model would see it happen. A rule that over-matches is corrected
+ * on the publishing side, where the fix reaches every machine by itself — so the
+ * escape hatch for a bad rule is the rule list, never a per-machine switch.
+ */
 export interface Config {
-  /** Set to false to leave every message exactly as the user typed it. */
-  enabled?: boolean
   /** Term list to load when nothing is cached. Defaults to the copy inside this package. */
   termsPath?: string
   /** Repository that publishes the list. An empty string keeps this build's copy in place. */

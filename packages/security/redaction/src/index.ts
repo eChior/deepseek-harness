@@ -31,7 +31,19 @@ export {
   name,
   type RedactablePart,
   type RedactionStatus,
+  type TermRequestDelivery,
+  type TermRequestSink,
 } from './plugin.ts'
+export {
+  TERM_REQUEST_FILE,
+  assertTermShape,
+  queueTermRequest,
+  readTermRequests,
+  settleTermRequest,
+  writeTermRequests,
+  type TermRequest,
+  type TermRequestState,
+} from './queue.ts'
 export {
   compileRules,
   isUsable,

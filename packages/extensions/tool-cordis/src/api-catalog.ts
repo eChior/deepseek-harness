@@ -1864,6 +1864,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'The redacted text, or `undefined` when no text could be read.',
       },
       {
+        signature: 'async requestTerm(term: string, note?: string): Promise<TermRequest>',
+        description: 'Ask the publisher to add a term to the list.\n\nThe request is queued on this machine first, so a machine that cannot reach the publisher loses nothing by asking: the term waits in the queue file and a later delivery carries it. A request never holds a value a session matched — it is the missing term itself, which is what a publisher adds.',
+        parameters: [{ name: 'term', description: 'the term to add to the list.' }, { name: 'note', description: 'why the term belongs in the list.' }],
+        returns: 'The queued request.',
+        throws: ['Error when the term breaks the shape a list entry can hold.'],
+      },
+      {
+        signature: 'async pendingRequests(): Promise<TermRequest[]>',
+        description: 'Everything this machine has queued, oldest first.',
+        parameters: [],
+        returns: 'every request the queue file holds, whatever state each one is in.',
+      },
+      {
+        signature: 'async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>',
+        description: 'Offer every pending request to a sink and record how each one ended.\n\nA sink is optional because the default deployment delivers nothing: the queue exists so a machine can hold a request until someone wires a destination, and this method is the seam that destination plugs into. A request the sink refuses stays on disk as rejected with its reason, so the next reader sees what happened instead of watching the entry disappear.',
+        parameters: [{ name: 'sink', description: 'destination to offer the requests to; omitted means none is configured.' }],
+        returns: 'What the attempt did with the queue.',
+      },
+      {
         signature: 'restore(text: string): string',
         description: 'Turn the placeholders this session emitted back into the values they stand for.',
         parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }],
@@ -6247,7 +6266,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n}',
   },
   {
     name: 'Registry',
@@ -7636,6 +7655,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalWaitReason',
     declaration: 'export type TerminalWaitReason = \'stdin_read\' | \'inferred_idle\' | \'timeout\' | \'session_exit\';',
+  },
+  {
+    name: 'TermRequest',
+    declaration: 'export interface TermRequest {\n    readonly id: string;\n    readonly term: string;\n    readonly note?: string;\n    readonly createdAt: string;\n    readonly state: TermRequestState;\n    readonly detail?: string;\n}',
+  },
+  {
+    name: 'TermRequestDelivery',
+    declaration: 'export interface TermRequestDelivery {\n    readonly sink: string | null;\n    readonly sent: number;\n    readonly failed: number;\n    readonly pending: number;\n}',
+  },
+  {
+    name: 'TermRequestSink',
+    declaration: 'export interface TermRequestSink {\n    readonly name: string;\n    send(request: TermRequest): Promise<void>;\n}',
+  },
+  {
+    name: 'TermRequestState',
+    declaration: 'export type TermRequestState = \'pending\' | \'uploaded\' | \'rejected\';',
   },
   {
     name: 'TermSourceKind',

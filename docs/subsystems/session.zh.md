@@ -850,6 +850,39 @@ redactValue(value: JsonValue): JsonValue
 async recognizeImage(data: string, mediaType: string): Promise<string | undefined>
 
 /**
+ * Ask the publisher to add a term to the list.
+ *
+ * The request is queued on this machine first, so a machine that cannot reach
+ * the publisher loses nothing by asking: the term waits in the queue file and
+ * a later delivery carries it. A request never holds a value a session
+ * matched — it is the missing term itself, which is what a publisher adds.
+ * @param term - the term to add to the list.
+ * @param note - why the term belongs in the list.
+ * @returns The queued request.
+ * @throws Error when the term breaks the shape a list entry can hold.
+ */
+async requestTerm(term: string, note?: string): Promise<TermRequest>
+
+/**
+ * Everything this machine has queued, oldest first.
+ * @returns every request the queue file holds, whatever state each one is in.
+ */
+async pendingRequests(): Promise<TermRequest[]>
+
+/**
+ * Offer every pending request to a sink and record how each one ended.
+ *
+ * A sink is optional because the default deployment delivers nothing: the
+ * queue exists so a machine can hold a request until someone wires a
+ * destination, and this method is the seam that destination plugs into. A
+ * request the sink refuses stays on disk as rejected with its reason, so the
+ * next reader sees what happened instead of watching the entry disappear.
+ * @param sink - destination to offer the requests to; omitted means none is configured.
+ * @returns What the attempt did with the queue.
+ */
+async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
+
+/**
  * Turn the placeholders this session emitted back into the values they stand for.
  * @param text Text that may carry placeholders.
  * @returns The text with every placeholder this process issued restored.

@@ -34,7 +34,6 @@ Mount the plugin, then call `redact()` on the parts a consumer is about to turn 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Set to `false` to leave every message exactly as typed. |
 | `termsPath` | the `assets/terms.yaml` inside this package | Term list this build carries; used when the cache holds nothing usable, or holds something older. |
 | `remote` | the published term-list repository on the intranet Gitea | Archive URL the cache refreshes from; an empty string turns every network call off. |
 | `branch` | `main` | Branch to pull the archive from. |
@@ -45,13 +44,17 @@ Mount the plugin, then call `redact()` on the parts a consumer is about to turn 
 | `vision` | `true` | Run local recognition over admitted images and substitute the redacted text. |
 | `visionTimeoutMs` | `20000` | Give up on one image after this long and substitute a blocked marker. |
 
+No field turns the provider off. A disabled provider writes exactly the values this feature exists to keep out of the session log, and writes them silently, so a rule that over-matches is corrected where the list is published instead — that fix reaches every machine on its own refresh, without a reinstall or an edit here.
+
 `redact(parts)` copies the list and rewrites only the parts whose `type` is `text`. Images, file references, and anything else come back as they arrived, so a caller can pass the result to the next stage exactly as it would have passed the input. `redactText(text)` does the same for one string held outside a part list.
 
 Images never reach the model as pixels. This package is also the reader the attachment store calls: it recognizes the text inside an admitted image, redacts that text, and hands the text back for the image part. Nothing is written to disk, and a recognition that fails or times out substitutes a blocked marker instead of the image. A caller that admits attachments on its own can pass the reader down — `admitPromptContent(parts, ctx.get('redaction'))` — and get the same treatment for a child agent's read.
 
 `restore(text)` swaps the placeholders this process issued back for their values. It belongs where a human reads text, never on the way into a session.
 
-`status` reports the revision the loaded list declares, where it came from, how many terms and patterns it carries, how many replacements this process has made, and a failure detail. A term list that cannot be read leaves no rules loaded, which replaces nothing, and the reason stays visible in `status.detail` instead of failing the plugin load.
+`status` reports the revision the loaded list declares, where it came from, how many terms and patterns it carries, how many replacements this process has made, how many term requests are queued, and a failure detail. A term list that cannot be read leaves no rules loaded, which replaces nothing, and the reason stays visible in `status.detail` instead of failing the plugin load.
+
+A term the list is missing can be asked for rather than waited on. `requestTerm(term, note)` appends it to a queue in `cacheDirectory`, and `deliverRequests(sink)` offers every queued request to a `TermRequestSink` the deployment supplies. No sink ships here, so a machine with no destination keeps its requests as `pending` instead of losing them, and every attempt settles each request as `uploaded` or `rejected` together with the sink's own reason — the queue records what happened rather than dropping the entry.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
@@ -79,7 +82,8 @@ Replacing a value with a placeholder changes the bytes of the request, so the fi
 
 **Runtime invariant:** No runtime invariant companion is published because the service owns one rule list, one status record, and one in-memory map, and no second observation of those values can diverge from the first.
 
-- **Wiring belongs to each consumer** — this package rewrites the text a caller hands it. Prompt admission, tool results, and image attachments each need their own caller before a session is covered end to end, and none of them is wired here yet.
+- **Coverage follows the callers that were wired** — this package rewrites the text a caller hands it, so prompt admission, tool results, and image attachments are covered because those callers pass through it. A path that assembles text and writes it without calling `redact()` is still uncovered, and an assistant's own reply is never rewritten.
+- **A term request has no destination on its own** — the queue holds what a machine cannot deliver, and `deliverRequests` needs a sink a deployment supplies. Nothing here reaches the publisher by itself, so an install without a sink accumulates requests rather than sending them.
 - **Placeholders do not survive the process** — the map is memory-only, so a restart cannot restore a placeholder an earlier process issued, and the session keeps the placeholder.
 - **Container formats stay opaque** — a scan sees a workbook, a slide deck, or a PDF as compressed bytes rather than text, so those files have to be unpacked before their contents can be matched.
 - **The term list is maintained outside this repository** — this package carries one copy for a build to start from; the maintained list is distributed separately and replaces it at runtime.

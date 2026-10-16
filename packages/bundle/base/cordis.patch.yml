@@ -297,10 +297,14 @@
     # placeholders, before the session log keeps them. The map tying a placeholder
     # back to its value lives in process memory only: after a restart the old
     # placeholders stay placeholders, which is the point of the feature.
+    #
+    # It sits in the base composition because it is not optional. A switched-off
+    # provider writes exactly the values it exists to keep out of the session log,
+    # and does it silently, so the provider has no off switch: a rule that
+    # over-matches is corrected where the list is published, which reaches every
+    # machine on its own refresh rather than needing a reinstall or an edit here.
     - id: redaction
       name: '@deepseek-ai/dsh-redaction'
-      config:
-        enabled: true
 
     - id: skill
       name: '@deepseek-ai/dsh-skill'
