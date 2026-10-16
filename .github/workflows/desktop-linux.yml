@@ -116,7 +116,12 @@ jobs:
           cat apps/desktop/.env.linux
 
       - name: Package linux-${{ matrix.arch }}
-        run: pnpm --dir apps/desktop run package:linux:${{ matrix.arch }}
+        # The stamp has to arrive as an argument. `package-target.ts` derives the version it
+        # publishes from `--build-version` alone and then overwrites the environment variable with
+        # that result, so a stamp living only in `$GITHUB_ENV` never reaches electron-builder: the
+        # feed would advertise the product version, and electron-updater would report an already
+        # installed build as the newest one.
+        run: pnpm --dir apps/desktop run package:linux:${{ matrix.arch }} -- --build-version "$DSH_DESKTOP_BUILD_VERSION"
 
       - name: Upload artefacts
         if: always()

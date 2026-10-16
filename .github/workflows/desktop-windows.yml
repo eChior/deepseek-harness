@@ -113,7 +113,13 @@ jobs:
           Get-Content $path
 
       - name: Package Windows x64
-        run: pnpm run package:desktop:win:x64:unsigned
+        shell: pwsh
+        # The stamp has to arrive as an argument. `package-target.ts` derives the version it
+        # publishes from `--build-version` alone and then overwrites the environment variable with
+        # that result, so a stamp living only in `$GITHUB_ENV` never reaches electron-builder: the
+        # feed would advertise the product version, and electron-updater would report an already
+        # installed build as the newest one.
+        run: pnpm run package:desktop:win:x64:unsigned -- --build-version "$env:DSH_DESKTOP_BUILD_VERSION"
 
       - name: Upload installer
         if: always()
