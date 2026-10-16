@@ -180,7 +180,7 @@ it('maps a reported CLI failure onto the published category', async () => {
   const converter = await createOfficeConverter()
   const options = await request()
   await expect(converter.render(options, new AbortController().signal))
-    .rejects.toMatchObject({ code: 'failed', message: expect.stringContaining('wps said no') })
+    .rejects.toMatchObject({ code: 'failed', message: expect.stringContaining('wps said no') as string })
 })
 
 it('reports a CLI that dies without a report as a generic failure', async () => {

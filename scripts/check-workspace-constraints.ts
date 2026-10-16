@@ -210,6 +210,10 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-sandbox-windows-acl': ['lib/runner.js', 'lib/types-*.js', 'assets'],
   '@deepseek-ai/dsh-skill-badge': ['assets'],
   '@deepseek-ai/dsh-skill-office': ['assets'],
+  // The term list and the bundled skill copy are data the runtime reads by path;
+  // each of these publishes its assets directory beside lib rather than inlining it.
+  '@deepseek-ai/dsh-redaction': ['assets'],
+  '@deepseek-ai/dsh-skill-repo': ['assets'],
   '@deepseek-ai/dsh-subprocess': ['lib/control.js'],
   // SSH launches a private helper and shares wire definitions and TLS setup
   // between that helper and the connection owner.

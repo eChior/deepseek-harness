@@ -125,9 +125,9 @@ export abstract class DeepSeekAccount extends Service {
    * @param session - provider-defined session payload, opaque to this seam.
    * @returns state after the session is committed.
    */
-  async acceptExternalSession(session: unknown): Promise<AccountView> {
+  acceptExternalSession(session: unknown): Promise<AccountView> {
     void session
-    throw new Error('deepseek-account: this provider does not accept externally captured sessions')
+    return Promise.reject(new Error('deepseek-account: this provider does not accept externally captured sessions'))
   }
 }
 export default DeepSeekAccount

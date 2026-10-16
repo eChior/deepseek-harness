@@ -374,7 +374,7 @@ abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserI
  * @param session - provider-defined session payload, opaque to this seam.
  * @returns state after the session is committed.
  */
-async acceptExternalSession(session: unknown): Promise<AccountView>
+acceptExternalSession(session: unknown): Promise<AccountView>
 ```
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)

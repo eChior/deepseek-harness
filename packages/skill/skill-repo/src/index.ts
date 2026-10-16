@@ -204,7 +204,6 @@ export class SkillRepository extends Service {
    */
   private async seed(staging: string, detail: string): Promise<boolean> {
     const bundled = this.config.bundledDirectory
-    if (bundled === undefined) return false
     if (await exists(this.current.skillsDirectory)) return false
     try {
       await rm(staging, { recursive: true, force: true })

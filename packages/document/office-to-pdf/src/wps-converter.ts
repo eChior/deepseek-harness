@@ -229,9 +229,10 @@ class WpsConverter implements Converter {
   }
 
   /** Stop accepting conversions and terminate one in flight. */
-  async dispose(): Promise<void> {
+  dispose(): Promise<void> {
     this.disposed = true
     this.active?.abort()
+    return Promise.resolve()
   }
 
   /**
@@ -249,9 +250,11 @@ class WpsConverter implements Converter {
     signal?.throwIfAborted()
     const controller = new AbortController()
     this.active = controller
-    const abort = (): void => controller.abort(signal?.reason)
+    const abort = (): void => { controller.abort(signal?.reason) }
     signal?.addEventListener('abort', abort, { once: true })
-    const timer = setTimeout(() => controller.abort(new ConversionError('timeout', 'The WPS conversion timed out.')), this.timeoutMs)
+    const timer = setTimeout((): void => {
+      controller.abort(new ConversionError('timeout', 'The WPS conversion timed out.'))
+    }, this.timeoutMs)
     try {
       await this.spawnConversion(inputPath, outputPath, controller.signal)
       signal?.throwIfAborted()

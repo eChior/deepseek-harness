@@ -926,7 +926,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'optional device/account identifiers and the provider\'s OS version string.',
       },
       {
-        signature: 'async acceptExternalSession(session: unknown): Promise<AccountView>',
+        signature: 'acceptExternalSession(session: unknown): Promise<AccountView>',
         description: 'Commit a session captured outside the Host, in the provider\'s own format.\n\nProviders whose login finishes inside a browser callback never need this route. It exists for shells that own an identity cookie themselves — a native window running the deployment\'s own sign-in page, for instance — and the default refuses so a provider opts in explicitly instead of silently ignoring the call.',
         parameters: [{ name: 'session', description: 'provider-defined session payload, opaque to this seam.' }],
         returns: 'state after the session is committed.',
