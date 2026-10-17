@@ -36,6 +36,16 @@ it('keeps a target payload identity independent of other target archives', () =>
   expect(primaryRuntimePayloadDigest('win-x64', changed, '11.7.0')).not.toBe(primaryRuntimePayloadDigest('win-x64', lock, '11.7.0'))
 })
 
+it('locks the Windows 7 Python build of the shared interpreter release', () => {
+  const { url, sha256 } = lock.targets['win-x64'].pythonNupkg
+  expect(url).toBe(`https://github.com/adang1345/PythonVista/releases/download/v${lock.pythonVersion}/python.${lock.pythonVersion}.nupkg`)
+  expect(sha256).toMatch(/^[0-9a-f]{64}$/u)
+  const changed = structuredClone(lock)
+  changed.targets['win-x64'].pythonNupkg.sha256 = 'a'.repeat(64)
+  expect(primaryRuntimePayloadDigest('win-x64', changed, '11.7.0')).not.toBe(primaryRuntimePayloadDigest('win-x64', lock, '11.7.0'))
+  expect(primaryRuntimePayloadDigest('mac-arm64', changed, '11.7.0')).toBe(primaryRuntimePayloadDigest('mac-arm64', lock, '11.7.0'))
+})
+
 it('invalidates payload identity for shared wheels, package versions and package-manager changes', () => {
   const wheel = structuredClone(lock), distribution = structuredClone(lock)
   wheel.wheels[0]!.sha256 = 'a'.repeat(64)

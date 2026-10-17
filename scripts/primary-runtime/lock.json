@@ -5,9 +5,13 @@
   "targets": {
     "win-x64": {
       "nodeArchive": "win-x64.zip",
-      "nodeSha256": "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541",
+      "nodeSha256": "3309fc6441bc8c5f14d92ebfed058738c252f2c4caa18c52839b080b04610162",
       "pythonTarget": "x86_64-pc-windows-msvc",
       "pythonSha256": "7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14",
+      "pythonNupkg": {
+        "url": "https://github.com/adang1345/PythonVista/releases/download/v3.12.14/python.3.12.14.nupkg",
+        "sha256": "13bd3e7542903b0e1159ca222cbdde3e1e5baf2d6621a9733effc343a23cd59d"
+      },
       "wheels": [
         {
           "url": "https://files.pythonhosted.org/packages/45/89/da2f7971a317f83d807fdd4065c0af40208e59e692cc43d315a71a0e96d1/pillow-12.3.0-cp312-cp312-win_amd64.whl",

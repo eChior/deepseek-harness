@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, globSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -34,10 +34,45 @@ export async function downloadPrimaryRuntimeAsset(url: string, sha256: string, c
   return destination
 }
 
+/**
+ * Locate the locked Node archive. `DSH_PRIMARY_RUNTIME_NODE_ARCHIVE` names a local build, such as the
+ * Windows 7 Node, used instead of nodejs.org; it must still match the locked digest.
+ * @param filename - Official archive filename, whose top-level directory the local build must reproduce.
+ * @param sha256 - Locked SHA-256 digest.
+ * @param cache - Download cache directory.
+ * @returns Verified local archive path.
+ */
+async function nodeArchive(filename: string, sha256: string, cache: string): Promise<string> {
+  const local = process.env.DSH_PRIMARY_RUNTIME_NODE_ARCHIVE
+  if (local === undefined || local === '') return downloadPrimaryRuntimeAsset(`https://nodejs.org/dist/v${lock.nodeVersion}/${filename}`, sha256, cache)
+  if (createHash('sha256').update(readFileSync(local)).digest('hex') !== sha256) throw new Error(`primary runtime: checksum mismatch for DSH_PRIMARY_RUNTIME_NODE_ARCHIVE=${local}`)
+  return resolve(local)
+}
+
 async function pythonArchive(target: keyof typeof lock.targets, cache: string): Promise<string> {
   const artifact = lock.targets[target]
   const filename = `cpython-${lock.pythonVersion}+${lock.pythonRelease}-${artifact.pythonTarget}-install_only_stripped.tar.gz`
   return downloadPrimaryRuntimeAsset(`https://github.com/astral-sh/python-build-standalone/releases/download/${lock.pythonRelease}/${encodeURIComponent(filename)}`, artifact.pythonSha256, cache)
+}
+
+/**
+ * Unpack the target's Python into `dependencies/python`. win-x64 uses the PythonVista NuGet build of the
+ * locked CPython release, which also runs on Windows 7 SP1 with KB2533623; other targets use python-build-standalone.
+ * @param target - Runtime target.
+ * @param dependencies - Payload dependencies directory.
+ * @param staging - Scratch directory on the same volume as `dependencies`.
+ * @param cache - Verified archive cache.
+ * @returns Resolves after `dependencies/python` holds the interpreter.
+ */
+async function unpackPython(target: PrimaryRuntimeTarget, dependencies: string, staging: string, cache: string): Promise<void> {
+  if (target !== 'win-x64') {
+    await extractTar({ file: await pythonArchive(target, cache), cwd: dependencies })
+    return
+  }
+  const { url, sha256 } = lock.targets['win-x64'].pythonNupkg
+  const unpacked = join(staging, 'python-nupkg')
+  await extractZip(await downloadPrimaryRuntimeAsset(url, sha256, cache), { dir: unpacked })
+  renameSync(join(unpacked, 'tools'), join(dependencies, 'python'))
 }
 
 /**
@@ -124,11 +159,11 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     let pnpmVersion: string | undefined
     if (!options.pythonOnly) {
       const nodeFilename = `node-v${lock.nodeVersion}-${artifact.nodeArchive}`
-      const nodeArchive = await downloadPrimaryRuntimeAsset(`https://nodejs.org/dist/v${lock.nodeVersion}/${nodeFilename}`, artifact.nodeSha256, paths.downloads)
+      const nodeArchivePath = await nodeArchive(nodeFilename, artifact.nodeSha256, paths.downloads)
       const unpackedNode = join(staging, 'node')
       mkdirSync(unpackedNode)
-      if (target === 'win-x64') await extractZip(nodeArchive, { dir: unpackedNode })
-      else await extractTar({ file: nodeArchive, cwd: unpackedNode })
+      if (target === 'win-x64') await extractZip(nodeArchivePath, { dir: unpackedNode })
+      else await extractTar({ file: nodeArchivePath, cwd: unpackedNode })
       const nodeSource = join(unpackedNode, nodeFilename.replace(/\.(?:zip|tar\.gz)$/u, ''))
       mkdirSync(join(dependencies, 'node', 'bin'), { recursive: true })
       mkdirSync(join(dependencies, 'node', 'node_modules'))
@@ -141,7 +176,7 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
       pnpmVersion = (JSON.parse(readFileSync(pnpmManifest, 'utf8')) as { version: string }).version
       await cp(dirname(pnpmManifest), join(dependencies, 'pnpm'), { recursive: true, dereference: true })
     }
-    await extractTar({ file: await pythonArchive(target, paths.downloads), cwd: dependencies })
+    await unpackPython(target, dependencies, staging, paths.downloads)
     const manifest: PrimaryRuntimeManifest = {
       desktopVersion: options.version,
       platform: target === 'win-x64' ? 'win32' : target.startsWith('linux-') ? 'linux' : 'darwin',
