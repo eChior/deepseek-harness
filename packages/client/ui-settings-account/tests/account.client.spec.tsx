@@ -6,12 +6,14 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { PlatformBridge } from '../src/client/PlatformOverlay.tsx'
-import { createPlatformPages, type PlatformPages } from '../src/client/platform-pages.ts'
+import { createPlatformPages, type PlatformPage, type PlatformPages } from '../src/client/platform-pages.ts'
 import { AccountPlatformHost } from '../src/client/AccountPlatformHost.tsx'
 import { AccountSection, type AccountSectionInjected, type AccountSnapshot } from '../src/client/AccountSection.tsx'
 import type { BonusNotice } from '../src/client/bonus-notices.ts'
+import type { AccountAttribution } from '../src/client/AccountSection.tsx'
 import type { AccountMenuProps } from '../src/client/AccountMenu.tsx'
 import type {} from '../src/client/index.ts'
+import { refreshAfterReturn } from '../src/client/account-refresh.ts'
 import { en, zh, type AccountKey } from '../src/client/locales.ts'
 import css from '../src/client/AccountSection.module.css'
 
@@ -23,12 +25,20 @@ const themeOf = (colorScheme: 'light' | 'dark'): ThemeSnapshot => ({
   active: { id: colorScheme, colorScheme, tokens: {} }, themes: [], revision: 0,
 })
 
-function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<AccountDetails>, pages?: PlatformPages): AccountSectionInjected {
+function operationsOf(
+  state: Omit<AccountView, 'links'>,
+  details?: Partial<AccountDetails>,
+  pages?: PlatformPages,
+  attribution?: AccountAttribution,
+): AccountSectionInjected {
   return {
     ...pages === undefined ? {} : { openPlatformPage: pages.open },
     hooks: {
       account: {
-        getSnapshot: () => ({ view: { ...state, links: { usageUrl: 'http://localhost:8081/usage', topUpUrl: 'http://localhost:8081/top_up' } }, details, failed: false }),
+        getSnapshot: () => ({
+          view: { ...state, links: { usageUrl: 'http://localhost:8081/usage', topUpUrl: 'http://localhost:8081/top_up' } },
+          attribution, details, failed: false,
+        }),
         subscribe: () => () => {},
       },
       theme: { getSnapshot: () => themeOf('light'), subscribe: () => () => {} },
@@ -41,9 +51,15 @@ function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<Accou
   }
 }
 
-function mount(state: Omit<AccountView, 'links'>, copy: typeof en | typeof zh = en, details?: Partial<AccountDetails>, platform?: PlatformBridge) {
+function mount(
+  state: Omit<AccountView, 'links'>,
+  copy: typeof en | typeof zh = en,
+  details?: Partial<AccountDetails>,
+  platform?: PlatformBridge,
+  attribution?: AccountAttribution,
+) {
   const pages = platform === undefined ? undefined : createPlatformPages()
-  const operations = operationsOf(state, details, pages)
+  const operations = operationsOf(state, details, pages, attribution)
   // AccountSection consumes no global hooks; the slot supplies them in the application.
   const globals = {} as GlobalStandardProps
   render(<>
@@ -53,19 +69,17 @@ function mount(state: Omit<AccountView, 'links'>, copy: typeof en | typeof zh = 
       close={() => {}} t={key => key in copy ? copy[key as AccountKey] : key} />
     {/* The application renders this from `shell.overlay`; the settings page only requests a page. */}
     {platform !== undefined && pages !== undefined
-      && <SharedPlatformHost Globals={globals} pages={pages} platform={platform} copy={copy}
-        refreshAccount={operations.refreshAccount} />}
+      && <SharedPlatformHost Globals={globals} pages={pages} platform={platform} copy={copy} />}
   </>)
   return operations
 }
 
 /** Test scaffold for the shell's host: real page subscription plus the opener's return read. */
-function SharedPlatformHost({ Globals, pages, platform, copy, refreshAccount }: {
+function SharedPlatformHost({ Globals, pages, platform, copy }: {
   Globals: GlobalStandardProps
   pages: PlatformPages
   platform: PlatformBridge
   copy: typeof en | typeof zh
-  refreshAccount: () => Promise<void>
 }) {
   const subscribe = useMemo(() => (listener: () => void) => pages.subscribe(listener), [pages])
   const usePage = useMemo(
@@ -77,9 +91,7 @@ function SharedPlatformHost({ Globals, pages, platform, copy, refreshAccount }: 
     closePage={() => {
       // Scaffold-only emulation of the opener's return read; in the application
       // the injected opener owns it and this host only closes the page.
-      const page = pages.getSnapshot()?.page
       pages.close()
-      if (page === 'top-up') void refreshAccount()
     }} t={key => key in copy ? copy[key as AccountKey] : key} />
 }
 
@@ -101,8 +113,6 @@ it.each([en, zh])('renders account cards without inventing profile or balance da
   mount({ status: 'credential-stored', attempt: null }, copy)
   expect(screen.getByText(copy.signedIn)).toBeTruthy()
   expect(screen.getAllByText(copy.loading)).toHaveLength(2)
-  expect(screen.getByRole('link', { name: copy.usage }).getAttribute('href')).toBe('http://localhost:8081/usage')
-  expect(screen.getByRole('link', { name: copy.topUp }).getAttribute('href')).toBe('http://localhost:8081/top_up')
   expect(screen.queryByRole('button', { name: copy.signOut })).toBeNull()
   expect(document.body.textContent).not.toContain('209.00')
   await expect(`${screen.getByRole('region').textContent}\n`).toMatchFileSnapshot(`./expected/account-${copy === en ? 'en' : 'zh'}.txt`)
@@ -249,9 +259,9 @@ it.each([en, zh])('renders the Platform profile', async (copy) => {
   mount({ status: 'credential-stored', attempt: null }, copy, {
     profile: { status: 'ready', value: { id: null, name: 'Harness Mock (TEST ONLY)', contact: '138****0000' } },
     balance: { status: 'ready', bonusWallets: [], value: [{ currency: 'CNY', balance: '1234.56000000' }, { currency: 'USD', balance: '0.00000100' }] },
-  })
+  }, undefined, { employeeId: 'A0123', department: '信息部' })
   expect(screen.getByText('Harness Mock (TEST ONLY)')).toBeTruthy()
-  expect(screen.getByText('138****0000')).toBeTruthy()
+  expect(screen.getByText('A0123 · 信息部')).toBeTruthy()
   await expect(`${screen.getByRole('region').textContent}\n`).toMatchFileSnapshot(`./expected/details-${copy === en ? 'en' : 'zh'}.txt`)
 })
 
@@ -269,8 +279,9 @@ it.each([en, zh])('shows the signed-out settings prompt without balance or Platf
 it('opens usage inside Desktop and returns to the same Account settings', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const platform: PlatformBridge = { open: vi.fn(async () => {}), setBounds: vi.fn(async () => {}), close: vi.fn(async () => {}) }
-  mount({ status: 'credential-stored', attempt: null }, en, undefined, platform)
-  const usage = screen.getByRole('link', { name: en.usage })
+  mount({ status: 'credential-stored', attempt: null }, en, { balance: { status: 'failed' } }, platform)
+  // The failed balance row is the remaining opener of the usage destination.
+  const usage = screen.getByRole('link', { name: en.balanceUnavailable })
   act(() => { usage.focus() })
   await act(async () => { fireEvent.click(usage) })
   expect(platform.open).toHaveBeenCalledWith('usage', { x: 0, y: 0, width: 0, height: 0 })
@@ -290,9 +301,9 @@ it('keeps a return action available when the native document fails to load', asy
   const platform: PlatformBridge = {
     open: vi.fn(async () => { throw new Error('load failed') }), setBounds: vi.fn(async () => {}), close: vi.fn(async () => {}),
   }
-  mount({ status: 'credential-stored', attempt: null }, zh, undefined, platform)
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: zh.topUp })) })
-  expect(platform.open).toHaveBeenCalledWith('top-up', { x: 0, y: 0, width: 0, height: 0 })
+  mount({ status: 'credential-stored', attempt: null }, zh, { balance: { status: 'failed' } }, platform)
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: zh.balanceUnavailable })) })
+  expect(platform.open).toHaveBeenCalledWith('usage', { x: 0, y: 0, width: 0, height: 0 })
   expect(screen.getByText(zh.platformFailed)).toBeTruthy()
   const back = screen.getByRole('button', { name: zh.backToHarness })
   await expect(`${back.parentElement!.parentElement!.textContent}\n`).toMatchFileSnapshot('./expected/platform-header-zh.txt')
@@ -308,8 +319,8 @@ it.each([en, zh])('retries the failed Platform destination and removes the error
     .mockRejectedValueOnce(new Error('still offline'))
     .mockReturnValueOnce(loaded.promise)
   const platform: PlatformBridge = { open, setBounds: vi.fn(async () => {}), close: vi.fn(async () => {}) }
-  mount({ status: 'credential-stored', attempt: null }, copy, undefined, platform)
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: copy.topUp })) })
+  mount({ status: 'credential-stored', attempt: null }, copy, { balance: { status: 'failed' } }, platform)
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: copy.balanceUnavailable })) })
   await expect(`${screen.getByRole('dialog').textContent}\n`)
     .toMatchFileSnapshot(`./expected/platform-error-${copy === en ? 'en' : 'zh'}.txt`)
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: copy.platformRetry })) })
@@ -317,7 +328,7 @@ it.each([en, zh])('retries the failed Platform destination and removes the error
   const retry = screen.getByRole('button', { name: copy.platformRetry })
   act(() => { retry.focus() })
   await act(async () => { fireEvent.click(retry) })
-  expect(open.mock.calls.map(([page]) => page)).toEqual(['top-up', 'top-up', 'top-up'])
+  expect(open.mock.calls.map(([page]) => page)).toEqual(['usage', 'usage', 'usage'])
   expect(screen.queryByRole('button', { name: copy.platformRetry })).toBeNull()
   expect(screen.getByRole('status', { name: copy.loading })).toBeTruthy()
   // Retrying removes the button that was focused, so the return action keeps
@@ -339,8 +350,8 @@ it('ignores a retried document completing after returning to Account', async () 
   const open = vi.fn<PlatformBridge['open']>()
     .mockRejectedValueOnce(new Error('load failed')).mockReturnValueOnce(loaded.promise)
   const platform: PlatformBridge = { open, setBounds: vi.fn(async () => {}), close: vi.fn(async () => {}) }
-  mount({ status: 'credential-stored', attempt: null }, en, undefined, platform)
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.usage })) })
+  mount({ status: 'credential-stored', attempt: null }, en, { balance: { status: 'failed' } }, platform)
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.balanceUnavailable })) })
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.platformRetry })) })
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.backToHarness })) })
   await act(async () => { loaded.resolve(undefined); await loaded.promise })
@@ -352,21 +363,22 @@ it('ignores a retried document completing after returning to Account', async () 
 it('shows the profile while the balance is still loading', async () => {
   mount({ status: 'credential-stored', attempt: null }, en, {
     profile: { status: 'ready', value: { id: null, name: 'Ready User', contact: '138****0000' } },
-  })
+  }, undefined, { employeeId: 'A0123', department: '信息部' })
   expect(screen.getByText('Ready User')).toBeTruthy()
-  // The bonus row reports its own pending read.
+  expect(screen.getByText('A0123 · 信息部')).toBeTruthy()
+  // The bonus row reports its own pending read; the directory line has settled.
   expect(screen.getAllByText(en.loading)).toHaveLength(1)
   expect(screen.queryByText(en.balanceUnavailable)).toBeNull()
   await expect(`${screen.getByRole('region').textContent}\n`).toMatchFileSnapshot('./expected/profile-before-balance.txt')
 })
 
 
-it.each(['usage', 'top-up'] as const)('shows an accessible spinner until %s finishes loading', async (page) => {
+it('shows an accessible spinner until the usage page finishes loading', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const loaded = Promise.withResolvers<undefined>()
   const platform: PlatformBridge = { open: () => loaded.promise, setBounds: async () => {}, close: async () => {} }
-  mount({ status: 'credential-stored', attempt: null }, en, undefined, platform)
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: page === 'usage' ? en.usage : en.topUp })) })
+  mount({ status: 'credential-stored', attempt: null }, en, { balance: { status: 'failed' } }, platform)
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.balanceUnavailable })) })
   const status = screen.getByRole('status', { name: en.loading })
   expect({ accessibleName: status.getAttribute('aria-label'), visibleText: status.textContent }).toMatchInlineSnapshot(`
     {
@@ -437,7 +449,7 @@ it.each([en, zh])('renders positive bonus wallets', async (copy) => {
   mount({ status: 'credential-stored', attempt: null }, copy, {
     balance: { status: 'ready', value: [{ currency: 'CNY', balance: '209.00' }, { currency: 'USD', balance: '20.07' }],
       bonusWallets: [{ currency: 'CNY', balance: '5.00' }, { currency: 'USD', balance: '0.000001' }] },
-  })
+  }, undefined, { employeeId: 'A0123', department: '信息部' })
   expect(screen.getByText(copy.bonusBalance).parentElement!.textContent).toBe(`${copy.bonusBalance}¥5.00<$0.01`)
   expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(1)
   await expect(`${screen.getByRole('region').textContent}\n`)
@@ -448,7 +460,7 @@ it.each([[], [{ currency: 'CNY' as const, balance: '0.00' }, { currency: 'USD' a
   'omits the bonus row for zero or negative wallets', ({ bonusWallets }) => {
     mount({ status: 'credential-stored', attempt: null }, en, {
       balance: { status: 'ready', value: [{ currency: 'CNY', balance: '0' }], bonusWallets },
-    })
+    }, undefined, { employeeId: 'A0123', department: '信息部' })
     expect(screen.queryByText(en.bonusBalance)).toBeNull()
     // The divider belongs to the bonus row, so it goes with it.
     expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(0)
@@ -520,20 +532,17 @@ it.each(['failed', 'expired'] as const)('allows a new sign-in after the attempt 
   expect(screen.getByRole('button', { name: en.signIn }).hasAttribute('disabled')).toBe(false)
 })
 
-it('shows unavailable details and keeps external Platform links usable in a browser', () => {
+it('shows unavailable details without claiming a failure the directory did not report', () => {
   mount({ status: 'credential-stored', attempt: null }, en, {
     profile: { status: 'failed' }, balance: { status: 'failed' },
   })
-  expect(screen.getByText(en.profileUnavailable)).toBeTruthy()
-  // The failed read keeps its copy in the bonus row, now as a link into Platform.
+  // The wallet read failed, so the bonus row keeps its copy, now as a link into Platform.
   const unavailable = screen.getAllByRole('link', { name: en.balanceUnavailable })
   expect(unavailable).toHaveLength(1)
   for (const link of unavailable) expect(link.getAttribute('href')).toBe('http://localhost:8081/usage')
-  for (const name of [en.usage, en.topUp, en.balanceUnavailable]) {
-    const event = new MouseEvent('click', { bubbles: true, cancelable: true })
-    screen.getAllByRole('link', { name })[0]!.dispatchEvent(event)
-    expect(event.defaultPrevented).toBe(false)
-  }
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+  unavailable[0]!.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(false)
 })
 
 it('opens the embedded Platform page from a failed balance row on Desktop', async () => {
@@ -640,16 +649,36 @@ it('reads once per Settings entry, whatever section the entry opens', async () =
 it('reads the account again when the user returns from the top-up view, and not from usage', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const platform: PlatformBridge = { open: vi.fn(async () => {}), setBounds: vi.fn(async () => {}), close: vi.fn(async () => {}) }
-  const operations = mount({ status: 'credential-stored', attempt: null }, en, undefined, platform)
-  // Opening the view enters the top-up page; leaving it is the user coming back to Settings.
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.topUp })) })
+  const pages = createPlatformPages()
+  const operations = operationsOf({ status: 'credential-stored', attempt: null },
+    { balance: { status: 'failed' } }, pages, { employeeId: 'A0123', department: '信息部' })
+  // The application wires the opener's return read in `platformPageOpener`; the
+  // scaffold repeats that wiring so this spec exercises the component seam.
+  operations.openPlatformPage = (page, onClose) => pages.open(page, (reason) => {
+    onClose(reason)
+    if (reason === 'returned' && page === 'top-up') void refreshAfterReturn(undefined, operations.refreshAccount)
+  })
+  const globals = {} as GlobalStandardProps
+  render(<>
+    <AccountSection {...globals} {...operations}
+      useAccount={selector => selector(operations.hooks.account.getSnapshot())}
+      useTheme={selector => selector(operations.hooks.theme.getSnapshot())}
+      close={() => {}} t={key => en[key as AccountKey]} />
+    <SharedPlatformHost Globals={globals} pages={pages} platform={platform} copy={en} />
+  </>)
+  // The opener narrows the shared channel: only a viewer returning from top-up
+  // re-reads, so the section routes both surfaces' openings through it.
+  const opener = (page: PlatformPage) => operations.openPlatformPage!(page, () => {})
+  // Opening the top-up view and coming back is the recharge return, so it reads.
+  await act(async () => { opener('top-up') })
   expect(platform.open).toHaveBeenCalledWith('top-up', expect.anything())
   expect(operations.refreshAccount).not.toHaveBeenCalled()
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.backToHarness })) })
   // The page leaves immediately and the account reads settle behind it.
   expect(screen.queryByRole('dialog')).toBeNull()
-  expect(operations.refreshAccount).toHaveBeenCalledOnce()
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.usage })) })
+  await vi.waitFor(() => { expect(operations.refreshAccount).toHaveBeenCalledOnce() })
+  // Opening the usage destination and coming back reads nothing.
+  await act(async () => { opener('usage') })
   expect(platform.open).toHaveBeenCalledWith('usage', expect.anything())
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.backToHarness })) })
   // Usage changed nothing the account owns, so returning from it reads nothing.
@@ -667,8 +696,8 @@ it('reports resize failure, ignores late native failures, and tolerates a remove
   document.body.append(svg)
   onTestFinished(() => { svg.remove() })
   svg.focus()
-  mount({ status: 'credential-stored', attempt: null }, en, undefined, platform)
-  await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.usage })) })
+  mount({ status: 'credential-stored', attempt: null }, en, { balance: { status: 'failed' } }, platform)
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.balanceUnavailable })) })
   await act(async () => { resize!() })
   expect(platform.setBounds).toHaveBeenCalled()
   expect(screen.getByText(en.platformFailed)).toBeTruthy()
