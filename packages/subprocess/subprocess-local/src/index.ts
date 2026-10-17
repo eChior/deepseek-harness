@@ -10,7 +10,7 @@
 
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
-import { userInfo } from 'node:os'
+import { release, userInfo } from 'node:os'
 import { delimiter, extname, isAbsolute, resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
@@ -47,7 +47,17 @@ import type { ProcessInspector } from './process-inspector.ts'
 import { LocalTerminalHandle } from './terminal.ts'
 import { prepareShellActivity } from './shell-activity.ts'
 
-const requireNodePty = createLazyRequire<typeof NodePty>('node-pty', import.meta.url)
+/**
+ * Windows before 8 (NT 6.2) has no ConPTY, which node-pty requires. There the Win7 build's
+ * `@dsh-win7/pty-winpty` (added to the packaged runtime by the Win7 overlay) provides the same
+ * `spawn()` over winpty.
+ */
+const NODE_PTY_MODULE = (() => {
+  const [major = 0, minor = 0] = release().split('.').map(Number)
+  return process.platform === 'win32' && (major < 6 || (major === 6 && minor < 2)) ? '@dsh-win7/pty-winpty' : 'node-pty'
+})()
+
+const requireNodePty = createLazyRequire<typeof NodePty>(NODE_PTY_MODULE, import.meta.url)
 
 /**
  * Local subprocess service: platform-selected managed ranges, Node-shaped stdio
