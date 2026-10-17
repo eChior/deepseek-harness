@@ -20,6 +20,12 @@ export interface RedactionTermList {
   readonly version: string
   readonly revision: string
   readonly categories: readonly RedactionCategory[]
+  /** Department that submitted an uploaded list; absent on the published one. */
+  readonly department?: string
+  /** Person the submitting account belongs to; absent on the published one. */
+  readonly author?: string
+  /** Whether the list takes part at all. Absent reads as enabled. */
+  readonly enabled?: boolean
 }
 
 /** A structural problem, reported against the line that caused it (0 = whole file). */
@@ -73,6 +79,10 @@ export function parseTermList(text: string): ParsedTermList {
   const categories: MutableCategory[] = []
   let version = ''
   let revision = ''
+  let department = ''
+  let author = ''
+  let enabled = true
+  let declared = false
   let category: MutableCategory | undefined
   let section: 'terms' | 'patterns' | undefined
   const fail = (line: number, message: string): void => {
@@ -136,6 +146,26 @@ export function parseTermList(text: string): ParsedTermList {
       revision = stripQuotes(match[1])
       continue
     }
+    match = /^department:\s*(.*)$/.exec(raw)
+    if (match !== null) {
+      department = stripQuotes(match[1])
+      continue
+    }
+    match = /^author:\s*(.*)$/.exec(raw)
+    if (match !== null) {
+      author = stripQuotes(match[1])
+      continue
+    }
+    match = /^enabled:\s*(.*)$/.exec(raw)
+    if (match !== null) {
+      const value = stripQuotes(match[1]).toLowerCase()
+      if (value !== 'true' && value !== 'false') fail(line, `enabled must be true or false, not "${value}"`)
+      else {
+        enabled = value === 'true'
+        declared = true
+      }
+      continue
+    }
     fail(line, `unrecognized line: ${trimmed}`)
   }
 
@@ -153,7 +183,15 @@ export function parseTermList(text: string): ParsedTermList {
   if (version === '') fail(0, 'missing top-level `version`')
   if (revision === '') fail(0, 'missing top-level `revision`')
 
-  return { version, revision, categories, problems }
+  return {
+    version,
+    revision,
+    categories,
+    ...department === '' ? {} : { department },
+    ...author === '' ? {} : { author },
+    ...declared ? { enabled } : {},
+    problems,
+  }
 }
 
 /**

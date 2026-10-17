@@ -52,6 +52,7 @@ async function harness(): Promise<Context> {
     remote: '',
     refreshMinutes: 0,
     vision: false,
+    includeRoster: false,
   })
   await ctx.redaction.load()
   ctx.tools.register(defineContentToolFixture({

@@ -74,6 +74,7 @@ async function wiredInbox(rawId: string): Promise<{ ctx: Context; inbox: ReactLo
     remote: '',
     refreshMinutes: 0,
     vision: false,
+    includeRoster: false,
   })
   await ctx.redaction.load()
   const id = SessionId(rawId)

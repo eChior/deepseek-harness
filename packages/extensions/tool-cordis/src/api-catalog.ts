@@ -1888,6 +1888,56 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }],
         returns: 'The text with every placeholder this process issued restored.',
       },
+      {
+        signature: 'identify(account: string): RosterPerson | undefined',
+        description: 'Look one colleague up by the name the account service reports.',
+        parameters: [{ name: 'account', description: 'Name as the signed-in account gives it.' }],
+        returns: 'The directory entry, or undefined when the directory is off or lists nobody by that name.',
+      },
+      {
+        signature: 'attributionFor(account: string): { department?: string; author?: string }',
+        description: 'The attribution an upload by this colleague should carry.\n\nThe department is the one fact a colleague cannot be asked to type correctly and the one fact the directory already knows, so an upload is stamped from it; a name the directory does not list leaves the department empty rather than guessing at one.',
+        parameters: [{ name: 'account', description: 'Name as the signed-in account gives it.' }],
+        returns: 'Author and, when the directory knows it, department.',
+      },
+      {
+        signature: 'rosterSummary(): { enabled: boolean; revision: string | null; people: number; departments: number }',
+        description: 'What the staff directory contributes, for a page that has to describe it.',
+        parameters: [],
+        returns: 'Whether it is on, and how many colleagues and departments it lists.',
+      },
+      {
+        signature: 'async localFiles(): Promise<LocalTermFile[]>',
+        description: 'List the lists uploaded on this machine, including the ones that do not compile.\n\nA file that reports problems is still listed: whoever wrote it has to see what is wrong with it, and hiding it would leave them with a file they cannot find and a rule that silently does nothing.',
+        parameters: [],
+        returns: 'One record per file, as last read.',
+      },
+      {
+        signature: 'async importLocal(name: string, text: string, attribution: { department?: string; author?: string } = {}): Promise<LocalTermFile>',
+        description: 'Store one uploaded list and put it in force.',
+        parameters: [{ name: 'name', description: 'File name the upload is stored under.' }, { name: 'text', description: 'The YAML a department wrote, in the format this provider reads.' }, { name: 'attribution', description: 'Department and person to name when the text names neither.' }],
+        returns: 'What the stored file declares.',
+        throws: ['LocalTermError when the text does not compile or the machine is full.'],
+      },
+      {
+        signature: 'async removeLocal(name: string): Promise<boolean>',
+        description: 'Drop one uploaded list and take its rules back out of force.',
+        parameters: [{ name: 'name', description: 'File name as it was uploaded.' }],
+        returns: 'True when a file was removed.',
+      },
+      {
+        signature: 'async setLocalEnabled(name: string, enabled: boolean): Promise<LocalTermFile>',
+        description: 'Turn one uploaded list on or off without touching what it declares.\n\nThe published list has no such switch: it is the floor every install stands on, and a client that could turn it off would spend part of its life replacing nothing.',
+        parameters: [{ name: 'name', description: 'File name as it was uploaded.' }, { name: 'enabled', description: 'Whether the list should take part.' }],
+        returns: 'The stored file as it reads after the change.',
+        throws: ['LocalTermError when no list is stored under that name.'],
+      },
+      {
+        signature: 'async localExample(): Promise<string>',
+        description: 'The upload template this build ships, for a department to start from.',
+        parameters: [],
+        returns: 'The template as YAML text.',
+      },
     ],
   },
   {
@@ -5741,6 +5791,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type LocalizedText = string | {\n    readonly en: string;\n    readonly [locale: string]: string;\n};',
   },
   {
+    name: 'LocalTermFile',
+    declaration: 'export interface LocalTermFile {\n    readonly name: string;\n    readonly bytes: number;\n    readonly revision: string | null;\n    readonly department: string | null;\n    readonly author: string | null;\n    readonly enabled: boolean;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly problems: readonly TermListProblem[];\n}',
+  },
+  {
     name: 'LspHover',
     declaration: 'export interface LspHover {\n    readonly contents: string;\n    readonly range?: LspRange;\n}',
   },
@@ -6266,7 +6320,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly roster: number;\n}',
   },
   {
     name: 'Registry',
@@ -6359,6 +6413,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ResumeAgentOptions',
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+  },
+  {
+    name: 'RosterPerson',
+    declaration: 'export interface RosterPerson {\n    readonly name: string;\n    readonly department: string;\n    readonly employeeId: string;\n    readonly position: string;\n    readonly account: string;\n    readonly qmsId: string;\n    readonly active: boolean;\n}',
   },
   {
     name: 'RpcId',
@@ -7655,6 +7713,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalWaitReason',
     declaration: 'export type TerminalWaitReason = \'stdin_read\' | \'inferred_idle\' | \'timeout\' | \'session_exit\';',
+  },
+  {
+    name: 'TermListProblem',
+    declaration: 'export interface TermListProblem {\n    readonly line: number;\n    readonly message: string;\n}',
   },
   {
     name: 'TermRequest',

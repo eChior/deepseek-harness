@@ -34,6 +34,7 @@ async function harness(): Promise<{ ctx: Context; directory: string }> {
     remote: '',
     refreshMinutes: 0,
     vision: false,
+    includeRoster: false,
   })
   return { ctx, directory }
 }

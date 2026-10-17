@@ -24,6 +24,24 @@ export function apply(ctx: Context, config: Config = {}): void {
   ctx.plugin(RedactionService, config)
 }
 
+export {
+  LOCAL_DIRECTORY,
+  MAX_LOCAL_BYTES,
+  MAX_LOCAL_FILES,
+  MAX_PATTERN_SPAN,
+  LocalTermError,
+  checkLocalText,
+  listLocalTermFiles,
+  localDirectory,
+  normalizeLocalName,
+  readLocalTermLists,
+  removeLocalTermFile,
+  setLocalTermEnabled,
+  stampAttribution,
+  writeLocalTermFile,
+  type LocalTermFile,
+  type LocalTermList,
+} from './local.ts'
 export { RedactionMap, type RedactionEntry } from './map.ts'
 export {
   Config,

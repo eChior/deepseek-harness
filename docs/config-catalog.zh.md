@@ -2420,7 +2420,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:92`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:106`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**
@@ -2452,6 +2452,24 @@ export interface Config {
   vision?: boolean
   /** How long one local recognition may take, in milliseconds. */
   visionTimeoutMs?: number
+  /**
+   * Add every colleague and department from the shipped staff directory to the
+   * rules, and let an upload inherit its department from it.
+   *
+   * Per-machine rather than fixed, because the directory belongs to one
+   * deployment: a build that carries somebody else's staff list must be able to
+   * leave it out, and a user who would rather not have their own name rewritten
+   * needs a switch they can reach.
+   */
+  includeRoster?: boolean
+  /**
+   * Ciphertext of the staff directory. Defaults to the copy inside this package.
+   *
+   * Exposed so a deployment can point at its own directory without rebuilding,
+   * and so a test can reach one it sealed itself instead of reading the list
+   * that ships here.
+   */
+  rosterPath?: string
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->
@@ -4433,7 +4451,7 @@ export interface Config {
 | `@deepseek-ai/dsh-acp-app` | `cmdlineArgs` | [`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts) |
 | `@deepseek-ai/dsh-agent` | — | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
 | `@deepseek-ai/dsh-api-account-controller` | `deepseekAccount` · `agents` | [`packages/api/account-controller/src/index.ts`](../packages/api/account-controller/src/index.ts) |
-| `@deepseek-ai/dsh-api-redaction-controller` | `redaction` | [`packages/api/redaction-controller/src/index.ts`](../packages/api/redaction-controller/src/index.ts) |
+| `@deepseek-ai/dsh-api-redaction-controller` | `redaction` · `deepseekAccount` | [`packages/api/redaction-controller/src/index.ts`](../packages/api/redaction-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |
 | `@deepseek-ai/dsh-authorization` | `credentials` | [`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts) |
 | `@deepseek-ai/dsh-browser-use` | — | [`packages/browser-use/browser-use/src/index.ts`](../packages/browser-use/browser-use/src/index.ts) |

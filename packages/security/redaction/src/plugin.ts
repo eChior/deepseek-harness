@@ -24,10 +24,21 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import {
+  listLocalTermFiles,
+  readLocalTermLists,
+  removeLocalTermFile,
+  setLocalTermEnabled,
+  stampAttribution,
+  writeLocalTermFile,
+  type LocalTermFile,
+  type LocalTermList,
+} from './local.ts'
 import { RedactionMap } from './map.ts'
+import { findPerson, ROSTER_PATH, readRoster, type Roster, type RosterPerson } from './roster.ts'
 import { queueTermRequest, readTermRequests, settleTermRequest, type TermRequest } from './queue.ts'
 import { fetchTermList, readCachedTermList, writeCachedTermList, type TermSourceConfig, type TermSourceKind } from './source.ts'
-import { compileRules, isUsable, parseTermList, type RedactionRule } from './terms.ts'
+import { compileRules, isUsable, parseTermList, type ParsedTermList, type RedactionCategory, type RedactionRule } from './terms.ts'
 import { redactText as applyRules } from './redact.ts'
 import { DEFAULT_VISION_TIMEOUT_MS, recognizeImageText } from './vision.ts'
 
@@ -41,6 +52,9 @@ export const name = '@deepseek-ai/dsh-redaction'
 
 /** Term list this build carries. A deployment can point at another file. */
 const TERMS_PATH = fileURLToPath(new URL('../assets/terms.yaml', import.meta.url))
+
+/** Upload template this build ships, for a department to fill in and hand back. */
+const LOCAL_EXAMPLE_PATH = fileURLToPath(new URL('../assets/terms-local.example.yaml', import.meta.url))
 
 /** Repository a deployment publishes the list in, read at start and every few minutes. */
 const PUBLISHED_TERMS = 'http://10.151.5.175:3000/ITPublic/dsh-redaction-terms'
@@ -108,6 +122,24 @@ export interface Config {
   vision?: boolean
   /** How long one local recognition may take, in milliseconds. */
   visionTimeoutMs?: number
+  /**
+   * Add every colleague and department from the shipped staff directory to the
+   * rules, and let an upload inherit its department from it.
+   *
+   * Per-machine rather than fixed, because the directory belongs to one
+   * deployment: a build that carries somebody else's staff list must be able to
+   * leave it out, and a user who would rather not have their own name rewritten
+   * needs a switch they can reach.
+   */
+  includeRoster?: boolean
+  /**
+   * Ciphertext of the staff directory. Defaults to the copy inside this package.
+   *
+   * Exposed so a deployment can point at its own directory without rebuilding,
+   * and so a test can reach one it sealed itself instead of reading the list
+   * that ships here.
+   */
+  rosterPath?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -120,6 +152,8 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().default(3000),
   vision: z.boolean().default(true),
   visionTimeoutMs: z.number().default(DEFAULT_VISION_TIMEOUT_MS),
+  includeRoster: z.boolean().default(true),
+  rosterPath: z.string().default(ROSTER_PATH),
 })
 
 /** What the provider has loaded and how much it has replaced so far. */
@@ -144,6 +178,10 @@ export interface RedactionStatus {
   readonly detail: string | null
   /** Term requests waiting on this machine for a delivery target. */
   readonly pending: number
+  /** Uploaded lists that compiled into the rules in force. */
+  readonly localFiles: number
+  /** Names the shipped staff directory contributed to the rules, or 0 when it is off. */
+  readonly roster: number
 }
 
 /**
@@ -187,6 +225,12 @@ export class RedactionService extends Service {
   private readonly config: Required<Config>
   private rules: RedactionRule[] = []
   private readonly map = new RedactionMap()
+  /** The published list in force, absent until one loads without problems. */
+  private main: { readonly parsed: ParsedTermList; readonly origin: string; readonly source: TermSourceKind } | undefined = undefined
+  /** Uploaded lists as last read, whether or not every one of them compiled. */
+  private local: LocalTermList[] = []
+  /** Staff directory as last read, absent when it is off or could not be opened. */
+  private roster: Roster | undefined = undefined
   private current: RedactionStatus
 
   constructor(ctx: Context, config: Config = {}) {
@@ -201,6 +245,8 @@ export class RedactionService extends Service {
       timeoutMs: config.timeoutMs ?? 3000,
       vision: config.vision ?? true,
       visionTimeoutMs: config.visionTimeoutMs ?? DEFAULT_VISION_TIMEOUT_MS,
+      includeRoster: config.includeRoster ?? true,
+      rosterPath: config.rosterPath ?? ROSTER_PATH,
     }
     this.current = {
       enabled: true,
@@ -213,6 +259,8 @@ export class RedactionService extends Service {
       lastError: null,
       detail: null,
       pending: 0,
+      localFiles: 0,
+      roster: 0,
     }
     ctx.effect(() => {
       void this.load()
@@ -280,6 +328,7 @@ export class RedactionService extends Service {
    * @returns The status after the attempt; `detail` carries any failure reason.
    */
   async load(): Promise<RedactionStatus> {
+    await this.reloadLocal()
     const cached = await readCachedTermList(this.config.cacheDirectory)
     let shipped: string | undefined
     try {
@@ -296,6 +345,11 @@ export class RedactionService extends Service {
     }
     if (!adopted && cached !== undefined) {
       adopted = this.tryAdopt(cached.text, cached.path, 'cache')
+    }
+    if (!adopted) {
+      // Nothing published could be read at all; the uploads stand on their own.
+      this.main = undefined
+      this.recompile()
     }
     if (adopted && this.config.refreshMinutes > 0 && this.config.remote !== '') void this.refresh()
     return this.current
@@ -334,7 +388,11 @@ export class RedactionService extends Service {
   }
 
   /**
-   * Parse a list and make it the rules in force.
+   * Parse a list and make it the published half of the rules in force.
+   *
+   * Every uploaded list stays in force across this call, because the two answer
+   * different questions: the published one says what the whole company must not
+   * leak, an uploaded one says what this department must not.
    * @param text The list as published or cached.
    * @param origin Where the text came from, for the log and for failure messages.
    * @param source Which copy it is.
@@ -345,16 +403,11 @@ export class RedactionService extends Service {
     if (!isUsable(parsed)) {
       throw new Error(`the term list at ${origin} reports ${String(parsed.problems.length)} problem(s)`)
     }
-    this.rules = compileRules(parsed)
-    this.current = {
-      ...this.current,
-      revision: parsed.revision,
-      terms: this.rules.filter(rule => rule.kind === 'term').length,
-      patterns: this.rules.filter(rule => rule.kind === 'pattern').length,
-      source,
-      detail: null,
-    }
-    this.ctx.logger.info(`redaction: ${String(this.rules.length)} rule(s) from ${origin} at ${parsed.revision}`)
+    this.main = { parsed, origin, source }
+    this.recompile()
+    this.current = { ...this.current, detail: null }
+    const uploaded = this.current.localFiles === 0 ? '' : ` plus ${String(this.current.localFiles)} uploaded list(s)`
+    this.ctx.logger.info(`redaction: ${String(this.rules.length)} rule(s) from ${origin} at ${parsed.revision}${uploaded}`)
   }
 
   private tryAdopt(text: string, origin: string, source: TermSourceKind): boolean {
@@ -368,14 +421,104 @@ export class RedactionService extends Service {
   }
 
   /**
-   * Record that no list could be loaded, which leaves the provider replacing nothing.
+   * Record that the published list could not be loaded.
+   *
+   * Uploaded lists keep replacing: a department writes its own terms because the
+   * published list does not cover them, and losing the publisher is no reason to
+   * stop honouring what it wrote.
    * @param error Why the attempt failed.
    */
   private record(error: unknown): void {
     const detail = error instanceof Error ? error.message : String(error)
-    this.rules = []
-    this.current = { ...this.current, revision: null, terms: 0, patterns: 0, detail }
-    this.ctx.logger.warn(`redaction: nothing will be replaced: ${detail}`)
+    this.main = undefined
+    this.recompile()
+    this.current = { ...this.current, detail }
+    const outcome = this.rules.length === 0
+      ? 'nothing will be replaced'
+      : `keeping ${String(this.rules.length)} rule(s) from uploaded lists`
+    this.ctx.logger.warn(`redaction: ${outcome}: ${detail}`)
+  }
+
+  /** Read the uploaded lists and the staff directory, so a synchronous recompile can use both. */
+  private async reloadLocal(): Promise<void> {
+    this.local = await readLocalTermLists(this.config.cacheDirectory)
+    await this.reloadRoster()
+  }
+
+  /**
+   * Read the staff directory, unless the deployment turned it off.
+   *
+   * A directory that cannot be opened — no key in a build that shipped none, or
+   * a ciphertext this build cannot read — leaves nothing in force and says so
+   * once. It is a convenience the published list also answers, so losing it is
+   * never a reason to stop replacing what the published list already covers.
+   */
+  private async reloadRoster(): Promise<void> {
+    if (!this.config.includeRoster) {
+      this.roster = undefined
+      return
+    }
+    try {
+      this.roster = await readRoster(this.config.rosterPath)
+    } catch (error) {
+      this.roster = undefined
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`redaction: no staff directory is in force: ${detail}`)
+    }
+  }
+
+  /**
+   * Rebuild the rules from the published list in hand plus every usable upload.
+   *
+   * Uploaded categories come first so a department's own rule wins when two of
+   * them match the same span at the same length: the published list is the floor
+   * every install stands on, not the ceiling. Only lists that parsed without a
+   * single problem take part, so a half-finished upload cannot disable the rest.
+   */
+  private recompile(): void {
+    const uploaded = this.local.filter(entry => entry.file.enabled && isUsable(entry.list))
+    const roster = this.rosterCategories()
+    const main = this.main
+    const rules = main === undefined && uploaded.length === 0 && roster.length === 0
+      ? []
+      : compileRules({
+        version: main?.parsed.version ?? '1',
+        revision: main?.parsed.revision ?? 'local',
+        categories: [
+          ...uploaded.flatMap(entry => entry.list.categories),
+          ...roster,
+          ...main?.parsed.categories ?? [],
+        ],
+      })
+    this.rules = rules
+    this.current = {
+      ...this.current,
+      revision: main?.parsed.revision ?? null,
+      terms: rules.filter(rule => rule.kind === 'term').length,
+      patterns: rules.filter(rule => rule.kind === 'pattern').length,
+      ...main === undefined ? {} : { source: main.source },
+      localFiles: uploaded.length,
+      roster: roster.reduce((count, category) => count + category.terms.length, 0),
+    }
+  }
+
+  /**
+   * Turn the staff directory into categories the rules can use.
+   *
+   * Colleagues and departments become terms of their own rather than a handful
+   * of narrow patterns, because whether an ordinary word is a name is knowable
+   * only from a list of names. Off, or not readable, contributes nothing.
+   * @returns Departments first, then colleagues; empty when either is unavailable.
+   */
+  private rosterCategories(): RedactionCategory[] {
+    const roster = this.roster
+    if (!this.config.includeRoster || roster === undefined) return []
+    const colleagues = roster.people.filter(person => person.active).map(person => person.name)
+    const departments = [...roster.departments]
+    return [
+      ...departments.length === 0 ? [] : [{ id: 'department', label: '部门', terms: departments, patterns: [] }],
+      ...colleagues.length === 0 ? [] : [{ id: 'person', label: '人名', terms: colleagues, patterns: [] }],
+    ]
   }
 
   /**
@@ -531,5 +674,120 @@ export class RedactionService extends Service {
    */
   restore(text: string): string {
     return this.map.restore(text)
+  }
+
+  /**
+   * Look one colleague up by the name the account service reports.
+   * @param account Name as the signed-in account gives it.
+   * @returns The directory entry, or undefined when the directory is off or lists nobody by that name.
+   */
+  identify(account: string): RosterPerson | undefined {
+    if (!this.config.includeRoster) return undefined
+    const roster = this.roster
+    if (roster === undefined) return undefined
+    return findPerson(roster, account)
+  }
+
+  /**
+   * The attribution an upload by this colleague should carry.
+   *
+   * The department is the one fact a colleague cannot be asked to type correctly
+   * and the one fact the directory already knows, so an upload is stamped from
+   * it; a name the directory does not list leaves the department empty rather
+   * than guessing at one.
+   * @param account Name as the signed-in account gives it.
+   * @returns Author and, when the directory knows it, department.
+   */
+  attributionFor(account: string): { department?: string; author?: string } {
+    const name = account.trim()
+    if (name === '') return {}
+    const person = this.identify(name)
+    return {
+      author: name,
+      ...person === undefined || person.department === '' ? {} : { department: person.department },
+    }
+  }
+
+  /**
+   * What the staff directory contributes, for a page that has to describe it.
+   * @returns Whether it is on, and how many colleagues and departments it lists.
+   */
+  rosterSummary(): { enabled: boolean; revision: string | null; people: number; departments: number } {
+    const roster = this.roster
+    return {
+      enabled: this.config.includeRoster,
+      revision: roster?.revision ?? null,
+      people: roster?.people.length ?? 0,
+      departments: roster?.departments.length ?? 0,
+    }
+  }
+
+  /**
+   * List the lists uploaded on this machine, including the ones that do not compile.
+   *
+   * A file that reports problems is still listed: whoever wrote it has to see what
+   * is wrong with it, and hiding it would leave them with a file they cannot find
+   * and a rule that silently does nothing.
+   * @returns One record per file, as last read.
+   */
+  async localFiles(): Promise<LocalTermFile[]> {
+    return await listLocalTermFiles(this.config.cacheDirectory)
+  }
+
+  /**
+   * Store one uploaded list and put it in force.
+   * @param name File name the upload is stored under.
+   * @param text The YAML a department wrote, in the format this provider reads.
+   * @param attribution Department and person to name when the text names neither.
+   * @returns What the stored file declares.
+   * @throws LocalTermError when the text does not compile or the machine is full.
+   */
+  async importLocal(name: string, text: string, attribution: { department?: string; author?: string } = {}): Promise<LocalTermFile> {
+    const file = await writeLocalTermFile(this.config.cacheDirectory, name, stampAttribution(text, attribution))
+    await this.reloadLocal()
+    this.recompile()
+    this.ctx.logger.info(`redaction: uploaded the term list ${file.name} with ${String(file.terms)} term(s) and ${String(file.patterns)} pattern(s)`)
+    return file
+  }
+
+  /**
+   * Drop one uploaded list and take its rules back out of force.
+   * @param name File name as it was uploaded.
+   * @returns True when a file was removed.
+   */
+  async removeLocal(name: string): Promise<boolean> {
+    const removed = await removeLocalTermFile(this.config.cacheDirectory, name)
+    if (!removed) return false
+    await this.reloadLocal()
+    this.recompile()
+    this.ctx.logger.info(`redaction: removed the uploaded term list ${name}`)
+    return true
+  }
+
+  /**
+   * Turn one uploaded list on or off without touching what it declares.
+   *
+   * The published list has no such switch: it is the floor every install stands
+   * on, and a client that could turn it off would spend part of its life
+   * replacing nothing.
+   * @param name File name as it was uploaded.
+   * @param enabled Whether the list should take part.
+   * @returns The stored file as it reads after the change.
+   * @throws LocalTermError when no list is stored under that name.
+   */
+  async setLocalEnabled(name: string, enabled: boolean): Promise<LocalTermFile> {
+    const file = await setLocalTermEnabled(this.config.cacheDirectory, name, enabled)
+    await this.reloadLocal()
+    this.recompile()
+    this.ctx.logger.info(`redaction: the uploaded list ${file.name} is now ${enabled ? 'in' : 'out of'} force`)
+    return file
+  }
+
+  /**
+   * The upload template this build ships, for a department to start from.
+   * @returns The template as YAML text.
+   */
+  async localExample(): Promise<string> {
+    return await readFile(LOCAL_EXAMPLE_PATH, 'utf8')
   }
 }

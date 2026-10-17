@@ -43,6 +43,8 @@ Mount the plugin, then call `redact()` on the parts a consumer is about to turn 
 | `timeoutMs` | `3000` | Per-request timeout for one pull. |
 | `vision` | `true` | Run local recognition over admitted images and substitute the redacted text. |
 | `visionTimeoutMs` | `20000` | Give up on one image after this long and substitute a blocked marker. |
+| `includeRoster` | `true` | Add every colleague and department from the shipped staff directory to the rules, and let an upload inherit its department from it. |
+| `rosterPath` | the `assets/roster.bin` inside this package | Ciphertext of the staff directory; the key that opens it is a CI secret written to `assets/roster.key` beside it. |
 
 No field turns the provider off. A disabled provider writes exactly the values this feature exists to keep out of the session log, and writes them silently, so a rule that over-matches is corrected where the list is published instead — that fix reaches every machine on its own refresh, without a reinstall or an edit here.
 
@@ -52,7 +54,13 @@ Images never reach the model as pixels. This package is also the reader the atta
 
 `restore(text)` swaps the placeholders this process issued back for their values. It belongs where a human reads text, never on the way into a session.
 
-`status` reports the revision the loaded list declares, where it came from, how many terms and patterns it carries, how many replacements this process has made, how many term requests are queued, and a failure detail. A term list that cannot be read leaves no rules loaded, which replaces nothing, and the reason stays visible in `status.detail` instead of failing the plugin load.
+`status` reports the revision the loaded list declares, where it came from, how many terms and patterns it carries, how many replacements this process has made, how many term requests are queued, how many uploaded lists are in force, how many directory names are in force, and a failure detail. A term list that cannot be read leaves no rules loaded, which replaces nothing, and the reason stays visible in `status.detail` instead of failing the plugin load.
+
+The rules come from up to three sources, and `status` counts what each contributed. The published list is the floor. Above it sit the lists uploaded on this machine — what one department knows and the publisher does not — and the staff directory shipped as ciphertext in `assets/roster.bin`, whose colleague and department names enter the rules when `includeRoster` is on. Where two sources match the same text at the same length, the earlier source wins: an upload over the directory, and the directory over the published list. A directory that cannot be read is warned about and skipped, never fatal, and it never writes into `detail` — a machine with no key still redacts everything else.
+
+`identify(account)` answers what the directory says about one colleague, `attributionFor(account)` reduces that to the `{ department?, author? }` an upload should carry, and `rosterSummary()` reports whether the directory is in force and how many people and departments it names. A name the directory does not list yields the author alone: the department is never guessed.
+
+A term list can also be uploaded on the machine, in the same format, for a department to add what the published list cannot cover. `localFiles()` lists what this machine holds — including a file that does not compile, because its author is the one who has to see what is wrong — `importLocal(name, text, attribution)` stamps it with its author's department, stores it and puts it in force, `removeLocal(name)` drops it, `setLocalEnabled(name, enabled)` turns it on or off while leaving what it declares untouched, and `localExample()` hands back the commented example this build ships. Uploads live in `local/` under `cacheDirectory`, up to `MAX_LOCAL_FILES` of them, each at most `MAX_LOCAL_BYTES`, and their names are normalized into that directory so a name cannot address anything else on disk. A pattern that would cover a whole sample prompt is refused before the file is accepted: that is what stops a well-meaning edit from turning every request into one placeholder.
 
 A term the list is missing can be asked for rather than waited on. `requestTerm(term, note)` appends it to a queue in `cacheDirectory`, and `deliverRequests(sink)` offers every queued request to a `TermRequestSink` the deployment supplies. No sink ships here, so a machine with no destination keeps its requests as `pending` instead of losing them, and every attempt settles each request as `uploaded` or `rejected` together with the sink's own reason — the queue records what happened rather than dropping the entry.
 
@@ -70,7 +78,7 @@ The reader for the list is a small scanner rather than a general YAML dependency
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the prompt text a consumer hands to `redact()`: the model sees the placeholders this provider issued in place of the values, and every other model-facing decision belongs to the consumer that called it.
+Indirectly, through the prompt text a consumer hands to `redact()`: the model sees the placeholders this provider issued in place of the values, including a colleague or a department reduced to `[人名-2]` or `[部门-1]`, and every other model-facing decision belongs to the consumer that called it.
 
 #### KV Cache effect
 
@@ -87,6 +95,11 @@ Replacing a value with a placeholder changes the bytes of the request, so the fi
 - **Placeholders do not survive the process** — the map is memory-only, so a restart cannot restore a placeholder an earlier process issued, and the session keeps the placeholder.
 - **Container formats stay opaque** — a scan sees a workbook, a slide deck, or a PDF as compressed bytes rather than text, so those files have to be unpacked before their contents can be matched.
 - **The term list is maintained outside this repository** — this package carries one copy for a build to start from; the maintained list is distributed separately and replaces it at runtime.
+- **The staff directory is a build-time snapshot** — `assets/roster.bin` is sealed when the package is packed, so a colleague who joins, leaves, or changes department is only reflected by the next release. A name the directory does not list is attributed to its author alone, and a departed colleague leaves the rules only because `active` was false in that snapshot.
+- **The directory key is not part of the artifact** — the ciphertext travels in the package and the key is a CI secret, so an install that skipped that step, or a build with no secret set, loads no directory at all. That is a warning, not a failure: every other source still applies.
+- **An upload cannot be attributed by hand** — the department on an upload comes from the directory and the signed-in account, so a shared login or an unlisted name files the list under nobody, and there is no method that overrides it.
+- **Uploads are per-machine** — the `local/` directory belongs to one install, and nothing here distributes a list to a colleague, checks whether another machine already holds the same one, or merges two uploads from the same department.
+- **An upload is never reconciled with the published list** — a department rule that duplicates, precedes, or shadows a published one is compiled and counted without a note, so an upload can make a published rule unreachable for the same span without saying so.
 
 -----
 

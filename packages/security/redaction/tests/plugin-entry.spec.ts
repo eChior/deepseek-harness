@@ -52,6 +52,7 @@ describe('plugin entry point', () => {
       remote: '',
       refreshMinutes: 0,
       vision: false,
+      includeRoster: false,
     })
     await ctx.redaction.load()
     expect(ctx.get('redaction')).toBeDefined()

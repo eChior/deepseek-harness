@@ -870,6 +870,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
   BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
   RedactionStatus: 'provider status record is owned by packages/security/redaction/README.md',
+  RosterPerson: 'staff directory record is owned by packages/security/redaction/README.md',
+  LocalTermFile: 'uploaded term-list description is owned by packages/security/redaction/README.md',
   RedactablePart: 'prompt part contract is owned by packages/security/redaction/README.md',
   TermRequest: 'queued term-request record is owned by packages/security/redaction/README.md',
   TermRequestDelivery: 'delivery outcome record is owned by packages/security/redaction/README.md',

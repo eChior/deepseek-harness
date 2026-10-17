@@ -92,6 +92,23 @@ jobs:
             }
           }
 
+      - name: Write the staff roster key
+        shell: pwsh
+        env:
+          DSH_ROSTER_KEY: ${{ secrets.DSH_ROSTER_KEY }}
+        # The roster travels as ciphertext inside the repository; the key that opens it is a
+        # secret, so the lane writes it beside the ciphertext before packaging. Without the secret
+        # packaging still succeeds: the client then reports that no directory is in force, which
+        # costs the department attribution and the colleague terms but breaks nothing.
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DSH_ROSTER_KEY)) {
+            'No DSH_ROSTER_KEY secret is set; packaging without a staff roster.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          $keyPath = Join-Path $PWD 'packages/security/redaction/assets/roster.key'
+          ($env:DSH_ROSTER_KEY).Trim() | Set-Content -Path $keyPath -Encoding utf8
+          [string]::Format('Wrote the staff roster key to {0}', $keyPath) | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
       - name: Write apps/desktop/.env.windows
         shell: pwsh
         run: |

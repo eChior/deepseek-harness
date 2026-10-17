@@ -888,6 +888,77 @@ async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
  * @returns The text with every placeholder this process issued restored.
  */
 restore(text: string): string
+
+/**
+ * Look one colleague up by the name the account service reports.
+ * @param account Name as the signed-in account gives it.
+ * @returns The directory entry, or undefined when the directory is off or lists nobody by that name.
+ */
+identify(account: string): RosterPerson | undefined
+
+/**
+ * The attribution an upload by this colleague should carry.
+ *
+ * The department is the one fact a colleague cannot be asked to type correctly
+ * and the one fact the directory already knows, so an upload is stamped from
+ * it; a name the directory does not list leaves the department empty rather
+ * than guessing at one.
+ * @param account Name as the signed-in account gives it.
+ * @returns Author and, when the directory knows it, department.
+ */
+attributionFor(account: string): { department?: string; author?: string }
+
+/**
+ * What the staff directory contributes, for a page that has to describe it.
+ * @returns Whether it is on, and how many colleagues and departments it lists.
+ */
+rosterSummary(): { enabled: boolean; revision: string | null; people: number; departments: number }
+
+/**
+ * List the lists uploaded on this machine, including the ones that do not compile.
+ *
+ * A file that reports problems is still listed: whoever wrote it has to see what
+ * is wrong with it, and hiding it would leave them with a file they cannot find
+ * and a rule that silently does nothing.
+ * @returns One record per file, as last read.
+ */
+async localFiles(): Promise<LocalTermFile[]>
+
+/**
+ * Store one uploaded list and put it in force.
+ * @param name File name the upload is stored under.
+ * @param text The YAML a department wrote, in the format this provider reads.
+ * @param attribution Department and person to name when the text names neither.
+ * @returns What the stored file declares.
+ * @throws LocalTermError when the text does not compile or the machine is full.
+ */
+async importLocal(name: string, text: string, attribution: { department?: string; author?: string } = {}): Promise<LocalTermFile>
+
+/**
+ * Drop one uploaded list and take its rules back out of force.
+ * @param name File name as it was uploaded.
+ * @returns True when a file was removed.
+ */
+async removeLocal(name: string): Promise<boolean>
+
+/**
+ * Turn one uploaded list on or off without touching what it declares.
+ *
+ * The published list has no such switch: it is the floor every install stands
+ * on, and a client that could turn it off would spend part of its life
+ * replacing nothing.
+ * @param name File name as it was uploaded.
+ * @param enabled Whether the list should take part.
+ * @returns The stored file as it reads after the change.
+ * @throws LocalTermError when no list is stored under that name.
+ */
+async setLocalEnabled(name: string, enabled: boolean): Promise<LocalTermFile>
+
+/**
+ * The upload template this build ships, for a department to start from.
+ * @returns The template as YAML text.
+ */
+async localExample(): Promise<string>
 ```
 
 Source: [`packages/security/redaction/src/plugin.ts`](../../packages/security/redaction/src/plugin.ts)

@@ -50,3 +50,6 @@ native/system/test/bin/
 
 # The WPS-backed Office converter is compiled from the source beside it during packaging.
 apps/desktop/resources/wps/wps2pdf
+
+# The staff roster travels as ciphertext; the key it was sealed with is a CI secret.
+packages/security/redaction/assets/roster.key

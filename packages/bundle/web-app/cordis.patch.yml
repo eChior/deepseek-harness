@@ -407,8 +407,11 @@
     - id: ui-agent-preset
       name: '@deepseek-ai/dsh-client-ui-agent-preset'
 
+    # This build carries no telemetry, so the session-log upload switch has
+    # nothing left to control. The package stays in the tree; nothing loads it.
     - id: ui-settings-session-log
       name: '@deepseek-ai/dsh-client-ui-settings-session-log'
+      disabled: true
 
     # The Built-in plugins settings section: the navigation entry and the tab
     # row the inventory tab registers into. The official configuration pages

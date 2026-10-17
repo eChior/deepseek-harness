@@ -25,6 +25,8 @@ const VIEW = {
   lastError: null,
   detail: null,
   pending: 2,
+  localFiles: 0,
+  roster: 0,
 } as const
 
 type StatusResult =
@@ -44,7 +46,15 @@ async function bench() {
   }
   new RemoteService(ctx)
   const status = vi.fn<() => Promise<StatusResult>>().mockResolvedValue({ ok: true, value: VIEW })
-  ctx.provide('remote.redaction', { status })
+  ctx.provide('remote.redaction', {
+    status,
+    roster: vi.fn(),
+    uploads: vi.fn(),
+    upload: vi.fn(),
+    remove: vi.fn(),
+    setEnabled: vi.fn(),
+    example: vi.fn(),
+  })
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, status }
 }
 
