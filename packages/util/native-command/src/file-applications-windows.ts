@@ -3,8 +3,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { NativeCommandRunner } from './runner.ts'
+import { windowsPowerShell } from './windows-powershell.ts'
 
-/** Shell interfaces are declared in their native vtable order; Invoke preserves packaged-app and DDE handling. */
+/**
+ * Shell objects are called through their native vtables, never wrapped in runtime callable wrappers: on
+ * Windows 7 the handler enumerator fails (.NET Framework) or crashes (.NET) on the extra interface probes a
+ * wrapper makes. Invoke preserves packaged-app and DDE handling.
+ */
 const WINDOWS_ASSOCIATIONS = String.raw`
 using System;
 using System.Collections.Generic;
@@ -12,32 +17,35 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 
 public static class DshFileAssociations {
-  [ComImport, Guid("973810ae-9599-4b88-9e4d-6ee98c9552da"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  public interface IEnumHandlers {
-    [PreserveSig] int Next(uint count, out IHandler handler, out uint fetched);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  delegate int EnumNext(IntPtr self, uint count, out IntPtr handler, out uint fetched);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  delegate int TextGetter(IntPtr self, out IntPtr text);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  delegate int IconGetter(IntPtr self, out IntPtr path, out int index);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  delegate int DataInvoker(IntPtr self, IntPtr data);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  delegate int HandlerBinder(IntPtr self, IntPtr context, ref Guid handler, ref Guid iid, out IntPtr result);
+  // Vtable slots after IUnknown's three. IEnumAssocHandlers: Next. IShellItem: BindToHandler.
+  // IAssocHandler: GetName, GetUIName, GetIconLocation, IsRecommended, MakeDefault, Invoke.
+  const int EnumNextSlot = 3, BindToHandlerSlot = 3, GetNameSlot = 3, GetUINameSlot = 4, GetIconLocationSlot = 5, InvokeSlot = 8;
+  static T Method<T>(IntPtr instance, int slot) where T : class {
+    IntPtr table = Marshal.ReadIntPtr(instance);
+    return (T)(object)Marshal.GetDelegateForFunctionPointer(Marshal.ReadIntPtr(table, slot * IntPtr.Size), typeof(T));
   }
-  [ComImport, Guid("f04061ac-1659-4a3f-a954-775aa57fc083"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  public interface IHandler {
-    void GetName([MarshalAs(UnmanagedType.LPWStr)] out string name);
-    void GetUIName([MarshalAs(UnmanagedType.LPWStr)] out string name);
-    void GetIconLocation([MarshalAs(UnmanagedType.LPWStr)] out string path, out int index);
-    [PreserveSig] int IsRecommended();
-    void MakeDefault([MarshalAs(UnmanagedType.LPWStr)] string description);
-    void Invoke(IDataObject data);
-    void CreateInvoker(IDataObject data, [MarshalAs(UnmanagedType.Interface)] out object invoker);
+  static string HandlerText(IntPtr handler, int slot) {
+    IntPtr text;
+    Marshal.ThrowExceptionForHR(Method<TextGetter>(handler, slot)(handler, out text));
+    try { return Marshal.PtrToStringUni(text); } finally { Marshal.FreeCoTaskMem(text); }
   }
-  [ComImport, Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  public interface IShellItem {
-    void BindToHandler(IntPtr context, ref Guid handler, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out IDataObject data);
-  }
-  [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
-  static extern void SHAssocEnumHandlers(string extension, uint filter, out IEnumHandlers handlers);
-  [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
-  static extern void SHCreateItemFromParsingName(string path, IntPtr context, ref Guid iid, out IShellItem item);
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+  static extern int SHAssocEnumHandlers(string extension, uint filter, out IntPtr handlers);
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+  static extern int SHCreateItemFromParsingName(string path, IntPtr context, ref Guid iid, out IntPtr item);
   [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
   static extern int AssocQueryString(uint flags, uint kind, string association, string extra, StringBuilder output, ref uint size);
   [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
@@ -91,8 +99,13 @@ public static class DshFileAssociations {
           // USER_TIMER_MINIMUM wakes the STA to inspect the reference count while dispatching COM work.
           UIntPtr timer = SetTimer(IntPtr.Zero, UIntPtr.Zero, 10, IntPtr.Zero);
           if (timer == UIntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+          // Windows 7's Shell holds the reference until the launched application exits, so the drain there only
+          // gives asynchronous launch work a bounded window; later Windows releases it once the handoff completes.
+          bool bounded = Environment.OSVersion.Version < new Version(6, 2);
+          int deadline = Environment.TickCount + 3000;
           try {
             while (Marshal.ReadInt32(count) > owned) {
+              if (bounded && Environment.TickCount - deadline > 0) break;
               Message message;
               if (GetMessage(out message, IntPtr.Zero, 0, 0) <= 0) throw new InvalidOperationException("Shell handoff message loop ended");
               TranslateMessage(ref message);
@@ -160,10 +173,12 @@ public static class DshFileAssociations {
   }
   // Best-effort fallback: some handlers return their executable path from GetName, but a
   // packaged handler's name may be an AUMID or family name, which extracts no icon.
-  static string IconData(IHandler handler, string id) {
+  static string IconData(IntPtr handler, string id) {
     string source = null; int index = 0;
-    try { handler.GetIconLocation(out source, out index); } catch (Exception) {
-      // A handler without a drawable icon location falls back to its name.
+    IntPtr location; int locationIndex;
+    // A handler without a drawable icon location falls back to its name.
+    if (Method<IconGetter>(handler, GetIconLocationSlot)(handler, out location, out locationIndex) >= 0) {
+      try { source = Marshal.PtrToStringUni(location); index = locationIndex; } finally { Marshal.FreeCoTaskMem(location); }
     }
     if (!String.IsNullOrEmpty(source)) {
       source = Environment.ExpandEnvironmentVariables(source);
@@ -178,20 +193,22 @@ public static class DshFileAssociations {
       ? null
       : PngFromIconSource(id, 0);
   }
-  static void Visit(string path, Action<IHandler> visit) {
+  static void Visit(string path, Action<IntPtr> visit) {
     var extension = Path.GetExtension(path);
     if (extension.Length == 0) return;
-    IEnumHandlers handlers;
-    SHAssocEnumHandlers(extension, 0, out handlers);
+    IntPtr handlers;
+    Marshal.ThrowExceptionForHR(SHAssocEnumHandlers(extension, 0, out handlers));
+    if (handlers == IntPtr.Zero) return;
     try {
+      var next = Method<EnumNext>(handlers, EnumNextSlot);
       while (true) {
-        IHandler handler; uint fetched;
-        int result = handlers.Next(1, out handler, out fetched);
+        IntPtr handler; uint fetched;
+        int result = next(handlers, 1, out handler, out fetched);
         Marshal.ThrowExceptionForHR(result);
-        if (result != 0 || fetched == 0) break;
-        try { visit(handler); } finally { Marshal.FinalReleaseComObject(handler); }
+        if (result != 0 || fetched == 0 || handler == IntPtr.Zero) break;
+        try { visit(handler); } finally { Marshal.Release(handler); }
       }
-    } finally { Marshal.FinalReleaseComObject(handlers); }
+    } finally { Marshal.Release(handlers); }
   }
   public static Application[] List(string path) {
     var extension = Path.GetExtension(path);
@@ -199,9 +216,8 @@ public static class DshFileAssociations {
     var appId = extension.Length == 0 ? null : Associated(extension, 21);
     var apps = new List<Application>();
     var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    Visit(path, delegate(IHandler handler) {
-      string id, name;
-      handler.GetName(out id); handler.GetUIName(out name);
+    Visit(path, delegate(IntPtr handler) {
+      string id = HandlerText(handler, GetNameSlot), name = HandlerText(handler, GetUINameSlot);
       if (!seen.Add(id)) return;
       apps.Add(new Application { id = id, name = name, icon = IconData(handler, id),
         @default = String.Equals(id, executable, StringComparison.OrdinalIgnoreCase) || String.Equals(id, appId, StringComparison.OrdinalIgnoreCase) });
@@ -213,22 +229,21 @@ public static class DshFileAssociations {
   }
   static void OpenRegistered(string path, string application) {
     bool opened = false;
-    Visit(path, delegate(IHandler handler) {
-      string id; handler.GetName(out id);
-      if (opened || !String.Equals(id, application, StringComparison.OrdinalIgnoreCase)) return;
-      var iid = typeof(IShellItem).GUID;
-      IShellItem item;
-      SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item);
-      IDataObject data = null;
+    Visit(path, delegate(IntPtr handler) {
+      if (opened || !String.Equals(HandlerText(handler, GetNameSlot), application, StringComparison.OrdinalIgnoreCase)) return;
+      var iid = new Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"); // IShellItem
+      IntPtr item;
+      Marshal.ThrowExceptionForHR(SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item));
+      IntPtr data = IntPtr.Zero;
       try {
-        var bhid = new Guid("b8c0bd9f-ed24-455c-83e6-d5390c4fe8c4");
-        var dataIid = typeof(IDataObject).GUID;
-        item.BindToHandler(IntPtr.Zero, ref bhid, ref dataIid, out data);
-        handler.Invoke(data);
+        var bhid = new Guid("b8c0bd9f-ed24-455c-83e6-d5390c4fe8c4"); // BHID_DataObject
+        var dataIid = new Guid("0000010e-0000-0000-c000-000000000046"); // IDataObject
+        Marshal.ThrowExceptionForHR(Method<HandlerBinder>(item, BindToHandlerSlot)(item, IntPtr.Zero, ref bhid, ref dataIid, out data));
+        Marshal.ThrowExceptionForHR(Method<DataInvoker>(handler, InvokeSlot)(handler, data));
         opened = true;
       } finally {
-        if (data != null) Marshal.FinalReleaseComObject(data);
-        Marshal.FinalReleaseComObject(item);
+        if (data != IntPtr.Zero) Marshal.Release(data);
+        Marshal.Release(item);
       }
     });
     if (!opened) throw new InvalidOperationException("Application is not registered for this file");
@@ -251,7 +266,13 @@ export async function windowsFileApplications(
   const encodedApplication = Buffer.from(application ?? '').toString('base64')
   const script = `$ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-Add-Type -ReferencedAssemblies System,System.Core,System.Drawing -TypeDefinition @'
+$references = 'System', 'System.Core', 'System.Drawing'
+# PowerShell 7 (Windows 7 build): explicit references replace its default .NET set (the ref folder under
+# PSHOME), and the drawing types live in System.Drawing.Common there.
+if ($PSVersionTable.PSEdition -eq 'Core') {
+  $references = @(Get-ChildItem -LiteralPath (Join-Path $PSHOME 'ref') -Filter *.dll | ForEach-Object FullName) + 'System.Drawing.Common'
+}
+Add-Type -ReferencedAssemblies $references -TypeDefinition @'
 ${WINDOWS_ASSOCIATIONS}
 '@
 $path = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedPath}'))
@@ -266,7 +287,7 @@ ${application === null ? 'ConvertTo-Json -InputObject @([DshFileAssociations]::L
   const scriptPath = join(directory, 'associations.ps1')
   try {
     await writeFile(scriptPath, `\uFEFF${script}`, 'utf8')
-    const result = await run('powershell.exe', [
+    const result = await run(windowsPowerShell(), [
       '-NoProfile', '-NonInteractive', '-STA', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
     ], signal, 'hidden')
     return result.stdout

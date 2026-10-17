@@ -12,7 +12,7 @@
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { desktopApplicationIcon } from '@deepseek-ai/dsh-native-command'
+import { desktopApplicationIcon, windowsPowerShell } from '@deepseek-ai/dsh-native-command'
 import type { OpenInAppApp } from './catalog.ts'
 import {
   findDesktopEntry, output, resolveInternals, specFor, xdgDataDirectories,
@@ -107,7 +107,7 @@ async function extractExecutableIconPng(
     const script = join(workDir, 'extract-icon.ps1')
     const outPng = join(workDir, 'icon.png')
     await writeFile(script, EXTRACT_ICON_PS1, 'utf8')
-    const ran = await output('powershell.exe', [
+    const ran = await output(windowsPowerShell(), [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, executablePath, outPng,
     ], timeoutMs, internals)
     if (ran === null) return null

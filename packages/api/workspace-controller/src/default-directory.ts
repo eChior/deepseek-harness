@@ -2,7 +2,7 @@
 
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
-import { runNativeCommand, type NativeCommandRunner } from '@deepseek-ai/dsh-native-command'
+import { runNativeCommand, windowsPowerShell, type NativeCommandRunner } from '@deepseek-ai/dsh-native-command'
 import { DEFAULT_WORKSPACE_DIRECTORY } from './default-workspace.ts'
 
 /** Platform observations replaceable in directory-resolution tests. */
@@ -53,7 +53,7 @@ export async function defaultWorkspaceDirectory(
         ], signal, 'hidden'))
         break
       case 'win32':
-        ({ stdout } = await run('powershell.exe', [
+        ({ stdout } = await run(windowsPowerShell(), [
           '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
           '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); '
           + '[Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments, '
