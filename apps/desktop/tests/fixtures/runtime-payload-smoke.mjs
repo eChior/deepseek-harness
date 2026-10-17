@@ -156,7 +156,12 @@ function checkHtml() {
 
 try {
   const builtin = requireRuntime('node-addon-require-builtin')
-  assert.equal(typeof builtin.requireBuiltin('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
+  assert.equal(typeof builtin.requireBuiltin, 'function')
+  // Desktop runs this Node with --expose-internals, and DSH then loads internals through the plain require (see
+  // vendor/loader and app-boot's profile resolver). The addon only accepts the Electron builds it has analyzed,
+  // which excludes the Windows 7 build's Electron 44.2.0, so probe the path the runtime actually takes.
+  const requireInternal = process.execArgv.includes('--expose-internals') ? createRequire(import.meta.url) : builtin.requireBuiltin
+  assert.equal(typeof requireInternal('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
   checkPnpm()
   checkKoffi()
   await checkSharp()

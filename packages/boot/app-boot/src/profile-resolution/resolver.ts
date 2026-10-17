@@ -612,7 +612,12 @@ class ResolutionRouter {
 
 function internalModules(): InternalModules {
   const require = createRequire(import.meta.url)
-  const addon = require('node-addon-require-builtin') as { requireBuiltin(moduleId: string): unknown }
+  // Under --expose-internals, which Desktop passes to its Electron-hosted Node, internal ids load through the plain
+  // require, as in vendor/loader. The addon only accepts the Electron builds it has analyzed, which excludes the
+  // Windows 7 build's Electron 44.2.0; both paths return the same builtin modules.
+  const addon = process.execArgv.includes('--expose-internals')
+    ? { requireBuiltin: (moduleId: string): unknown => require(moduleId) }
+    : require('node-addon-require-builtin') as { requireBuiltin(moduleId: string): unknown }
   const esmModule = addon.requireBuiltin('internal/modules/esm/loader') as {
     getOrInitializeCascadedLoader(): ModuleLoaderV1 | ModuleLoaderV2
   }
