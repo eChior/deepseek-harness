@@ -16,6 +16,8 @@ export const WAIT_TIMEOUT = 258
 export const CREATE_SUSPENDED = 0x4
 /** CreateProcess flag selecting a UTF-16 environment block. */
 export const CREATE_UNICODE_ENVIRONMENT = 0x400
+/** CreateProcess flag that starts the child outside the creator's Job; the Job must allow breakaway. */
+export const CREATE_BREAKAWAY_FROM_JOB = 0x01000000
 /** GetStdHandle selector for standard input. */
 export const STD_INPUT_HANDLE = -10
 /** GetStdHandle selector for standard output. */
@@ -26,6 +28,8 @@ export const STD_ERROR_HANDLE = -12
 export const FORMAT_MESSAGE_FROM_SYSTEM = 0x00001000
 /** FormatMessage leaves insertion placeholders uninterpreted. */
 export const FORMAT_MESSAGE_IGNORE_INSERTS = 0x00000200
+/** Win32 code reporting denied access, including a breakaway request that the creator's Job forbids. */
+export const ERROR_ACCESS_DENIED = 5
 /** Win32 code reporting a caller-provided buffer is too small. */
 export const ERROR_INSUFFICIENT_BUFFER = 122
 /** Win32 code reporting that the other pipe end closed. */
@@ -34,6 +38,8 @@ export const ERROR_BROKEN_PIPE = 109
 export const ERROR_NO_DATA = 232
 /** Job limit that terminates every member when the final Job handle closes. */
 export const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+/** Job limit that lets members create children with CREATE_BREAKAWAY_FROM_JOB. */
+export const JOB_OBJECT_LIMIT_BREAKAWAY_OK = 0x00000800
 /** QueryInformationJobObject class for basic accounting and active-process count. */
 export const JobObjectBasicAccountingInformation = 1
 /** SetInformationJobObject class for JOBOBJECT_EXTENDED_LIMIT_INFORMATION. */

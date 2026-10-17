@@ -1,5 +1,6 @@
 /** Typed Win32 process operations over the shared binding table. */
 
+import { release } from 'node:os'
 import * as abi from './abi.ts'
 import { inheritedControlStdio } from './control-stdio.ts'
 import {
@@ -337,12 +338,40 @@ export function waitForProcessExit(api: Win32ProcessBindings, process: NativePtr
   }
 }
 
-function createKillOnCloseJob(api: Win32ProcessBindings): NativePtr {
+/**
+ * Windows before 8 (NT 6.2) cannot nest Jobs: a child created inside a Job that does not release children
+ * silently inherits it and then fails its own Job assignment with ERROR_ACCESS_DENIED. There, every child asks
+ * to leave its creator's Job with CREATE_BREAKAWAY_FROM_JOB, and current-token Jobs allow that breakaway for
+ * their own descendants. The creator's Job need not be ours: Windows 7's Program Compatibility Assistant keeps
+ * an installer's whole process tree, including the app its finish page starts, in a Job that allows only
+ * explicit breakaway.
+ */
+const NESTED_JOBS = (() => {
+  const [major = 0, minor = 0] = release().split('.').map(Number)
+  return process.platform !== 'win32' || major > 6 || (major === 6 && minor >= 2)
+})()
+
+/**
+ * Create a child outside its creator's Job where Jobs cannot nest. A Job that forbids breakaway rejects the
+ * request with ERROR_ACCESS_DENIED; the retry creates the child inside it, which still works when that Job
+ * releases children silently and otherwise leaves Job assignment to report the conflict.
+ * @param api - active binding table.
+ * @param create - CreateProcess call taking the extra creation flags.
+ * @returns the CreateProcess result, with its error in GetLastError on failure.
+ */
+function createOutsideCreatorJob(api: Win32ProcessBindings, create: (extraFlags: number) => number): number {
+  if (NESTED_JOBS) return create(0)
+  const created = create(abi.CREATE_BREAKAWAY_FROM_JOB)
+  if (created !== 0 || api.getLastError() !== abi.ERROR_ACCESS_DENIED) return created
+  return create(0)
+}
+
+function createKillOnCloseJob(api: Win32ProcessBindings, extraLimitFlags = 0): NativePtr {
   const job = api.createJobObjectW(null, null)
   if (isNullPtr(job)) throwLastError(api, 'CreateJobObjectW')
   const information = Buffer.alloc(abi.JOBOBJECT_EXTENDED_LIMIT_SIZE)
   information.writeUInt32LE(
-    abi.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    abi.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | extraLimitFlags,
     abi.JOBOBJECT_EXTENDED_LIMIT_FLAGS_OFFSET,
   )
   if (api.setInformationJobObject(
@@ -417,9 +446,10 @@ function spawnJobProcess(
   options: ProcessSpawnOptions,
   resolveStdio: () => ProcessStandardHandles,
   createName: 'CreateProcessAsUserW' | 'CreateProcessW',
-  create: (startupInfo: NativePtr, processInfo: NativePtr) => number,
+  create: (startupInfo: NativePtr, processInfo: NativePtr, extraFlags: number) => number,
+  extraJobLimitFlags = 0,
 ): SpawnedJobProcess {
-  const job = createKillOnCloseJob(api)
+  const job = createKillOnCloseJob(api, extraJobLimitFlags)
   const enabled: NativePtr[] = []
   let startupInfo: NativePtr | undefined
   let processInfo: NativePtr | undefined
@@ -463,7 +493,8 @@ function spawnJobProcess(
       },
     })
     processInfo = allocProcessInfo()
-    created = create(startupInfo, processInfo)
+    const startupPointer = startupInfo, processPointer = processInfo
+    created = createOutsideCreatorJob(api, extraFlags => create(startupPointer, processPointer, extraFlags))
     if (created === 0) createFailureCode = api.getLastError()
   } catch (error) {
     freeNative(processInfo)
@@ -534,12 +565,12 @@ export function spawnInheritedJobProcess(
   options: RestrictedProcessSpawnOptions,
 ): SpawnedJobProcess {
   const commandLine = buildCommandLine(options.command, options.args)
-  return spawnJobProcess(api, options, () => inheritedStandardHandles(api, options.controlFileDescriptor), 'CreateProcessAsUserW', (startupInfo, processInfo) =>
+  return spawnJobProcess(api, options, () => inheritedStandardHandles(api, options.controlFileDescriptor), 'CreateProcessAsUserW', (startupInfo, processInfo, extraFlags) =>
     createRestrictedProcess(
       api,
       options,
       commandLine,
-      abi.CREATE_SUSPENDED,
+      abi.CREATE_SUSPENDED | extraFlags,
       startupInfo,
       processInfo,
     ))
@@ -557,19 +588,19 @@ export function spawnCurrentTokenJobProcess(
 ): SpawnedJobProcess {
   const commandLine = buildCommandLine(options.command, options.args)
   const environment = encodeWindowsEnvironment(options.env)
-  return spawnJobProcess(api, options, () => targetCarrierHandles(api, options.stdio), 'CreateProcessW', (startupInfo, processInfo) =>
+  return spawnJobProcess(api, options, () => targetCarrierHandles(api, options.stdio), 'CreateProcessW', (startupInfo, processInfo, extraFlags) =>
     api.createProcessW(
       options.applicationName,
       commandLine,
       null,
       null,
       1,
-      abi.CREATE_SUSPENDED | abi.CREATE_UNICODE_ENVIRONMENT,
+      abi.CREATE_SUSPENDED | abi.CREATE_UNICODE_ENVIRONMENT | extraFlags,
       environment,
       options.cwd,
       startupInfo,
       processInfo,
-    ))
+    ), NESTED_JOBS ? 0 : abi.JOB_OBJECT_LIMIT_BREAKAWAY_OK)
 }
 
 /**
