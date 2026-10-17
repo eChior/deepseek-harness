@@ -1,9 +1,12 @@
 /** Private command-management worker; macOS mutation targets are fixed before elevation. */
 
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { release } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CommandInstallationError, inspectFileCommand, installFileCommand, removeFileCommand } from './command-installation.ts'
+import { isPreWindows8 } from './win7-environment.ts'
 
 const [operation, expected] = process.argv.slice(2)
 const fingerprint = expected ?? ''
@@ -23,7 +26,12 @@ try {
   } else if (process.platform === 'win32') {
     const systemRoot = process.env.SystemRoot ?? process.env.WINDIR
     if (systemRoot === undefined) throw new CommandInstallationError('ENOENT', 'Windows system directory is unavailable.')
-    const child = spawn(join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    // command-path.ps1 needs PowerShell 5 (::new, ConvertFrom-Json); Windows 7 has 2.0, so the Win7 build runs its bundled pwsh.
+    const bundledPwsh = join(resources, 'runtime', 'pwsh', 'pwsh.exe')
+    const powershell = isPreWindows8(release()) && existsSync(bundledPwsh)
+      ? bundledPwsh
+      : join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    const child = spawn(powershell,
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(resources, 'runtime', 'cli', 'command-path.ps1')],
       { stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true })
     child.stdout.pipe(process.stdout)
