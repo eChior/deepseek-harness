@@ -51,7 +51,7 @@ async function bench() {
     roster: vi.fn(),
     uploads: vi.fn(),
     upload: vi.fn(),
-    remove: vi.fn(),
+    drop: vi.fn(),
     setEnabled: vi.fn(),
     example: vi.fn(),
   })

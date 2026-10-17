@@ -8,7 +8,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-api-redaction-controller` publishes the session-redaction surface over Typert Remote. One namespace, `redaction`, answers `status()` with the loaded term-list revision, its source, the compiled term and pattern counts, this process's replacement count, and the queued term requests; `roster()` reports the staff directory; `uploads()`, `upload()`, `remove()`, `setEnabled()` and `example()` manage this machine's department term lists. Every reply is display-safe by construction: a status says how much was rewritten, never what, and an upload is the file its own author wrote. The namespace stays mounted without the provider and then reports a named configuration error.
+`@deepseek-ai/dsh-api-redaction-controller` publishes the session-redaction surface over Typert Remote. One namespace, `redaction`, answers `status()` with the loaded term-list revision, its source, the compiled term and pattern counts, this process's replacement count, and the queued term requests; `roster()` reports the staff directory; `uploads()`, `upload()`, `drop()`, `setEnabled()` and `example()` manage this machine's department term lists. Every reply is display-safe by construction: a status says how much was rewritten, never what, and an upload is the file its own author wrote. The namespace stays mounted without the provider and then reports a named configuration error.
 
 ## Table of Contents
 
@@ -30,7 +30,7 @@ The browser half reaches it as `ctx.remote.redaction.<method>()`. A client packa
 
 `status()` reads the provider unchanged. `roster()` adds what the staff directory says about the signed-in colleague, so an upload can be filed under a department and an author without the caller naming either. Nobody signed in, or an account service that cannot answer, yields `null` for the account rather than a failure — the upload is still worth taking, it simply carries no department.
 
-`uploads()` lists what this machine holds, including a file whose text does not compile: its author is the one who has to see what is wrong. `upload({ name, text })` stamps the file with the caller's attribution, stores it, and puts it in force. `remove({ name })` drops one, and `setEnabled({ name, enabled })` turns one on or off without touching what it declares. `example()` hands back the commented example this build ships, so a department starts from the real shape rather than a paraphrase.
+`uploads()` lists what this machine holds, including a file whose text does not compile: its author is the one who has to see what is wrong. `upload({ name, text })` stamps the file with the caller's attribution, stores it, and puts it in force. `remove({ name })` is published as `drop({ name })` — it drops one — and `setEnabled({ name, enabled })` turns one on or off without touching what it declares. `example()` hands back the commented example this build ships, so a department starts from the real shape rather than a paraphrase.
 
 ### Attribution comes from the directory, never from the payload
 
@@ -70,6 +70,8 @@ No direct effect; the status is read by configuration surfaces and never enters 
 `status()` projects the provider record field by field instead of re-exporting it, because the browser half imports the type across the Remote boundary and a subpath that only re-exports another module leaves the analyzer without a declaration to walk. Projecting also keeps this namespace's own `RedactionStatusView` free to stop carrying a field the provider might later add — a field that recovered original text could never be republished here.
 
 `roster()` is the only method that reads another service: it resolves the signed-in display name through `deepseekAccount`, then asks the provider what the staff directory says. Every failure along that path — nobody signed in, a provider that throws, a name the directory does not list — collapses to `null`, because a missing department must never turn into a refused upload.
+
+The drop endpoint is named `drop`, not `remove`, and renaming it back breaks the whole Web client. The Browser face installs each endpoint as a member of the namespace's generated service, and refuses the ones whose names collide with that service's own methods — `remove`, `has`, `empty`, `install`, `ctx`, `methods`, `name`, `namespace`. That refusal is not a failed call but a refused mount: the client assembly aborts while booting, leaving every namespace unavailable. `removeLocal()` on the provider keeps its own name; only the wire name differs.
 
 </details>
 

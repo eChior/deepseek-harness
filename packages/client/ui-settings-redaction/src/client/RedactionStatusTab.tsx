@@ -30,7 +30,7 @@ export interface RedactionStatusTabInjected {
   /** Store one uploaded list and put it in force. */
   upload: (request: { readonly name: string; readonly text: string }) => Promise<RedactionUploadView>
   /** Drop one uploaded list. */
-  remove: (request: { readonly name: string }) => Promise<boolean>
+  drop: (request: { readonly name: string }) => Promise<boolean>
   /** Turn one uploaded list on or off. */
   setEnabled: (request: { readonly name: string; readonly enabled: boolean }) => Promise<RedactionUploadView>
   /** Read the example a department starts from. */
@@ -204,7 +204,7 @@ function UploadsPanel(props: UploadsPanelProps) {
   }, [props])
 
   const drop = useCallback((entry: RedactionUploadView): void => {
-    void props.remove({ name: entry.name }).then(
+    void props.drop({ name: entry.name }).then(
       async () => { setUploads(await props.uploads()); props.onChanged() },
       (error: unknown) => { setFailure(error instanceof Error ? error.message : String(error)) },
     )

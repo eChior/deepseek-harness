@@ -135,14 +135,19 @@ export class RedactionController extends TypertRemoteService {
 
   /**
    * Drop one uploaded list and take its rules back out of force.
+   *
+   * The wire name is `drop`, not `remove`: the Browser face installs every
+   * endpoint as a member of the namespace service, and `remove` is one of that
+   * service's own methods, so a `redaction/remove` endpoint makes the whole
+   * Client assembly refuse to mount rather than fail one call.
    * @param request - the name the file was uploaded under.
    * @returns whether a file was removed.
    * @throws RemoteError when the payload is malformed.
    */
   @Remote
-  async remove(request: { readonly name: string }): Promise<boolean> {
+  async drop(request: { readonly name: string }): Promise<boolean> {
     const parsed = NameRequest.safeParse(request)
-    if (!parsed.success) throw badRequest('remove', parsed.error)
+    if (!parsed.success) throw badRequest('drop', parsed.error)
     return await this.ctx.redaction.removeLocal(parsed.data.name)
   }
 

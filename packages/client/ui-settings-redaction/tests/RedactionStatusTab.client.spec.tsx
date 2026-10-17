@@ -63,7 +63,7 @@ function face(overrides: Partial<RedactionStatusTabInjected> = {}): RedactionSta
     roster: async () => ROSTER,
     uploads: async () => [],
     upload: async () => UPLOAD,
-    remove: async () => true,
+    drop: async () => true,
     setEnabled: async () => UPLOAD,
     example: async () => ({ name: 'terms-local.example.yaml', text: 'version: 1\n' }),
     ...overrides,
@@ -161,16 +161,16 @@ describe('RedactionStatusTab', () => {
   })
 
   it('drops a list and reloads what remains', async () => {
-    const remove = vi.fn(async () => true)
+    const drop = vi.fn(async () => true)
     const uploads = vi.fn()
       .mockResolvedValueOnce([UPLOAD])
       .mockResolvedValue([])
-    render(<RedactionStatusTab {...props(async () => READY, { uploads, remove })} />)
+    render(<RedactionStatusTab {...props(async () => READY, { uploads, drop })} />)
 
     await waitFor(() => { expect(screen.getByText('qc.yaml')).toBeTruthy() })
     fireEvent.click(screen.getByText('删除'))
 
-    await waitFor(() => { expect(remove).toHaveBeenCalledWith({ name: 'qc.yaml' }) })
+    await waitFor(() => { expect(drop).toHaveBeenCalledWith({ name: 'qc.yaml' }) })
     await waitFor(() => { expect(screen.queryByText('qc.yaml')).toBeNull() })
   })
 
