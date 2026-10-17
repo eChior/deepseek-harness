@@ -54,8 +54,11 @@ static int ExtractApplication(HWND parent, LPCWSTR tool, LPCWSTR archive, LPCWST
     InstallerAttributes attributes;
     if (!attributes.Initialize()) return LaunchFailure(GetLastError());
     HANDLE inherited[] = {nullInput.value, output.value, errors.value};
-    if (!UpdateProcThreadAttribute(attributes.list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited, sizeof(inherited), nullptr, nullptr) ||
-        !UpdateProcThreadAttribute(attributes.list, 0, PROC_THREAD_ATTRIBUTE_JOB_LIST, &job.value, sizeof(job.value), nullptr, nullptr)) return LaunchFailure(GetLastError());
+    if (!UpdateProcThreadAttribute(attributes.list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited, sizeof(inherited), nullptr, nullptr)) return LaunchFailure(GetLastError());
+    // [win7] PROC_THREAD_ATTRIBUTE_JOB_LIST needs Windows 10. Without it the child starts suspended and joins the Job
+    // before running; an installer already inside a Job that forbids breakaway cannot nest one on Windows 7, so 7-Zip
+    // then runs uncontained and supervision falls back to TerminateProcess.
+    const bool jobAttribute = UpdateProcThreadAttribute(attributes.list, 0, PROC_THREAD_ATTRIBUTE_JOB_LIST, &job.value, sizeof(job.value), nullptr, nullptr) != FALSE;
     STARTUPINFOEXW startup = {};
     startup.StartupInfo.cb = sizeof(startup);
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -67,9 +70,24 @@ static int ExtractApplication(HWND parent, LPCWSTR tool, LPCWSTR archive, LPCWST
     // Error output is UTF-8 so the failure report can quote paths from any code page.
     std::wstring command = L"\"" + std::wstring(tool) + L"\" x -y -bso0 -bse2 -bsp1 -bb0 -sccUTF-8 \"-o" + destination + L"\\.\" \"" + archive + L"\"";
     PROCESS_INFORMATION child = {};
-    if (!CreateProcessW(tool, &command[0], nullptr, nullptr, TRUE,
-        EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW, nullptr, nullptr, &startup.StartupInfo, &child)) return LaunchFailure(GetLastError());
+    const DWORD baseFlags = EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW;
+    BOOL created = CreateProcessW(tool, &command[0], nullptr, nullptr, TRUE,
+        jobAttribute ? baseFlags : baseFlags | CREATE_SUSPENDED | CREATE_BREAKAWAY_FROM_JOB, nullptr, nullptr, &startup.StartupInfo, &child);
+    if (!created && !jobAttribute && GetLastError() == ERROR_ACCESS_DENIED) {
+        created = CreateProcessW(tool, &command[0], nullptr, nullptr, TRUE,
+            baseFlags | CREATE_SUSPENDED, nullptr, nullptr, &startup.StartupInfo, &child);
+    }
+    if (!created) return LaunchFailure(GetLastError());
     InstallerHandle process(child.hProcess), thread(child.hThread);
+    bool contained = jobAttribute;
+    if (!jobAttribute) {
+        contained = AssignProcessToJobObject(job.value, process.value) != FALSE;
+        if (ResumeThread(thread.value) == static_cast<DWORD>(-1)) {
+            const DWORD error = GetLastError();
+            TerminateProcess(process.value, error);
+            return LaunchFailure(error);
+        }
+    }
     output.Close();
     errors.Close();
     ExtractionProgress progress;
@@ -83,7 +101,8 @@ static int ExtractApplication(HWND parent, LPCWSTR tool, LPCWSTR archive, LPCWST
         if (parent) SetPropW(parent, L"HarnessInstaller.ExtractProgress", reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(progress.value)));
     }
     if (readError != ERROR_BROKEN_PIPE && readError != ERROR_SUCCESS) {
-        TerminateJobObject(job.value, readError);
+        if (contained) TerminateJobObject(job.value, readError);
+        else TerminateProcess(process.value, readError);
         WaitForSingleObject(process.value, INFINITE);
         return LaunchFailure(readError);
     }

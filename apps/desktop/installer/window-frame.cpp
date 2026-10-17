@@ -293,6 +293,14 @@ extern "C" __declspec(dllexport) HRESULT __cdecl InstallerApplyFrame(HWND window
         }
     }
     SetWindowLongW(window, GWL_STYLE, GetWindowLongW(window, GWL_STYLE) | WS_THICKFRAME);
+    // [win7] Windows 7 can run with desktop composition off (Basic and Classic themes), where every DWM frame call
+    // fails. The frame shadow is decoration, so the borderless window is used as is; Windows 8+ always composes.
+    BOOL composed = FALSE;
+    if (FAILED(DwmIsCompositionEnabled(&composed)) || !composed) {
+        SetWindowPos(window, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        return S_OK;
+    }
     const DWMNCRENDERINGPOLICY policy = DWMNCRP_ENABLED;
     HRESULT result = DwmSetWindowAttribute(window, DWMWA_NCRENDERING_POLICY, &policy, sizeof(policy));
     if (FAILED(result)) return result;
