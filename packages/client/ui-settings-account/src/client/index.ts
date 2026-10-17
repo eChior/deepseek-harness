@@ -18,7 +18,7 @@ import { AccountOnboarding } from './AccountOnboarding.tsx'
 import { AccountPlatformHost, type AccountPlatformHostInjected } from './AccountPlatformHost.tsx'
 import { AccountMenu } from './AccountMenu.tsx'
 import { createPlatformPages, type PlatformPages } from './platform-pages.ts'
-import { AccountSection, type AccountSnapshot, type AccountSectionInjected } from './AccountSection.tsx'
+import { AccountSection, type AccountAttribution, type AccountSnapshot, type AccountSectionInjected } from './AccountSection.tsx'
 import { createBonusNoticeController } from './bonus-notices.ts'
 import { accountClientMetadata } from './client-metadata.ts'
 import { en, zh, type AccountKey } from './locales.ts'
@@ -35,6 +35,23 @@ export type { AccountKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { 'settings.account': AccountKey }
+}
+
+/**
+ * The one staff-directory read the identity card makes.
+ *
+ * The employee number and department belong to a namespace a separate plugin
+ * serves, and a deployment without that plugin still has to render this page.
+ * Naming the single method the page uses keeps that dependency to one
+ * interface instead of a second required Remote namespace, and the read goes
+ * through `ctx.get` so an absent directory yields nothing rather than a
+ * refused activation.
+ */
+interface StaffDirectory {
+  roster: () => Promise<
+    | { readonly ok: true; readonly value: { readonly department: string | null; readonly employeeId: string | null } }
+    | { readonly ok: false }
+  >
 }
 
 /** Services required by account settings. */
@@ -77,6 +94,32 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => { notices.end() }, 'account: bonus notice lifetime')
   let revision = 0
   let refreshing: Promise<void> | undefined
+  /**
+   * Read the employee number and department the staff directory keeps for this account.
+   *
+   * The account service this deployment signs in with reports neither, so the
+   * identity card takes them from the directory the redaction provider already
+   * holds — the same directory that stamps an upload's department. That
+   * provider serves the `redaction` namespace on its own, so the read is a
+   * separate request from the profile and a failing or absent directory leaves
+   * the line on its placeholder instead of claiming the account has no details.
+   * @param generation - revision the read started at; a newer one discards the answer.
+   * @returns after the directory answered, or immediately when it did not.
+   */
+  const readAttribution = async (generation: number): Promise<void> => {
+    const directory = ctx.get('remote.redaction') as StaffDirectory | undefined
+    if (directory === undefined) return
+    let person: AccountAttribution | undefined
+    try {
+      const result = await directory.roster()
+      if (result.ok) person = { department: result.value.department, employeeId: result.value.employeeId }
+    } catch (_error) {
+      // An absent or failing directory is not an account failure.
+    }
+    if (generation !== revision || person === undefined) return
+    const { attribution: _previous, ...rest } = snapshot
+    publish({ ...rest, attribution: person })
+  }
   const refresh = (): Promise<void> => {
     if (snapshot.view?.status !== 'credential-stored') return Promise.resolve()
     if (refreshing !== undefined) return refreshing
@@ -99,6 +142,7 @@ export function apply(ctx: Context): void {
         if (!result.ok) throw new Error('account balance failed')
         return result.value
       }),
+      readAttribution(generation),
     ]).then(() => undefined)
     refreshing = request
     void request.finally(() => { if (refreshing === request) refreshing = undefined })

@@ -3,7 +3,7 @@ import { Big } from 'big.js'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Button, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
-import type { PropsRuntime, PropsLocale, InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime, PropsLocale, InjectFace, HostObservable, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { PlatformPage, PlatformPages } from './platform-pages.ts'
 import { formatBalance } from './formatBalance.ts'
@@ -19,6 +19,16 @@ export interface AccountSnapshot {
 
   /** Latest Host state, absent until the stream responds. */
   view: AccountView | undefined
+  /**
+   * Staff-directory attribution of the signed-in account.
+   *
+   * Absent until the read settles, null when no directory serves this
+   * deployment, and the record itself once one answered. The account service
+   * this deployment signs in with carries no employee number or department, so
+   * the identity card reads them from the directory the redaction provider
+   * already keeps — the same directory that stamps an upload's department.
+   */
+  attribution?: AccountAttribution | null | undefined
   /** Sanitized profile and balance query outcomes, absent while loading. */
   details: Partial<AccountDetails> | undefined
   /** Whether the state stream failed. */
@@ -29,6 +39,14 @@ export interface AccountSnapshot {
   loginFailed?: boolean
   /** Mounted onboarding owns the dialog while active. */
   onboarding?: boolean
+}
+
+/** Employee number and department the staff directory reports for the signed-in account. */
+export interface AccountAttribution {
+  /** Department the directory lists the account under, or null when it lists none. */
+  department: string | null
+  /** Employee number the directory lists for the account, or null when it lists none. */
+  employeeId: string | null
 }
 
 /** Host operations injected into the Cordis-free account component. */
@@ -80,9 +98,29 @@ export interface AccountSectionInjected {
 /** Composed account section props. */
 export type AccountSectionProps =
   PropsRuntime<'settings.section'> & PropsLocale<'settings.account'> & InjectFace<AccountSectionInjected>
+
+/**
+ * The identity line under the account name.
+ *
+ * The employee number and department live in the staff directory, and the
+ * account service this deployment signs in with reports neither, so the line
+ * reads what the directory knows about the signed-in name. A directory that
+ * lists nobody by that name leaves the line blank instead of claiming the
+ * account has no details.
+ * @param attribution - what the directory reported, absent while the read is in flight.
+ * @param t - copy of the account namespace.
+ * @returns the line to render, or the loading copy while the directory has not answered.
+ */
+function directoryLine(attribution: AccountAttribution | null | undefined, t: TranslateNS<'settings.account'>): string {
+  if (attribution === undefined) return t('loading')
+  if (attribution === null) return ''
+  return [attribution.employeeId, attribution.department]
+    .filter((value): value is string => value !== null && value !== '')
+    .join(' · ')
+}
 /** @param props - localized actions, account subscription, and the shared Platform page channel. @returns account settings UI. */
 export function AccountSection({ t, useAccount, useTheme, start, cancel, openPlatformPage }: AccountSectionProps) {
-  const { view: state, details, failed: streamFailed } = useAccount(value => value)
+  const { view: state, details, attribution, failed: streamFailed } = useAccount(value => value)
   const colorScheme = useTheme(snapshot => snapshot.active.colorScheme)
   // The shared host owns the native view; this page holds only its own request,
   // and only while it is the latest owner.
@@ -135,7 +173,11 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
   const status = failed || streamFailed || attempt?.phase === 'failed' ? t('failed')
     : attempt?.phase === 'expired' ? t('expired')
       : active ? t(attempt.phase === 'initializing' ? 'initializing' : attempt.phase === 'waiting-browser' ? 'waiting' : 'completing')
-        : signedIn ? profile?.contact ?? t(details?.profile === undefined ? 'loading' : 'profileUnavailable') : t('signInDescription')
+        // The account service this deployment signs in with reports no contact
+        // detail, so the line carries what the staff directory knows instead of
+        // a field that is null by construction. A directory that lists nobody
+        // by this name leaves the line empty rather than reporting a failure.
+        : signedIn ? directoryLine(attribution, t) : t('signInDescription')
   if (!signedIn && !active) return (
     <section className={css.signedOut} aria-label={t('nav')}>
       <div className={css.signedOutContent}>
@@ -188,15 +230,6 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
           </div>
           <div className={css.divider} />
         </>}
-        <div className={css.row}>
-          <span className={css.secondary}>{t('more')}</span>
-          <div className={css.links}>
-            {platformLink(t('usage'), css.linkButton)}
-            <a className={`${css.linkButton} ${css.primary}`} href={state?.links.topUpUrl} aria-disabled={state === undefined}
-              target="_blank" rel="noreferrer"
-              onClick={(event) => { if (openPlatformPage !== undefined && signedIn) { event.preventDefault(); showPage(openPlatformPage, 'top-up') } }}>{t('topUp')}</a>
-          </div>
-        </div>
       </div>
     </section>
   )

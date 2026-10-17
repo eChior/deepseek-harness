@@ -214,13 +214,6 @@ function UploadsPanel(props: UploadsPanelProps) {
     <div className={css.panel}>
       <h3 className={css.heading}>{t('uploadsTitle')}</h3>
       <p className={css.hint}>{t('uploadsHint')}</p>
-      {roster !== null && (
-        <p className={css.hint}>
-          {roster.enabled
-            ? t('uploadsRosterOn', { people: roster.people, departments: roster.departments })
-            : t('uploadsRosterOff')}
-        </p>
-      )}
       {roster !== null && roster.enabled && roster.account === null && (
         <p className={css.hint}>{t('uploadsRosterUnknown')}</p>
       )}

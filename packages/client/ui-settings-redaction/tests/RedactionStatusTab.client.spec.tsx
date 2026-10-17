@@ -144,7 +144,6 @@ describe('RedactionStatusTab', () => {
 
     await waitFor(() => { expect(screen.getByText('qc.yaml')).toBeTruthy() })
     expect(screen.getByText('质量管理部 · 毛子艺 · 3 个词条 · 1 条正则')).toBeTruthy()
-    expect(screen.getByText('已把公司人员与部门名称加入脱敏（227 人 · 16 个部门）')).toBeTruthy()
   })
 
   it('refuses a file over the ceiling without calling the Host', async () => {

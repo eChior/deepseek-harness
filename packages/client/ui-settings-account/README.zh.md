@@ -42,7 +42,7 @@ Chat 通过 `shell.overlay` 中的宿主把已绑定 Session 的实时欠费交�
 
 账号菜单的“意见反馈”入口在系统浏览器中打开飞书问卷。每次点击都按当时的上下文取值：profile ready 且带 id 时的账号 UID、以 harness_version 表示的构建版本、界面语言、屏幕物理分辨率，以及 device_info。所有上下文字段同时设置 hide_*=1，配置的表单 URL 中这些字段的 stale prefill 参数先被清除，uid、device_info 与 harness_version 的隐藏参数不依赖配置 URL 的取值。不传 token 或脱敏联系方式；未登录、profile 仍在加载或读取失败时都不填写 prefill_uid。Desktop 桥接没有 deviceInfo 读取器时，打开的表单以 navigator.userAgent 作为 device_info。Desktop 端暴露可选的 dshDesktop.deviceInfo 读取器，其字段格式由 [Desktop README](../../../apps/desktop/README.zh.md) 负责；该读取器的结果取代 user-agent，读取失败时仍打开表单、仅 device_info 留空，而 device_info 描述的是上报的环境而非硬件型号。可在 ui-settings-account 插件配置 contactFormUrl，切换到另一个 HTTPS 问卷；问卷支持 Harness 来源选项前，contactSource 默认为空。
 
-账号资料与余额卡片共用[设置卡片材质与圆角](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。用量与充值链接与标准 Button 尺寸一致；授权操作使用公共 Button。
+账号资料与余额卡片共用[设置卡片材质与圆角](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)；授权操作使用公共 Button。
 
 侧边栏账号菜单使用公共 Menu 的表面和背景模糊。已登录菜单沿用公共菜单项排版；未登录菜单使用自己的较宽菜单项。两种菜单的问卷入口均为“意见反馈”。设置菜单项显示外壳传入的有效组合键。关闭设置后，焦点回到侧栏账号入口。
 
@@ -77,7 +77,7 @@ Desktop preload 标记在账号凭证已存储后启用引导。进度属于本�
 
 账户状态流的终止错误会显示在登录对话框或账户设置中。插件卸载后不再报告延迟到达的错误。
 
-余额卡片分行展示充值余额与赠金余额。登录态下，赠金行在加载中、余额读取失败以及存在正额赠金时显示；读取成功但没有正额赠金时不显示该行。余额或赠金读取失败时，沿用既有的不可用文案并改为指向 Platform 的链接，目标与行为同“查询用量”一致：Desktop 打开内嵌页面，其它环境新开标签页；加载中仍为纯文本。不同币种分别显示；日期只在服务端自己的消息中出现。
+余额卡片分行展示充值余额与赠金余额。登录态下，赠金行在加载中、余额读取失败以及存在正额赠金时显示；读取成功但没有正额赠金时不显示该行。余额或赠金读取失败时，沿用既有的不可用文案并改为指向 Platform 的链接：Desktop 打开内嵌页面，其它环境新开标签页；加载中仍为纯文本。不同币种分别显示；日期只在服务端自己的消息中出现。
 
 
 登录成功时，若其他提供方均未配置 API key，则将 `deepseek-account` 的第一个可用模型设为默认值，即使此前保存过默认选择。其他提供方只要配置了 key，就保留原默认值，即使其没有可用模型。会话内的显式选择保持不变。

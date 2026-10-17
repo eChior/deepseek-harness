@@ -34,6 +34,8 @@ export const remoteDefaultResponses: RemoteTable = {
     'credentials/describe': ok({}),
     // ui-permission-presets `PermissionCatalogDirectory` on its first read for a connection generation.
     'permissionPresets/catalog': ok({ options: [] }),
+    // ui-settings-account reads the staff directory to attribute the account card.
+    'redaction/roster': ok({ ok: true, value: null }),
     // ui-settings-account refreshes details after a stored-grant snapshot.
     'account/getProfile': ok(null),
     'account/getBalance': ok(null),

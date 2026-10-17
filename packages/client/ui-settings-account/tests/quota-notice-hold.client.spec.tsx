@@ -119,7 +119,7 @@ async function bench() {
   runtime.ctx.uiSession.provide = (next) => { descriptor ??= next; return provide(next) }
   await runtime.mount({ inject: [...injectChat], apply: applyChat })
   if (descriptor === undefined) throw new Error('ui-chat did not provide its standard source')
-  const accountSnapshot = createSnapshotStore<AccountSnapshot>({ view: storedView, details: undefined, failed: false })
+  const accountSnapshot = createSnapshotStore<AccountSnapshot>({ view: storedView, details: { balance: { status: 'failed' } }, failed: false })
   const account = {
     getSnapshot: () => accountSnapshot.getSnapshot(),
     subscribe: (listener: () => void) => accountSnapshot.subscribe(listener),
@@ -189,11 +189,11 @@ async function fail(runtime: SlotTestRuntime, seq: number, code: string): Promis
 
 /** The account settings card's top-up link, which requests the shared page. */
 function settingsTopUp() {
-  return screen.getAllByRole('link', { name: en.topUp }).at(-1)!
+  return screen.getAllByRole('link', { name: en.balanceUnavailable }).at(-1)!
 }
 /** The account settings card's usage link, which requests the shared page. */
 function settingsUsage() {
-  return screen.getAllByRole('link', { name: en.usage }).at(-1)!
+  return screen.getAllByRole('link', { name: en.balanceUnavailable }).at(-1)!
 }
 
 describe('shared Platform page ownership', () => {
@@ -279,7 +279,9 @@ describe('shared Platform page ownership', () => {
 
   it('leaves an already-showing settings top-up page intact behind the deferred notice', async () => {
     const b = await bench()
-    await act(async () => { settingsTopUp().click() })
+    // The card no longer carries its own top-up link; this surface opens the
+    // top-up destination directly through the shared channel it owns.
+    await act(async () => { b.pages.open('top-up', () => {}) })
     expect(b.platform.open).toHaveBeenLastCalledWith('top-up', { x: 0, y: 0, width: 0, height: 0 })
 
     // The settings card remains mounted behind the shared overlay, and the
