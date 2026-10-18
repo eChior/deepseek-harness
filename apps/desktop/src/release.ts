@@ -11,6 +11,8 @@ export interface DesktopRelease {
   readonly hostProtocolVersion: typeof DESKTOP_HOST_PROTOCOL_VERSION
   readonly nodeVersion: string
   readonly pnpmVersion: string
+  /** Present in builds that stage the npm CLI for pnpm's lockfile-less git-package fallback. */
+  readonly npmVersion?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,5 +33,6 @@ export function parseDesktopRelease(value: unknown): DesktopRelease {
     hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
     nodeVersion: value.nodeVersion,
     pnpmVersion: value.pnpmVersion,
+    ...(typeof value.npmVersion === 'string' ? { npmVersion: value.npmVersion } : {}),
   }
 }

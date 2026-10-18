@@ -244,6 +244,7 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`lightningcss`](https://github.com/parcel-bundler/lightningcss) | MPL-2.0 |
 | [`mermaid`](https://github.com/mermaid-js/mermaid) | MIT |
 | [`micromark-util-types`](https://github.com/micromark/micromark/tree/main/packages/micromark-util-types) | MIT |
+| [`npm`](https://github.com/npm/cli) | Artistic-2.0 |
 | [`oxlint`](https://github.com/oxc-project/oxc) | MIT |
 | [`oxlint-tsgolint`](https://github.com/oxc-project/tsgolint) | MIT |
 | [`playwright`](https://github.com/microsoft/playwright) | Apache-2.0 |
@@ -261,7 +262,7 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`vitest`](https://github.com/vitest-dev/vitest) | MIT |
 | [`vue`](https://github.com/vuejs/core) | MIT |
 
-`eslint-plugin-sonarjs` (LGPL-3.0-only) and `lightningcss` (MPL-2.0) run only as development tooling; their code is not linked into or distributed with any DeepSeek Harness artifact.
+`eslint-plugin-sonarjs` (LGPL-3.0-only), `lightningcss` (MPL-2.0) and `npm` (Artistic-2.0) run only as development tooling; their code is not linked into or distributed with any DeepSeek Harness artifact.
 
 ## Python SDK dependencies (`python/`)
 

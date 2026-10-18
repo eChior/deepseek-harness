@@ -64,6 +64,7 @@ function desktopRelease(): DesktopRelease {
     hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
     nodeVersion: runtime.node,
     pnpmVersion: runtime.pnpm,
+    ...(typeof runtime.npm === 'string' ? { npmVersion: runtime.npm } : {}),
   })
 }
 

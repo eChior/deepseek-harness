@@ -2,7 +2,7 @@
 
 import { packagingStep } from './packaging-step.mjs'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -23,6 +23,28 @@ function preparePnpm(): string {
   if (typeof manifest.version !== 'string') throw new Error('desktop runtime: pnpm manifest has no version')
   const packageDir = dirname(manifestPath)
   const destination = join(RUNTIME_ROOT, 'pnpm')
+  rmSync(destination, { recursive: true, force: true })
+  cpSync(packageDir, destination, { recursive: true })
+  return manifest.version
+}
+
+/**
+ * Copy the npm CLI beside the pnpm CLI.
+ *
+ * pnpm falls back to `npm install` when it prepares a git-hosted package without a pnpm
+ * lockfile (`@pnpm/prepare-package` picks the package manager from the lockfiles it finds and
+ * defaults to npm), so a plugin without a lockfile would otherwise fail with `'npm' is not
+ * recognized`. npm ships with full Node.js installations but not inside the packaged runtime,
+ * so the workspace copy — resolved through the pnpm virtual store — is staged here.
+ */
+function prepareNpm(): string {
+  const require = createRequire(import.meta.url)
+  // The npm manifest does not export ./bin, so the entry is joined from the resolved package root.
+  const packageDir = dirname(require.resolve('npm/package.json'))
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as { version?: unknown }
+  if (typeof manifest.version !== 'string') throw new Error('desktop runtime: npm manifest has no version')
+  if (!existsSync(join(packageDir, 'bin', 'npm-cli.js'))) throw new Error('desktop runtime: npm package has no bin/npm-cli.js')
+  const destination = join(RUNTIME_ROOT, 'npm')
   rmSync(destination, { recursive: true, force: true })
   cpSync(packageDir, destination, { recursive: true })
   return manifest.version
@@ -83,12 +105,14 @@ async function main(): Promise<void> {
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
   const pnpmVersion = preparePnpm()
+  const npmVersion = prepareNpm()
   cpSync(join(import.meta.dirname, 'node-bin'), join(RUNTIME_ROOT, 'bin'), { recursive: true })
   chmodSync(join(RUNTIME_ROOT, 'bin', 'node'), 0o755)
   writeFileSync(join(RUNTIME_ROOT, 'versions.json'), `${JSON.stringify({
     schemaVersion: 1,
     node: nodeVersion,
     pnpm: pnpmVersion,
+    npm: npmVersion,
   }, undefined, 2)}\n`)
   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:cli',
     async () => prepareDesktopCli(join(RUNTIME_ROOT, 'cli'), platform))

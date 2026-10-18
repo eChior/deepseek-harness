@@ -214,23 +214,20 @@ export function AccountSection({ t, useAccount, useTheme, start, cancel, openPla
         <Button variant="outline" disabled={busy || attempt.phase === 'committing'}
           onClick={() => { void run(() => cancel(attempt.id)) }}>{t('cancel')}</Button>
       </div>}
-      <div className={css.balanceCard}>
-        {signedIn && showBonusRow && <>
-          <div className={css.row}>
-            <span>{t('bonusBalance')}</span>
-            <span className={css.bonusValue}>
-              {bonusWallets.length > 0
-                ? <span className={css.amount}>{bonusWallets.map(wallet => <span key={wallet.currency}>
-                  {formatBalance(wallet.balance, wallet.currency === 'CNY' ? '¥' : '$')}
-                </span>)}</span>
-                : details?.balance === undefined
-                  ? <span className={css.unavailable}>{t('loading')}</span>
-                  : platformLink(t('balanceUnavailable'), css.unavailableLink)}
-            </span>
-          </div>
-          <div className={css.divider} />
-        </>}
-      </div>
+      {signedIn && showBonusRow && <div className={css.balanceCard}>
+        <div className={css.row}>
+          <span>{t('bonusBalance')}</span>
+          <span className={css.bonusValue}>
+            {bonusWallets.length > 0
+              ? <span className={css.amount}>{bonusWallets.map(wallet => <span key={wallet.currency}>
+                {formatBalance(wallet.balance, wallet.currency === 'CNY' ? '¥' : '$')}
+              </span>)}</span>
+              : details?.balance === undefined
+                ? <span className={css.unavailable}>{t('loading')}</span>
+                : platformLink(t('balanceUnavailable'), css.unavailableLink)}
+          </span>
+        </div>
+      </div>}
     </section>
   )
 }

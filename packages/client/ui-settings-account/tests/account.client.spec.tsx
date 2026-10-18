@@ -15,7 +15,6 @@ import type { AccountMenuProps } from '../src/client/AccountMenu.tsx'
 import type {} from '../src/client/index.ts'
 import { refreshAfterReturn } from '../src/client/account-refresh.ts'
 import { en, zh, type AccountKey } from '../src/client/locales.ts'
-import css from '../src/client/AccountSection.module.css'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
@@ -451,7 +450,6 @@ it.each([en, zh])('renders positive bonus wallets', async (copy) => {
       bonusWallets: [{ currency: 'CNY', balance: '5.00' }, { currency: 'USD', balance: '0.000001' }] },
   }, undefined, { employeeId: 'A0123', department: '信息部' })
   expect(screen.getByText(copy.bonusBalance).parentElement!.textContent).toBe(`${copy.bonusBalance}¥5.00<$0.01`)
-  expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(1)
   await expect(`${screen.getByRole('region').textContent}\n`)
     .toMatchFileSnapshot(`./expected/bonus-${copy === en ? 'en' : 'zh'}.txt`)
 })
@@ -462,8 +460,6 @@ it.each([[], [{ currency: 'CNY' as const, balance: '0.00' }, { currency: 'USD' a
       balance: { status: 'ready', value: [{ currency: 'CNY', balance: '0' }], bonusWallets },
     }, undefined, { employeeId: 'A0123', department: '信息部' })
     expect(screen.queryByText(en.bonusBalance)).toBeNull()
-    // The divider belongs to the bonus row, so it goes with it.
-    expect(screen.getByRole('region').querySelectorAll(`.${css.divider}`)).toHaveLength(0)
     expect(screen.queryByText('¥-1.00')).toBeNull()
   },
 )
