@@ -204,12 +204,17 @@ export class SkillRepository extends Service {
    */
   private async seed(staging: string, detail: string): Promise<boolean> {
     const bundled = this.config.bundledDirectory
-    if (await exists(this.current.skillsDirectory)) return false
+    /* A mirror counts only when it still holds a readable skill: an empty or
+     * half-written directory (a rename that was cut off, a wiped skills folder)
+     * would otherwise block the bundled floor and leave the machine with no
+     * skills at all. */
+    if ((await listSkillDirectories(this.current.skillsDirectory)).length > 0) return false
     try {
       await rm(staging, { recursive: true, force: true })
       await mkdir(join(staging, this.config.skillsDirectory), { recursive: true })
       await cp(bundled, join(staging, this.config.skillsDirectory), { recursive: true })
       await mkdir(dirname(this.current.directory), { recursive: true })
+      await rm(this.current.directory, { recursive: true, force: true })
       await rename(staging, this.current.directory)
       const published = await this.publish(this.current.skillsDirectory)
       this.current = { ...this.current, state: 'ready', revision: null, source: 'bundled', detail }

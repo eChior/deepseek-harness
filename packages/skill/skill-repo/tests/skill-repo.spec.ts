@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createServer, type Server } from 'node:http'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
@@ -319,6 +319,43 @@ describe('SkillRepository', () => {
     const status = await ctx.skillRepo.sync()
     expect(status.state).toBe('failed')
     expect(await readFile(join(directory, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('kept\n')
+    await fiber.dispose()
+  })
+
+  it('seeds the bundled floor over an empty mirror when the remote is unreachable', async () => {
+    const home = await tempDir('skill-home')
+    const directory = join(home, 'skills-repo')
+    const published = join(home, 'skills')
+    await mkdir(join(directory, 'skills'), { recursive: true })
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, {
+      url: 'http://127.0.0.1:1/none.git',
+      directory,
+      publishDirectory: published,
+    })
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('ready')
+    expect(status.source).toBe('bundled')
+    expect(await readFile(join(published, 'tsd-reader', 'SKILL.md'), 'utf8')).toContain('tsd-reader')
+    await fiber.dispose()
+  })
+
+  it('seeds the bundled floor over a mirror with no readable skill', async () => {
+    const home = await tempDir('skill-home')
+    const directory = join(home, 'skills-repo')
+    const published = join(home, 'skills')
+    await mkdir(join(directory, 'skills', 'leftover'), { recursive: true })
+    await writeFile(join(directory, 'skills', 'leftover', 'notes.txt'), 'cut off\n', 'utf8')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, {
+      url: 'http://127.0.0.1:1/none.git',
+      directory,
+      publishDirectory: published,
+    })
+    const status = await ctx.skillRepo.sync()
+    expect(status.state).toBe('ready')
+    expect(status.source).toBe('bundled')
+    expect(await readFile(join(published, 'improvement-proposal', 'SKILL.md'), 'utf8')).toContain('improvement-proposal')
     await fiber.dispose()
   })
 

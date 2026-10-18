@@ -59,7 +59,7 @@ The sync reads the archive over HTTP and never runs a git binary, so a client ma
 
 The provider never throws. An unreachable host, a refused archive, or a timeout is logged as a warning and written to `status.detail`; `skill-filesystem` keeps scanning whatever the mirror already contains.
 
-When the remote never answers and the machine has no mirror at all — a fresh install that has never seen the intranet — `seed()` copies the skills this package carries out of `bundledDirectory` through the same staging step, publishes them, and reports `source: 'bundled'` with a null revision. A machine that synced before keeps the remote copy instead, because that one is newer than the one this build shipped.
+When the remote never answers and the machine has no readable mirror — a fresh install that has never seen the intranet, or a mirror left empty or half-written by an interrupted sync — `seed()` copies the skills this package carries out of `bundledDirectory` through the same staging step, publishes them, and reports `source: 'bundled'` with a null revision. A machine whose mirror still holds a readable skill keeps the remote copy instead, because that one is newer than the one this build shipped.
 
 ## Model Experience
 
