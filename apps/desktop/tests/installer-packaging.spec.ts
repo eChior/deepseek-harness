@@ -89,6 +89,24 @@ describe('installer preparation preserves application dependencies', () => {
     expect(config.deb.depends).toContain('libayatana-appindicator3-1 | libappindicator3-1')
   })
 
+  it('carries release notes into the update metadata only when the build provides them', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const base = {
+      DSH_DESKTOP_APP_ID: 'com.example.installer',
+      DSH_DESKTOP_AUTO_UPDATE_ENV: 'production',
+      DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
+      DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN: 'https://policy.example.com',
+      DSH_DESKTOP_TARGET_PLATFORM: 'win32',
+      DSH_DESKTOP_TARGET_ARCH: 'x64',
+      DSH_DESKTOP_UNSIGNED: '1',
+      DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
+    }
+    const silent = createElectronBuilderConfig(base, 'win32', 'x64')
+    expect(silent.releaseInfo).toBeUndefined()
+    const annotated = createElectronBuilderConfig({ ...base, DSH_DESKTOP_RELEASE_NOTES: '新增更新日志展示。' }, 'win32', 'x64')
+    expect(annotated.releaseInfo).toEqual({ releaseNotes: '新增更新日志展示。' })
+  })
+
   it('packages every preload entry point the shell loads', async () => {
     const { readdirSync, readFileSync } = await import('node:fs')
     const sourceDirectory = new URL('../src/', import.meta.url)

@@ -385,15 +385,18 @@ export function formatDesktopMessage(
  * @param messages - Selected Desktop dictionary.
  * @param version - Prepared update version, including any prerelease suffix.
  * @param platform - Operating system presenting the confirmation.
+ * @param releaseNotes - Notes from the update feed, appended below the guidance when present.
  * @returns The versioned title and installation guidance.
  */
 export function desktopUpdateReadyConfirmation(
   messages: DesktopMessages,
   version: string,
   platform: string,
+  releaseNotes?: string,
 ): { message: string; detail: string } {
+  const detail = platform === 'win32' ? messages.updateDownloadedDetailWindows : messages.updateDownloadedDetail
   return {
     message: formatDesktopMessage(messages.updateDownloadedTitle, { version }),
-    detail: platform === 'win32' ? messages.updateDownloadedDetailWindows : messages.updateDownloadedDetail,
+    detail: releaseNotes === undefined ? detail : `${detail}\n\n${releaseNotes}`,
   }
 }

@@ -56,6 +56,7 @@ export interface DesktopElectronBuilderConfig {
     readonly depends: readonly string[]
     readonly afterInstall: string
   }
+  readonly releaseInfo: { readonly releaseNotes: string } | undefined
   readonly beforeBuild: () => Promise<boolean>
   readonly beforePack: (context: BeforePackContext) => Promise<void>
   readonly afterPack: (context: AfterPackContext) => Promise<void>

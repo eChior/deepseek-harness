@@ -33,7 +33,10 @@ export interface DesktopUpdaterAdapter extends Pick<EventEmitter, 'on' | 'off' |
   /** Points the updater at this distribution's release feed. */
   setFeedURL(options: Parameters<AppUpdater['setFeedURL']>[0]): void
   /** Resolves the feed's newest release, or `null` when the updater reports none. */
-  checkForUpdates(): Promise<{ isUpdateAvailable: boolean; updateInfo: { version: string } } | null>
+  checkForUpdates(): Promise<{
+    isUpdateAvailable: boolean
+    updateInfo: { version: string; releaseNotes?: string | ReadonlyArray<{ version: string; note: string | null }> | null }
+  } | null>
   /** Downloads the candidate release and resolves with the verified artefact paths. */
   downloadUpdate(): Promise<readonly string[]>
   /** Quits the application and starts the downloaded installer. */
@@ -47,6 +50,7 @@ const packagedUpdater: DesktopUpdaterAdapter = autoUpdater
 export class DesktopUpdateCoordinator {
   private current: DesktopUpdateState = { phase: 'idle' }
   private candidate: string | undefined
+  private notes: string | undefined
   private downloaded = false
   private disposed = false
   private checkOperation: Promise<DesktopUpdateState> | undefined
@@ -139,12 +143,12 @@ export class DesktopUpdateCoordinator {
       this.assertLive()
       if (this.candidate === undefined) throw new Error('desktop update: no checked update is available')
       if (version !== this.candidate) throw new Error('desktop update: download confirmation is stale')
-      this.setState({ phase: 'downloading', version, percent: 0 })
+      this.setState({ phase: 'downloading', ...this.target(), percent: 0 })
       try {
         await this.updater.downloadUpdate()
         if (!this.downloaded) throw new Error('desktop update: platform preparation did not report readiness')
         this.downloadResult?.(true)
-        return this.setState({ phase: 'ready', version })
+        return this.setState({ phase: 'ready', ...this.target() })
       } catch (error) {
         this.downloaded = false
         this.downloadResult?.(false, error instanceof DesktopUpdatePreparationError ? error.kind : 'download_failed')
@@ -163,9 +167,9 @@ export class DesktopUpdateCoordinator {
     this.assertLive()
     if (!this.downloaded || this.downloadOperation !== undefined || version !== this.candidate) throw new Error('desktop update: confirmed target is not ready')
     this.installOperation ??= Promise.resolve().then(async () => {
-      this.setState({ phase: 'installing', version })
+      this.setState({ phase: 'installing', ...this.target() })
       try {
-        if (!await this.beforeRestart()) return this.setState({ phase: 'ready', version })
+        if (!await this.beforeRestart()) return this.setState({ phase: 'ready', ...this.target() })
         this.assertLive()
         // A silent install leaves no window on screen between this process exiting and the
         // app reopening, so the user cannot tell whether the install is running or stuck.
@@ -212,8 +216,11 @@ export class DesktopUpdateCoordinator {
       } : {}) }
   }
 
-  private target(): { version?: string } {
-    return this.candidate === undefined ? {} : { version: this.candidate }
+  private target(): { version?: string; releaseNotes?: string } {
+    return this.candidate === undefined ? {} : {
+      version: this.candidate,
+      ...(this.notes === undefined ? {} : { releaseNotes: this.notes }),
+    }
   }
 
   private async doCheck(): Promise<DesktopUpdateState> {
@@ -228,7 +235,11 @@ export class DesktopUpdateCoordinator {
       const version = result.updateInfo.version
       if (valid(version) === null) throw new Error('desktop update: feed version is invalid')
       this.candidate = result.isUpdateAvailable && gt(version, this.currentVersion()) ? version : undefined
-      return this.setState(this.candidate === undefined ? { phase: 'idle' } : { phase: 'available', version })
+      this.notes = typeof result.updateInfo.releaseNotes === 'string' && result.updateInfo.releaseNotes.trim() !== ''
+        ? result.updateInfo.releaseNotes : undefined
+      return this.setState(this.candidate === undefined
+        ? { phase: 'idle' }
+        : { phase: 'available', ...this.target() })
     } catch (error) {
       return this.failure(error, 'check')
     }

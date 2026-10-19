@@ -16,6 +16,7 @@ export type DesktopUpdateFailureKind =
 export interface DesktopUpdatePresentation {
   readonly phase: 'idle' | 'checking' | 'available' | 'downloading' | 'verifying' | 'installing' | 'ready' | 'error'
   readonly version?: string
+  readonly releaseNotes?: string
   readonly percent?: number
   readonly failure?: DesktopUpdateFailureKind
 }

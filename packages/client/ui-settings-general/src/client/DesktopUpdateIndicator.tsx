@@ -43,9 +43,11 @@ function updateCopy(state: DesktopUpdatePresentation, t: SettingsTranslate): { l
   if (state.phase === 'downloading' && state.version !== undefined) {
     return { label, detail: t('desktop.update.downloadDetail', { percent: state.percent ?? 0, version: state.version }) }
   }
-  return { label, detail: state.version === undefined
+  const detail = state.version === undefined
     ? label
-    : t('desktop.update.versionDetail', { label, version: state.version }) }
+    : t('desktop.update.versionDetail', { label, version: state.version })
+  // The feed's release notes ride along from the available phase onward.
+  return { label, detail: state.releaseNotes === undefined ? detail : `${detail}\n${state.releaseNotes}` }
 }
 
 /**

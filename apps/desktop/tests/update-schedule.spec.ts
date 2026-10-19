@@ -23,7 +23,10 @@ function fixture(jitter = 0, random = () => 0.5) {
     events.emit('update-downloaded', { version: '1.1.0-nightly.1' })
     return ['verified']
   })
-  const updater = Object.assign(events, { checkForUpdates, downloadUpdate, quitAndInstall: vi.fn() }) as unknown as AppUpdater
+  const updater = Object.assign(events, {
+    checkForUpdates: checkForUpdates as unknown as () => Promise<{ isUpdateAvailable: boolean; updateInfo: { version: string } }>,
+    downloadUpdate, quitAndInstall: vi.fn(),
+  }) as unknown as AppUpdater
   const states: DesktopUpdateState[] = []
   const coordinator = new DesktopUpdateCoordinator((state) => { states.push(state); return state }, async () => true,
     updater, () => true, () => '1.0.0')

@@ -125,6 +125,9 @@ export function createElectronBuilderConfig(
     productName: 'DeepSeek Harness',
     // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.
     artifactName: `deepseek-harness-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
+    // Lands in the generated update metadata, so the desktop update confirmation can show the
+    // notes; a build without the variable keeps today's notes-free dialogs.
+    ...env.DSH_DESKTOP_RELEASE_NOTES ? { releaseInfo: { releaseNotes: env.DSH_DESKTOP_RELEASE_NOTES } } : {},
     directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
     asar: true,
     electronDist: buildPaths.electron,

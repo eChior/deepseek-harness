@@ -49,9 +49,9 @@ afterEach(() => { for (const item of coordinators.splice(0)) item.dispose() })
 
 function fixture() {
   const events = new EventEmitter()
-  const checkForUpdates = vi.fn(async () => ({
+  const checkForUpdates = vi.fn<DesktopUpdaterAdapter['checkForUpdates']>(async () => ({
     isUpdateAvailable: true,
-    updateInfo: { version: '1.1.0-rc.2' },
+    updateInfo: { version: '1.1.0-rc.2', releaseNotes: null },
   }))
   const downloadUpdate = vi.fn(async () => {
     events.emit('download-progress', { percent: 58 })
@@ -139,7 +139,7 @@ describe('desktop update coordinator', () => {
 
   it('consumes late updater errors until an in-flight check settles after disposal', async () => {
     const f = fixture()
-    const checked = Promise.withResolvers<{ isUpdateAvailable: boolean; updateInfo: { version: string } }>()
+    const checked = Promise.withResolvers<Awaited<ReturnType<DesktopUpdaterAdapter['checkForUpdates']>>>()
     f.checkForUpdates.mockImplementation(() => checked.promise)
     const pending = f.coordinator.check()
     await Promise.resolve()
@@ -174,7 +174,7 @@ describe('desktop update coordinator', () => {
 
   it('joins checks and downloads without retargeting a prepared release', async () => {
     const f = fixture()
-    const checked = Promise.withResolvers<{ isUpdateAvailable: boolean; updateInfo: { version: string } }>()
+    const checked = Promise.withResolvers<Awaited<ReturnType<DesktopUpdaterAdapter['checkForUpdates']>>>()
     f.checkForUpdates.mockImplementation(() => checked.promise)
     const checking = f.coordinator.check()
     const manual = f.coordinator.check(true)
@@ -189,8 +189,19 @@ describe('desktop update coordinator', () => {
     await expect(f.coordinator.install('1.2.0')).rejects.toThrow(/not ready/u)
   })
 
-  it('keeps automatic failures silent and exposes a manual caller joining the same check', async () => {
+  it('carries the feed release notes from check through download readiness', async () => {
     const f = fixture()
+    f.checkForUpdates.mockResolvedValue({
+      isUpdateAvailable: true,
+      updateInfo: { version: '1.1.0-rc.2', releaseNotes: '新增更新日志展示。' },
+    })
+    await f.coordinator.check()
+    expect(f.coordinator.state).toMatchObject({ phase: 'available', version: '1.1.0-rc.2', releaseNotes: '新增更新日志展示。' })
+    await f.coordinator.download('1.1.0-rc.2')
+    expect(f.coordinator.state).toEqual({ phase: 'ready', version: '1.1.0-rc.2', releaseNotes: '新增更新日志展示。' })
+  })
+
+  it('keeps automatic failures silent and exposes a manual caller joining the same check', async () => {    const f = fixture()
     f.checkForUpdates.mockRejectedValue(new Error('offline'))
     expect(await f.coordinator.check()).toMatchObject({ phase: 'error', failedOperation: 'check' })
     expect(f.states).toEqual([])
@@ -235,7 +246,7 @@ describe('desktop update coordinator', () => {
 
   it('does not publish late check completion after disposal', async () => {
     const f = fixture()
-    const checked = Promise.withResolvers<{ isUpdateAvailable: boolean; updateInfo: { version: string } }>()
+    const checked = Promise.withResolvers<Awaited<ReturnType<DesktopUpdaterAdapter['checkForUpdates']>>>()
     f.checkForUpdates.mockImplementation(() => checked.promise)
     const pending = f.coordinator.check()
     f.coordinator.dispose()

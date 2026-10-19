@@ -153,6 +153,21 @@ it('shows fallback progress and error details when the shell omits optional fiel
   } finally { f.view.unmount(); f.status.resolve({ phase: 'idle' }) }
 })
 
+it('appends the feed release notes to the available-phase detail', async () => {
+  const f = fixture()
+  try {
+    await f.emit({ phase: 'available', version: '1.0.1', releaseNotes: '修复了麒麟上的插件安装。' })
+    const button = screen.getByRole('button', { name: '新版本' })
+    fireEvent.focus(button)
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip.textContent).toContain('1.0.1')
+    expect(tooltip.textContent).toContain('修复了麒麟上的插件安装。')
+    f.view.rerender(<f.Indicator dictionary={en} />)
+    fireEvent.focus(screen.getByRole('button', { name: 'Update' }))
+    expect((await screen.findByRole('tooltip')).textContent).toContain('修复了麒麟上的插件安装。')
+  } finally { f.view.unmount(); f.status.resolve({ phase: 'idle' }) }
+})
+
 it.each(['checking', 'verifying', 'installing'] as const)('shows only the version during %s in both locales', async (phase) => {
   const f = fixture()
   try {

@@ -45,6 +45,7 @@ export function presentDesktopUpdate(state: DesktopUpdateState): DesktopUpdatePr
   return {
     phase: state.phase,
     ...(state.version === undefined ? {} : { version: state.version }),
+    ...(state.releaseNotes === undefined ? {} : { releaseNotes: state.releaseNotes }),
     ...(state.percent === undefined ? {} : { percent: Math.floor(state.percent) }),
     ...(state.phase === 'error' ? { failure: desktopUpdateFailureKind(state) } : {}),
   }

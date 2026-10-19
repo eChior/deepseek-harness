@@ -39,6 +39,8 @@ export type DesktopUpdatePreparationFailureKind = 'stop-failed' | 'tasks-changed
 export interface DesktopUpdateState {
   readonly phase: 'idle' | 'checking' | 'available' | 'downloading' | 'verifying' | 'installing' | 'ready' | 'error'
   readonly version?: string
+  /** Release notes from the update feed; shown with the download confirmation and the status card. */
+  readonly releaseNotes?: string
   readonly message?: string
   /** Main-owned diagnostics without subprocess output or credentials; hidden until expanded. */
   readonly technicalDetails?: string
@@ -64,6 +66,7 @@ export type DesktopUpdateFailureKind =
 export interface DesktopUpdatePresentation {
   readonly phase: DesktopUpdateState['phase']
   readonly version?: string
+  readonly releaseNotes?: string
   readonly percent?: number
   readonly failure?: DesktopUpdateFailureKind
 }
