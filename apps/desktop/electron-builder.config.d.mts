@@ -52,6 +52,10 @@ export interface DesktopElectronBuilderConfig {
     readonly allowToChangeInstallationDirectory: false
     readonly installerLanguages: readonly ['en_US', 'zh_CN']
   }
+  readonly deb: {
+    readonly depends: readonly string[]
+    readonly afterInstall: string
+  }
   readonly beforeBuild: () => Promise<boolean>
   readonly beforePack: (context: BeforePackContext) => Promise<void>
   readonly afterPack: (context: AfterPackContext) => Promise<void>

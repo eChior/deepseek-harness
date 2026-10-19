@@ -73,8 +73,20 @@ describe('installer preparation preserves application dependencies', () => {
       DSH_DESKTOP_TARGET_PLATFORM: 'win32',
       DSH_DESKTOP_TARGET_ARCH: 'x64',
       DSH_DESKTOP_UNSIGNED: '1',
+      DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
     }, 'win32', 'x64')
     expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-unsigned.${ext}')
+  })
+
+  it('declares the deb dependencies the plugin manager needs on Linux', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const config = createElectronBuilderConfig({
+      DSH_DESKTOP_APP_ID: 'com.example.installer',
+      DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
+    }, 'linux', 'arm64')
+    // Git resolves `github:` plugin dependencies: desktop Kylin ships without it, so apt must bring it in.
+    expect(config.deb.depends).toContain('git')
+    expect(config.deb.depends).toContain('libayatana-appindicator3-1 | libappindicator3-1')
   })
 
   it('packages every preload entry point the shell loads', async () => {

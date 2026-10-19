@@ -279,8 +279,10 @@ export function createElectronBuilderConfig(
       // The stock list stops at the GUI toolkits. Chromium publishes its Linux tray icon as a
       // StatusNotifierItem through libappindicator, so a machine without that library shows no
       // tray icon at all even though the process creates one. Kylin and UOS ship either the
-      // ayatana fork or the original, hence the alternatives syntax.
-      depends: [...DEFAULT_DEB_DEPENDS, 'libayatana-appindicator3-1 | libappindicator3-1'],
+      // ayatana fork or the original, hence the alternatives syntax. Git backs the plugin
+      // manager's GitHub installs: pnpm resolves `github:` dependencies through the system git,
+      // and desktop Kylin ships without it, so declare it here and let apt bring it in.
+      depends: [...DEFAULT_DEB_DEPENDS, 'libayatana-appindicator3-1 | libappindicator3-1', 'git'],
       // Domestic Linux (Kylin/UOS) needs the sandbox helper marked SUID and the hicolor cache
       // refreshed before the menu entry shows its icon; the stock template does neither.
       afterInstall: fileURLToPath(new URL('./linux-after-install.sh', import.meta.url)),
