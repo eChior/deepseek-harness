@@ -322,6 +322,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     useProjection: () => undefined,
     useConversation: selector => selector(panelConversation),
     useChat: selector => selector(panelChat),
+    useUserPlaceholders: selector => selector(null),
     useTrajectory: selector => selector(panelTrajectory),
     useInput: () => { throw new Error('unused') },
     inputActions: {

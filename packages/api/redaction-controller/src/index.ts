@@ -17,7 +17,7 @@ import type {} from '@deepseek-ai/dsh-deepseek-account'
 import type {} from '@deepseek-ai/dsh-redaction'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import z from 'zod'
-import type { RedactionExampleView, RedactionRosterView, RedactionStatusView, RedactionUploadView } from './types.ts'
+import type { RedactionEntryView, RedactionExampleView, RedactionRosterView, RedactionStatusView, RedactionUploadView } from './types.ts'
 
 /** One upload as the page submits it. */
 const UploadRequest = z.object({
@@ -81,7 +81,24 @@ export class RedactionController extends TypertRemoteService {
       pending: view.pending,
       localFiles: view.localFiles,
       roster: view.roster,
+      imageTool: view.imageTool,
     })
+  }
+
+  /**
+   * The placeholder table this machine is holding, for the browser that renders
+   * its own sessions. Each entry is one value the model must not see but the
+   * signed-in user may; the client swaps these back into the text it renders
+   * and never stores or transmits them further.
+   * @returns Every recorded entry, in the order the values were first seen.
+   */
+  @Remote
+  entries(): Promise<readonly RedactionEntryView[]> {
+    return Promise.resolve(this.ctx.redaction.entries().map(entry => ({
+      placeholder: entry.placeholder,
+      category: entry.category,
+      original: entry.original,
+    })))
   }
 
   /**

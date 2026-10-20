@@ -879,6 +879,15 @@ async pendingRequests(): Promise<TermRequest[]>
 async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
 
 /**
+ * The placeholder table this process is holding, for a reader that renders
+ * session text to the user. The values are what the model must not see but
+ * the user may: they cross to the browser that renders this machine's own
+ * sessions and nowhere else.
+ * @returns Every recorded entry, in the order the values were first seen.
+ */
+entries(): readonly RedactionEntry[]
+
+/**
  * Turn the placeholders this session emitted back into the values they stand for.
  * @param text Text that may carry placeholders.
  * @returns The text with every placeholder this process issued restored.

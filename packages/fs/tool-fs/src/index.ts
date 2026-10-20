@@ -31,6 +31,12 @@ export interface Config {
   readMaxBytes?: number
   /** Files at or above this size stream instead of loading whole into memory. */
   readStreamMinSize?: number
+  /**
+   * Whether the model gets the `read_image` tool at all. Images the user attaches
+   * still reach the model through the OCR pipeline; this only removes the tool
+   * that would hand raw image pixels to the model. Off by default.
+   */
+  readImage?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -38,6 +44,7 @@ export const Config: z<Config> = z.object({
   readMaxLineLength: z.number().default(READ_MAX_LINE_LENGTH),
   readMaxBytes: z.number().default(READ_MAX_BYTES),
   readStreamMinSize: z.number().default(STREAM_MIN_SIZE),
+  readImage: z.boolean().default(false),
 })
 
 /** The shape after schemastery applied the defaults. */
@@ -67,9 +74,13 @@ export function apply(ctx: Context, config: Config): void {
   // read_image is composition-conditional: without a mounted attachment store
   // the deployment cannot durably commit image bytes, so the tool never
   // registers; the execute body keeps a defensive re-check for direct callers.
-  ctx.inject(['attachments'], (imageCtx) => {
-    applyReadImageTool(imageCtx)
-  })
+  // Deployments that redact before storage can also switch the tool off for
+  // every composition — the OCR pipeline keeps images readable as text.
+  if (resolved.readImage) {
+    ctx.inject(['attachments'], (imageCtx) => {
+      applyReadImageTool(imageCtx)
+    })
+  }
   // One escalation API shared by both mutating tools: advertisement gating,
   // per-call policy resolution, and denial-marker mapping, all keyed off whether
   // the mounted ctx.fs confines (ctx.fs.sandboxMode).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RedactionMap, type RedactionRule, findHits, redactText, resolveOverlaps } from '../src/index.ts'
+import { RedactionMap, codeShape, groupShape, type RedactionRule, findHits, redactText, resolveOverlaps } from '../src/index.ts'
 
 function pattern(category: string, label: string, source: string): RedactionRule {
   return { category, label, kind: 'pattern', source, regex: new RegExp(source, 'g') }
@@ -115,21 +115,62 @@ describe('redactText', () => {
 })
 
 describe('fixed codes', () => {
-  it('replaces every hit with the rule code and records the pairing', () => {
+  it('replaces every hit with the wrapped code and records the bare pairing', () => {
     const map = new RedactionMap()
     const rule = { ...term('product', '产品', '红霉素肠溶胶囊'), code: 'A' }
     const text = '红霉素肠溶胶囊与红霉素肠溶胶囊的差异'
     const result = redactText(text, [rule], map)
-    expect(result.text).toBe('A与A的差异')
-    expect(result.placeholders).toEqual(['A', 'A'])
+    // The code carries invisible separators, so the letter `A` in prose never
+    // collides with it.
+    expect(result.text).toBe(`${codeShape('A')}与${codeShape('A')}的差异`)
+    expect(result.placeholders).toEqual([codeShape('A'), codeShape('A')])
     const [entry] = map.entries()
     expect(entry).toEqual({ placeholder: 'A', category: 'product', original: '红霉素肠溶胶囊' })
     expect(map.restore(result.text)).toBe(text)
+  })
+
+  it('leaves a natural letter in the text alone during restore', () => {
+    const map = new RedactionMap()
+    const rule = { ...term('product', '产品', '红霉素肠溶胶囊'), code: 'A' }
+    const redacted = redactText('红霉素肠溶胶囊', [rule], map).text
+    expect(map.restore(`方案${redacted}优于B方案`)).toBe('方案红霉素肠溶胶囊优于B方案')
   })
 
   it('keeps numbered placeholders when the rule carries no code', () => {
     const map = new RedactionMap()
     const result = redactText('红霉素肠溶胶囊', [term('product', '产品', '红霉素肠溶胶囊')], map)
     expect(result.text).toBe('[产品-1]')
+  })
+})
+
+describe('alias groups', () => {
+  const ZY = [
+    { ...term('holder', '公司', '浙江华润三九众益制药有限公司'), code: '1.1', group: 'holder\u00001' },
+    { ...term('holder', '公司', '众益'), code: '1.8', group: 'holder\u00001' },
+  ]
+  const SF = [{ ...term('holder', '公司', '顺峰'), code: '2.4', group: 'holder\u00002' }]
+
+  it('gives one company one group number and one spelling per wording', () => {
+    const map = new RedactionMap()
+    const result = redactText('浙江华润三九众益制药有限公司由众益代持', ZY, map)
+    expect(result.text).toBe(`${codeShape(groupShape(1, 1))}由${codeShape(groupShape(1, 2))}代持`)
+    expect(result.placeholders).toEqual([codeShape(groupShape(1, 1)), codeShape(groupShape(1, 2))])
+  })
+
+  it('keeps the same spelling on the same numbers across calls', () => {
+    const map = new RedactionMap()
+    redactText('众益的通知', ZY, map)
+    // `众益` took 1-1 on its first sighting; the longer spelling takes the next
+    // free spelling number of the same group on its own first sighting.
+    const again = redactText('浙江华润三九众益制药有限公司与顺峰开会', [...ZY, ...SF], map)
+    expect(again.text).toBe(`${codeShape(groupShape(1, 2))}与${codeShape(groupShape(2, 1))}开会`)
+  })
+
+  it('restores every spelling back to its original wording', () => {
+    const map = new RedactionMap()
+    const text = '浙江华润三九众益制药有限公司审核，顺峰与百诺会签'
+    const rules = [...ZY, ...SF, { ...term('holder', '公司', '百诺'), code: '3.4', group: 'holder\u00003' }]
+    const redacted = redactText(text, rules, map).text
+    expect(map.restore(redacted)).toBe(text)
   })
 })

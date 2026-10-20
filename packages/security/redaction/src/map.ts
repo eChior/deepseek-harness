@@ -15,11 +15,45 @@ export interface RedactionEntry {
   readonly original: string
 }
 
+/**
+ * Invisible separator (U+2060 word joiner) wrapped around every fixed code that
+ * leaves this process. A code like `A` is an ordinary word; in running text the
+ * letter occurs naturally, so the bare code could be spliced back over text it
+ * never stood for. Wrapped, the code is a unique token nothing else collides
+ * with — and restore matches the exact wrapped shape, never the bare code.
+ */
+export const CODE_JOINER = '\u2060'
+
+/**
+ * The form a fixed code takes in redacted text: the code wrapped in invisible
+ * separators. Numbered placeholders (`[产品-3]`) are already unique by shape and
+ * pass through untouched.
+ * @param placeholder A bare fixed code (`A`, `ZY`) from the entry log.
+ * @returns The wrapped form to search for in redacted text.
+ */
+export function codeShape(placeholder: string): string {
+  return placeholder.startsWith('[') ? placeholder : `${CODE_JOINER}${placeholder}${CODE_JOINER}`
+}
+
+/**
+ * The visible form of an alias-group placeholder: `公司1-1` (group 1, spelling 1).
+ * The term list spells it `1.1` because `|` separates the code; the dash form is
+ * what humans see and what the session keeps.
+ * @param group Group number, allocated per category in first-seen order.
+ * @param spelling Spelling number inside the group, also first-seen order.
+ * @returns The dashed visible form, e.g. `公司1-1`.
+ */
+export function groupShape(group: number, spelling: number): string {
+  return `公司${group}-${spelling}`
+}
+
 /** Hand out placeholders, resolve them back, and remember nothing after a restart. */
 export class RedactionMap {
   readonly #byOriginal = new Map<string, string>()
   readonly #byPlaceholder = new Map<string, string>()
   readonly #counters = new Map<string, number>()
+  readonly #groups = new Map<string, number>()
+  readonly #spellings = new Map<string, number>()
   readonly #entries: RedactionEntry[] = []
 
   /**
@@ -57,10 +91,42 @@ export class RedactionMap {
   code(category: string, code: string, original: string): string {
     const existing = this.#byOriginal.get(original)
     if (existing !== undefined) return existing
-    this.#byOriginal.set(original, code)
-    this.#byPlaceholder.set(code, original)
+    const shaped = codeShape(code)
+    this.#byOriginal.set(original, shaped)
+    this.#byPlaceholder.set(shaped, original)
+    // The entry log carries the bare code; the wrapped form is a transport
+    // detail of this process, and downstream readers (the mapping file, the
+    // client view) re-wrap it with `codeShape` themselves.
     this.#entries.push({ placeholder: code, category, original })
-    return code
+    return shaped
+  }
+
+  /**
+   * Alias-group placeholder for `original`: every company becomes `公司<n>-<m>`,
+   * where `<n>` is one company (all spellings share it) and `<m>` is one
+   * spelling. The same spelling always keeps its numbers; a spelling seen for
+   * the first time takes the next free pair, in first-seen order, so restore
+   * can put every spelling back exactly.
+   * @param category Category that owns the group sequences.
+   * @param group Group key — one company across all its spellings.
+   * @param original The spelling as it appeared in the text.
+   * @returns The dashed placeholder, reused when this spelling was seen before.
+   */
+  group(category: string, group: string, original: string): string {
+    const existing = this.#byOriginal.get(original)
+    if (existing !== undefined) return existing
+    const allKey = `${category}\u0000all`
+    const nextGroup = this.#groups.get(group) ?? (this.#groups.get(allKey) ?? 0) + 1
+    this.#groups.set(group, nextGroup)
+    this.#groups.set(allKey, Math.max(this.#groups.get(allKey) ?? 0, nextGroup))
+    const nextSpelling = (this.#spellings.get(group) ?? 0) + 1
+    this.#spellings.set(group, nextSpelling)
+    const shaped = codeShape(groupShape(nextGroup, nextSpelling))
+    this.#byOriginal.set(original, shaped)
+    this.#byPlaceholder.set(shaped, original)
+    // The entry log carries the bare dashed form; wrapping is transport detail.
+    this.#entries.push({ placeholder: groupShape(nextGroup, nextSpelling), category, original })
+    return shaped
   }
 
   /**
@@ -81,7 +147,8 @@ export class RedactionMap {
   restore(text: string): string {
     if (this.#byPlaceholder.size === 0) return text
     // Numbered placeholders match by shape; fixed codes (a bare `A`, `ZY`) do
-    // not, so they are spliced back by direct lookup wherever they appear.
+    // not, so they are spliced back by their wrapped form only — a natural
+    // letter in the text never matches.
     let restored = text.replace(/\[[^\]\n]{1,32}-\d{1,6}\]/g, match => this.#byPlaceholder.get(match) ?? match)
     for (const [code, original] of this.#byPlaceholder) {
       if (code.startsWith('[')) continue
@@ -120,6 +187,8 @@ export class RedactionMap {
     this.#byOriginal.clear()
     this.#byPlaceholder.clear()
     this.#counters.clear()
+    this.#groups.clear()
+    this.#spellings.clear()
     this.#entries.length = 0
   }
 }

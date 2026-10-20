@@ -3,7 +3,9 @@ import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
+import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
+import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserViewInjected } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
@@ -158,10 +160,28 @@ function TurnMaxTokensItem({ t }: {
   )
 }
 
+/**
+ * Swap every placeholder this machine issued back for its value, for the view
+ * only. Numbered placeholders match by shape; fixed codes and alias groups are
+ * stored wrapped in the placeholder map key exactly as the provider hands them
+ * over, so a plain splice by key can never hit a natural word in the text.
+ * @param text Text as the session logged it.
+ * @param placeholders Placeholder to original, from the provider's table.
+ * @returns The text with every known placeholder restored.
+ */
+function restoreUserView(text: string, placeholders: ReadonlyMap<string, string>): string {
+  let restored = text.replace(/\[[^\]\n]{1,32}-\d{1,6}]/g, match => placeholders.get(match) ?? match)
+  for (const [key, original] of placeholders) {
+    if (key.startsWith('[') || key === original || !restored.includes(key)) continue
+    restored = restored.split(key).join(original)
+  }
+  return restored
+}
+
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
   content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], skillNames = [],
-  previewAttachments, references, t,
+  previewAttachments, references, useUserPlaceholders, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -178,9 +198,19 @@ function UserStyleBubble({
   /** Local submission-echo attachments replacing the content-derived attachment sequence. */
   previewAttachments?: readonly PresentedAttachment[]
   references?: Pick<ChatNodeOwnerProps, 'openFile' | 'openSkill'>
+  /** Placeholder-to-original map hook; absent rows keep the placeholder visible. */
+  useUserPlaceholders?: SnapshotSelectorHook<ReadonlyMap<string, string> | null>
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, attachments: contentAttachments, rest } = contentParts(content)
+  const placeholders = useUserPlaceholders?.(value => value)
+  // The user may read what the model must not: swap each placeholder this
+  // machine issued back for its value in the view only. The session log and
+  // every outbound request keep the placeholder; unknown placeholders and the
+  // pre-provider state render exactly what was logged.
+  const viewText = placeholders === null || placeholders === undefined || placeholders.size === 0
+    ? text
+    : restoreUserView(text, placeholders)
   const attachments = previewAttachments ?? contentAttachments
   const compactImages = attachments.length > 1
   const truncated = (total: number): string => t('json.truncated', { total })
@@ -219,7 +249,7 @@ function UserStyleBubble({
           </div>
         )}
         {showBubble && <div className={css.bubble}>
-          {projectUserText(text, referenceLabels, skillNames, 'skill', references)}
+          {projectUserText(viewText, referenceLabels, skillNames, 'skill', references)}
           {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
         </div>}
         {referenceLabels.length > 0 && (
@@ -318,14 +348,15 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, openFile, openSkill, t,
-}: ChatNodeViewProps<'user' | 'steering'>) {
+  node, renderMessageImages, openFile, openSkill, useUserPlaceholders, t,
+}: ChatNodeViewProps<'user' | 'steering'> & InjectFace<UserViewInjected>) {
   const data = node.data
   return (
     <UserStyleBubble
       content={data.content}
       references={{ openFile, openSkill }}
       renderMessageImages={renderMessageImages}
+      useUserPlaceholders={useUserPlaceholders}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
       {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
       t={t}

@@ -873,6 +873,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   RosterPerson: 'staff directory record is owned by packages/security/redaction/README.md',
   LocalTermFile: 'uploaded term-list description is owned by packages/security/redaction/README.md',
   RedactablePart: 'prompt part contract is owned by packages/security/redaction/README.md',
+  RedactionEntry: 'entry of the redaction map is owned by packages/security/redaction/README.md',
   TermRequest: 'queued term-request record is owned by packages/security/redaction/README.md',
   TermRequestDelivery: 'delivery outcome record is owned by packages/security/redaction/README.md',
   TermRequestSink: 'deployment-supplied delivery contract is owned by packages/security/redaction/README.md',

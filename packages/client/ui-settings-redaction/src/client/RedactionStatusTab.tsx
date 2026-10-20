@@ -115,6 +115,8 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
         <dd className={css.value}>{view.pending}</dd>
         <dt className={css.term}>{t('checkedLabel')}</dt>
         <dd className={css.value}>{view.lastChecked ?? t('never')}</dd>
+        <dt className={css.term}>{t('imageToolLabel')}</dt>
+        <dd className={css.value}>{t('imageToolDenied')}</dd>
       </dl>
       <p className={css.hint}>{t('rulesHint')}</p>
       {view.detail !== null && <p className={css.note}>{t('detailBlocked', { detail: view.detail })}</p>}

@@ -39,6 +39,8 @@ export interface RedactionStatusView {
   readonly localFiles: number
   /** Names the staff directory contributed to the rules. */
   readonly roster: number
+  /** Whether the read-image tool is denied for every agent of this deployment. */
+  readonly imageTool: boolean
 }
 
 /** One term list a department uploaded to this machine. */
@@ -93,4 +95,14 @@ export interface RedactionExampleView {
   readonly name: string
   /** The example term list, exactly as it ships. */
   readonly text: string
+}
+
+/** One placeholder this machine issued, and the value it stands for. */
+export interface RedactionEntryView {
+  /** Placeholder as it appears in session text: numbered, or the fixed code. */
+  readonly placeholder: string
+  /** Category the placeholder belongs to. */
+  readonly category: string
+  /** The value the model must not see but the user may. */
+  readonly original: string
 }

@@ -153,6 +153,8 @@ export interface ChatNodeInjected {
   hooks: {
     turnData: SlotHookFactory<'conversation.chat.node', UseChatNodeTurnData>
     disclosure: SlotHookFactory<'conversation.chat.node', UseDisclosure>
+    /** Placeholder-to-original map served by the redaction provider, or null while unavailable. */
+    userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>
   }
 }
 
@@ -187,6 +189,14 @@ export interface TurnProcessOwnerProps {
   readonly foldable: boolean
   readonly open: boolean
   setOpen(open: boolean): void
+}
+
+/** The user's own view of redacted text: which placeholder stands for which value. */
+export interface UserViewInjected {
+  hooks: {
+    /** Placeholder to original, live; absent when no provider serves this machine. */
+    userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>
+  }
 }
 
 /** Shared presentation policy source for renderers that depend on the work-details mode. */
@@ -233,6 +243,8 @@ export interface ChatViewInjected {
   hooks: {
     /** Live presentation policy derived from the accepted work-details mode. */
     presentation: ObservableSnapshot<ChatPresentationPolicy>
+    /** Placeholder-to-original map served by the redaction provider, or null while unavailable. */
+    userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>
   }
   keyedHooks: {
     /** Resolve the stable source for one Chat Node key. */

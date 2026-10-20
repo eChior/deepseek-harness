@@ -44,13 +44,16 @@ import { PerformanceUsagePolicy } from './performance-usage.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
 
-const CHAT_NODE_INJECT: ChatNodeInjected = {
-  hooks: {
-    turnData: (_standard, { turnData }) => function useTurnData(key) {
-      return useTurnDataValue(turnData, key)
+function chatNodeInject(userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>): ChatNodeInjected {
+  return {
+    hooks: {
+      turnData: (_standard, { turnData }) => function useTurnData(key) {
+        return useTurnDataValue(turnData, key)
+      },
+      disclosure: (_standard, { disclosureReset }) => bindDisclosure(disclosureReset),
+      userPlaceholders,
     },
-    disclosure: (_standard, { disclosureReset }) => bindDisclosure(disclosureReset),
-  },
+  }
 }
 
 /** Services required by the Chat target and its presentation registrations. */
@@ -151,6 +154,23 @@ export function apply(ctx: Context): void {
   const performancePolicy = new PerformanceUsagePolicy(chatSettings)
   ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
   const performanceUsage = performancePolicy.mode
+  // The user's own view of redacted text: the provider's placeholder table,
+  // read once per connection. A `null` value means no provider answered yet;
+  // renderers keep the placeholders visible instead of guessing.
+  const userPlaceholders = createSnapshotStore<ReadonlyMap<string, string> | null>(null)
+  const readUserPlaceholders = async (): Promise<void> => {
+    const redaction = ctx.get('remote.redaction') as { entries?: () => Promise<unknown> } | undefined
+    if (redaction?.entries === undefined) return
+    try {
+      const result = await redaction.entries() as { ok: boolean; value?: readonly { placeholder: string; original: string }[] }
+      if (result.ok && Array.isArray(result.value)) {
+        userPlaceholders.set(new Map(result.value.map(entry => [entry.placeholder, entry.original])))
+      }
+    } catch (_error) {
+      // An absent or failing provider leaves the placeholders visible.
+    }
+  }
+  void readUserPlaceholders()
   registerChatNodeRenderers(ctx, performanceUsage, presentation)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
@@ -183,7 +203,7 @@ export function apply(ctx: Context): void {
       label: () => t('view.chat'),
       locale: NS,
       children: {
-        'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
+        'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: chatNodeInject(userPlaceholders) },
         'conversation.message.images': { kind: 'single', scope: 'session' },
       },
       store: chatStore,
@@ -194,7 +214,7 @@ export function apply(ctx: Context): void {
         const chat = chatSource(binding)
         const conversation = ctx.uiConversation.binding(binding)
         return {
-          hooks: { presentation },
+          hooks: { presentation, userPlaceholders },
           keyedHooks: {
             chatNode: key => chat.getSnapshot().nodes.source(key),
             chatNodeProcess: key => chat.getSnapshot().nodes.processSource(key),

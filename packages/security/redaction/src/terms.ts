@@ -53,6 +53,12 @@ export interface RedactionRule {
   readonly regex: RegExp
   /** Fixed code the hit is replaced with instead of a numbered placeholder. */
   readonly code?: string
+  /**
+   * Alias-group key the hit belongs to: every rule carrying the same key
+   * replaces its matches with the same `公司<n>-<m>` placeholder, one spelling
+   * number per distinct original. Absent = not a group member.
+   */
+  readonly group?: string
 }
 
 const CATEGORY_ID = /^[a-z][a-z0-9-]*$/
@@ -144,8 +150,9 @@ export function parseTermList(text: string): ParsedTermList {
         const term = value.slice(0, separator).trim()
         const code = value.slice(separator + 1).trim()
         if (term === '') fail(line, 'a codes entry must be `term|code`')
-        else if (!/^[A-Za-z0-9]{1,8}$/.test(code)) fail(line, `code "${code}" must be 1-8 letters or digits`)
-        else category.codes.set(term, code)
+        else if (!/^[A-Za-z0-9]{1,8}$/.test(code) && !/^\d{1,4}\.\d{1,4}$/.test(code)) {
+          fail(line, `code "${code}" must be 1-8 letters or digits, or a group.spelling pair like 1.1`)
+        } else category.codes.set(term, code)
         continue
       }
       if (section === 'patterns') {
@@ -252,6 +259,9 @@ export function compileRules(list: RedactionTermList): RedactionRule[] {
   for (const category of list.categories) {
     if (category.codeMap !== undefined) {
       for (const [term, code] of Object.entries(category.codeMap)) {
+        // A dotted code (`1.1`) marks an alias-group member: all entries sharing
+        // the integer part replace with the same `公司<n>-<m>` placeholder.
+        const group = /^\d{1,4}\.\d{1,4}$/.test(code) ? `${category.id}\u0000${code.split('.')[0]}` : undefined
         rules.push({
           category: category.id,
           label: category.label,
@@ -259,6 +269,7 @@ export function compileRules(list: RedactionTermList): RedactionRule[] {
           source: term,
           regex: new RegExp(escapeRegExp(term), 'g'),
           code,
+          ...group === undefined ? {} : { group },
         })
       }
     }

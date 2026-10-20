@@ -42,7 +42,7 @@ export {
   type LocalTermFile,
   type LocalTermList,
 } from './local.ts'
-export { RedactionMap, type RedactionEntry } from './map.ts'
+export { CODE_JOINER, RedactionMap, codeShape, groupShape, type RedactionEntry } from './map.ts'
 export {
   Config,
   RedactionService,

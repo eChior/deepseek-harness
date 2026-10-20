@@ -24,6 +24,12 @@ export interface RedactionHit {
   readonly kind: 'term' | 'pattern'
   /** Fixed code the hit is replaced with; absent = numbered placeholder. */
   readonly code?: string
+  /**
+   * Alias-group key the hit belongs to; present only when the rule's code is a
+   * `group.spelling` pair. All rules sharing the key replace with the same
+   * `公司<n>-<m>` placeholder.
+   */
+  readonly group?: string
 }
 
 /** The redacted text plus what was replaced. */
@@ -65,6 +71,7 @@ export function findHits(text: string, rules: readonly RedactionRule[]): Redacti
         source: rule.source,
         kind: rule.kind,
         ...rule.code === undefined ? {} : { code: rule.code },
+        ...rule.group === undefined ? {} : { group: rule.group },
       })
     }
   }
@@ -127,9 +134,13 @@ export function redactText(
     // A rule with a fixed code replaces every hit with that code — a product's
     // assigned letter, a holder company's abbreviation — instead of a numbered
     // placeholder; the map still records the pairing so restore can undo it.
-    const placeholder = hit.code === undefined
-      ? map.placeholder(hit.category, hit.label, hit.text)
-      : map.code(hit.category, hit.code, hit.text)
+    // A group rule (the holder's alias set) replaces with `公司<n>-<m>` instead:
+    // one group number per company, one spelling number per distinct wording.
+    const placeholder = hit.group !== undefined
+      ? map.group(hit.category, hit.group, hit.text)
+      : hit.code === undefined
+        ? map.placeholder(hit.category, hit.label, hit.text)
+        : map.code(hit.category, hit.code, hit.text)
     placeholders.push(placeholder)
     output += text.slice(cursor, hit.start) + placeholder
     cursor = hit.end

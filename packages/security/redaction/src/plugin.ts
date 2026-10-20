@@ -36,7 +36,8 @@ import {
   type LocalTermFile,
   type LocalTermList,
 } from './local.ts'
-import { RedactionMap } from './map.ts'
+import { RedactionMap, type RedactionEntry } from './map.ts'
+import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import { findPerson, ROSTER_PATH, readRoster, type Roster, type RosterPerson } from './roster.ts'
 import { queueTermRequest, readTermRequests, settleTermRequest, type TermRequest } from './queue.ts'
 import { fetchTermList, readCachedTermList, writeCachedTermList, type TermSourceConfig, type TermSourceKind } from './source.ts'
@@ -144,6 +145,8 @@ export interface Config {
   rosterPath?: string
   /** Persist the placeholder table to the local mappings directory when a session ends. */
   mappings?: boolean
+  /** Deny the read-image tool to every agent of this deployment. Defaults to true: images go through local OCR, not the model. */
+  readImage?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -186,6 +189,8 @@ export interface RedactionStatus {
   readonly localFiles: number
   /** Names the shipped staff directory contributed to the rules, or 0 when it is off. */
   readonly roster: number
+  /** Whether the read-image tool is denied for every agent of this deployment. */
+  readonly imageTool: boolean
 }
 
 /**
@@ -252,6 +257,7 @@ export class RedactionService extends Service {
       includeRoster: config.includeRoster ?? true,
       rosterPath: config.rosterPath ?? ROSTER_PATH,
       mappings: config.mappings ?? true,
+      readImage: config.readImage ?? true,
     }
     this.current = {
       enabled: true,
@@ -266,6 +272,7 @@ export class RedactionService extends Service {
       pending: 0,
       localFiles: 0,
       roster: 0,
+      imageTool: true,
     }
     ctx.effect(() => {
       void this.load()
@@ -310,6 +317,15 @@ export class RedactionService extends Service {
     // into exported files, and deletes the file afterwards.
     ctx.on('session/disposed', (session: Session) => {
       void this.writeMappings(session)
+    })
+    // Images go through the local reader, so the model never needs a tool that
+    // would hand a picture to the provider. Deny the tool for every agent this
+    // deployment creates; the status view tells the settings page it happened.
+    ctx.on('agent/created', ({ agent }: { agent: Agent; source: SessionStartSource; signal?: AbortSignal }) => {
+      if (!this.config.readImage) return
+      agent.ctx.tools.guard(execution => execution.name === 'read_image'
+        ? 'read_image is not available: this deployment reads images through local OCR'
+        : undefined)
     })
   }
 
@@ -511,6 +527,7 @@ export class RedactionService extends Service {
       ...main === undefined ? {} : { source: main.source },
       localFiles: uploaded.length,
       roster: roster.reduce((count, category) => count + category.terms.length, 0),
+      imageTool: this.config.readImage,
     }
   }
 
@@ -692,6 +709,17 @@ export class RedactionService extends Service {
       // A mapping that cannot be written only costs the restore step; placeholders
       // in the session stay in force and no error escapes disposal.
     }
+  }
+
+  /**
+   * The placeholder table this process is holding, for a reader that renders
+   * session text to the user. The values are what the model must not see but
+   * the user may: they cross to the browser that renders this machine's own
+   * sessions and nowhere else.
+   * @returns Every recorded entry, in the order the values were first seen.
+   */
+  entries(): readonly RedactionEntry[] {
+    return this.map.entries()
   }
 
   /**

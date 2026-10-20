@@ -101,6 +101,7 @@ interface SetupOptions {
   llm?: boolean
   storeConfig?: { maxImageBytes?: number; maxImagePixels?: number; maxImageDimension?: number; maxMessageImageBytes?: number }
   toolMode?: ToolConfig['mode']
+  readImage?: boolean
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -123,7 +124,7 @@ async function setup(options: SetupOptions = {}) {
       { provider: 'visual', id: 'legacy-model', name: 'Legacy' },
     ], options.resolvedModels))
   }
-  await ctx.plugin(ToolFs)
+  await ctx.plugin(ToolFs, { readImage: options.readImage ?? true })
   return ctx
 }
 
@@ -763,7 +764,9 @@ describe('registration surface', () => {
     await ctx.plugin(LocalFileSystem, { cwd: dir })
     await ctx.plugin(FsPolicy)
     const attachmentsFiber = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
-    const toolFsFiber = await ctx.plugin(ToolFs)
+    // The registration-surface test exercises the conditional fiber; the switch
+    // has to be on for read_image to mount at all.
+    const toolFsFiber = await ctx.plugin(ToolFs, { readImage: true })
     const names = () => ctx.tools.schemas().map(schema => schema.name).sort()
     expect(names()).toEqual(['edit', 'read', 'read_image', 'write'])
 
@@ -845,5 +848,28 @@ describe('image result presentation', () => {
     expect(image?.attachment.width).toBe(1)
     expect(image?.attachment.height).toBe(1)
     expect(image?.attachment.attachmentId).toMatch(/^sha256:/u)
+  })
+})
+
+describe('the readImage deployment switch', () => {
+  it('registers the tool by default only when the config turns it on', async () => {
+    // Config default: off — a deployment that never mentions readImage gets no
+    // tool, which is the redaction-first posture.
+    const off = await setup({ readImage: false })
+    expect(off.tools.get('read_image')).toBeUndefined()
+    const on = await setup({ readImage: true })
+    expect(on.tools.get('read_image')).toBeDefined()
+  })
+
+  it('keeps read/write/edit working while read_image is switched off', async () => {
+    await writeFile(join(dir, 'note.txt'), 'hello')
+    const ctx = await setup({ readImage: false })
+    const read = await call(ctx, 'read', { file_path: 'note.txt' }, agentOn('text-model'))
+    expect(read.isError).toBe(false)
+    expect(text(read)).toContain('1: hello')
+    expect(ctx.tools.get('read')).toBeDefined()
+    expect(ctx.tools.get('write')).toBeDefined()
+    expect(ctx.tools.get('edit')).toBeDefined()
+    expect(ctx.tools.get('read_image')).toBeUndefined()
   })
 })

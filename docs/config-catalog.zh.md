@@ -2420,7 +2420,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:108`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:109`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**
@@ -2472,6 +2472,8 @@ export interface Config {
   rosterPath?: string
   /** Persist the placeholder table to the local mappings directory when a session ends. */
   mappings?: boolean
+  /** Deny the read-image tool to every agent of this deployment. Defaults to true: images go through local OCR, not the model. */
+  readImage?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->
@@ -3669,6 +3671,12 @@ export interface Config {
   readMaxBytes?: number
   /** Files at or above this size stream instead of loading whole into memory. */
   readStreamMinSize?: number
+  /**
+   * Whether the model gets the `read_image` tool at all. Images the user attaches
+   * still reach the model through the OCR pipeline; this only removes the tool
+   * that would hand raw image pixels to the model. Off by default.
+   */
+  readImage?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-fs -->

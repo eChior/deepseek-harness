@@ -1883,6 +1883,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'What the attempt did with the queue.',
       },
       {
+        signature: 'entries(): readonly RedactionEntry[]',
+        description: 'The placeholder table this process is holding, for a reader that renders session text to the user. The values are what the model must not see but the user may: they cross to the browser that renders this machine\'s own sessions and nowhere else.',
+        parameters: [],
+        returns: 'Every recorded entry, in the order the values were first seen.',
+      },
+      {
         signature: 'restore(text: string): string',
         description: 'Turn the placeholders this session emitted back into the values they stand for.',
         parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }],
@@ -6319,8 +6325,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
   },
   {
+    name: 'RedactionEntry',
+    declaration: 'export interface RedactionEntry {\n    readonly placeholder: string;\n    readonly category: string;\n    readonly original: string;\n}',
+  },
+  {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly roster: number;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly roster: number;\n    readonly imageTool: boolean;\n}',
   },
   {
     name: 'Registry',

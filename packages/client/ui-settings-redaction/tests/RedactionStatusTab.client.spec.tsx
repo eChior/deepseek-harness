@@ -25,6 +25,7 @@ const READY: RedactionStatusView = {
   pending: 0,
   localFiles: 0,
   roster: 0,
+  imageTool: true,
 }
 
 const ROSTER: RedactionRosterView = {
