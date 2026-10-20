@@ -1,0 +1,123 @@
+/* Sits in the composer's right cell, before the model selector. */
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.badge:hover {
+  background: var(--dsw-alias-fill-secondary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-warning-primary);
+}
+
+.panel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+  max-height: 280px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-secondary);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-fill-primary);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.placeholder {
+  flex: none;
+  font-family: var(--dsw-font-mono, monospace);
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.arrow {
+  flex: none;
+  color: var(--dsw-alias-label-quaternary, var(--dsw-alias-label-tertiary));
+}
+
+.original {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer {
+  display: flex;
+  gap: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-secondary);
+  padding-top: 8px;
+}
+
+.viewToggle {
+  flex: 1;
+  padding: 4px 8px;
+  border: 0.5px solid var(--dsw-alias-border-secondary);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.viewToggle:hover:not(:disabled) {
+  background: var(--dsw-alias-fill-secondary);
+}
+
+.viewToggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

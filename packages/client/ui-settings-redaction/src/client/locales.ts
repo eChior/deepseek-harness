@@ -44,6 +44,10 @@ export const zh = {
   uploadsNeedFile: '请选择一个 .yaml 或 .txt 文件。',
   uploadsFailed: '上传失败：{detail}',
   uploadsFileTooBig: '文件超过 256 KB，请拆分后上传。',
+  badgeAria: '脱敏占位符',
+  badgeTitle: '本机已生成 {total} 个占位符',
+  badgeShowPlaceholders: '会话里显示占位符',
+  badgeShowOriginals: '会话里显示原文',
 } satisfies Record<string, string>
 
 /** Redaction page locale key union. */
@@ -93,4 +97,8 @@ export const en = {
   uploadsNeedFile: 'Choose a .yaml or .txt file.',
   uploadsFailed: 'The upload failed: {detail}',
   uploadsFileTooBig: 'The file is over 256 KB; split it and upload again.',
+  badgeAria: 'Redaction placeholders',
+  badgeTitle: '{total} placeholders issued on this machine',
+  badgeShowPlaceholders: 'Show placeholders in the transcript',
+  badgeShowOriginals: 'Show original values in the transcript',
 } satisfies Record<RedactionLocaleKey, string>

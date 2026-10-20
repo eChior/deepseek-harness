@@ -2,16 +2,16 @@
 import type {} from '@deepseek-ai/dsh-settings'
 
 import type { Volatile, Context } from '@deepseek-ai/cordis'
-import type { ChatSettings, LinkOpening, PerformanceUsageMode } from './chat-settings.ts'
+import type { ChatSettings, LinkOpening, PerformanceUsageMode, RedactionUserView } from './chat-settings.ts'
 import z from '@deepseek-ai/schemastery'
 import { TRANSCRIPT_VIEW_FIELD } from './chat-settings.ts'
 
 import { ChatSettingsFields } from './chat-settings.ts'
 
 export {
-  CHAT_SETTINGS_NAMESPACE, DEFAULT_TRANSCRIPT_VIEW_MODE, LEGACY_TRANSCRIPT_VIEW_MODE,
-  LEGACY_EXPANDED_TRANSCRIPT_VIEW_MODE, TRANSCRIPT_VIEW_FIELD,
-  TRANSCRIPT_VIEW_MODES, type ChatSettings, type TranscriptViewMode,
+  CHAT_SETTINGS_NAMESPACE, DEFAULT_REDACTION_USER_VIEW, DEFAULT_TRANSCRIPT_VIEW_MODE,
+  LEGACY_TRANSCRIPT_VIEW_MODE, LEGACY_EXPANDED_TRANSCRIPT_VIEW_MODE, TRANSCRIPT_VIEW_FIELD,
+  TRANSCRIPT_VIEW_MODES, type ChatSettings, type RedactionUserView, type TranscriptViewMode,
 } from './chat-settings.ts'
 
 /** Runtime preferences projected to the browser. */
@@ -22,6 +22,8 @@ export interface Config {
   performanceUsage: Volatile<PerformanceUsageMode>
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: Volatile<LinkOpening>
+  /** What the user reads in place of redaction placeholders. */
+  redactionUserView: Volatile<RedactionUserView>
 }
 
 /** Live preferences projected to the browser. */
@@ -29,6 +31,7 @@ export const Config = z.object({
   [TRANSCRIPT_VIEW_FIELD]: ChatSettingsFields[TRANSCRIPT_VIEW_FIELD].volatile(),
   performanceUsage: ChatSettingsFields['performanceUsage'].volatile(),
   linkOpening: ChatSettingsFields.linkOpening.volatile(),
+  redactionUserView: ChatSettingsFields.redactionUserView.volatile(),
 })
 
 /** Host preferences are consumed through the configuration form projection.

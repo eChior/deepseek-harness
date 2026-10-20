@@ -14,9 +14,9 @@ describe('ui-chat Host settings', () => {
     const configuration = await liveConfig(ctx, { Config, apply })
     const { fiber } = configuration
 
-    expect(plainConfig(configuration.fiber.config)).toEqual({ performanceUsage: 'detailed', linkOpening: 'sidebar' })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ performanceUsage: 'detailed', linkOpening: 'sidebar', redactionUserView: 'original' })
     await configuration.update({ transcriptView: 'normal' })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar' })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar', redactionUserView: 'original' })
     for (const mode of ['expanded', 'compact', 'standard', 'detailed', 'verbose']) {
       await configuration.update({ transcriptView: mode })
       expect(plainConfig(configuration.fiber.config)).toMatchObject({ transcriptView: mode })

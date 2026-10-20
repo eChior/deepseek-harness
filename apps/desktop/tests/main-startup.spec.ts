@@ -86,6 +86,7 @@ const harness = await vi.hoisted(async () => {
       send: vi.fn((channel: string, state: { policy?: { blocking: boolean } }) => {
         if (channel === 'dsh-desktop:mandatory-state' && state.policy?.blocking) policyBlocked.resolve()
       }),
+      session: { cookies: { get: vi.fn(async () => []) } },
     })
     readonly shown = deferred()
     readonly show = vi.fn(() => { this.shown.resolve() })
@@ -107,6 +108,11 @@ const harness = await vi.hoisted(async () => {
     fullscreen = false
     isFullScreen() { return this.fullscreen }
     readonly setFullScreen = vi.fn((flag: boolean) => { this.fullscreen = flag; this.emit(flag ? 'enter-full-screen' : 'leave-full-screen') })
+    maximized = false
+    isMaximized() { return this.maximized }
+    readonly maximize = vi.fn(() => { this.maximized = true; this.emit('maximize') })
+    readonly unmaximize = vi.fn(() => { this.maximized = false; this.emit('unmaximize') })
+    readonly minimize = vi.fn()
     minimized = false
     isMinimized() { return this.minimized }
     visible = true
@@ -123,11 +129,11 @@ const harness = await vi.hoisted(async () => {
     setBounds() {}
     setTitle = vi.fn()
     destroy() { this.destroyed = true; this.emit('closed') }
-    close() {
+    readonly close = vi.fn(() => {
       const event = { preventDefault: vi.fn() }
       this.emit('close', event)
       if (event.preventDefault.mock.calls.length === 0) this.destroy()
-    }
+    })
   }
   class FakeHost {
     readonly updateTasks = vi.fn(async (_action: 'inspect' | 'lock' | 'unlock') => false)
@@ -695,7 +701,7 @@ describe('desktop main startup', () => {
     }
   })
 
-  it.each(['darwin', 'win32', 'linux'] as const)('limits native titlebar styling to macOS on %s', async (platform) => {
+  it.each(['darwin', 'win32', 'linux'] as const)('applies caption titlebar styling on %s', async (platform) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -711,8 +717,10 @@ describe('desktop main startup', () => {
         { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
       ])
     } else {
-      expect(window.options).not.toHaveProperty('titleBarStyle')
+      // Linux draws the caption chrome inside the page, so native chrome is hidden.
+      expect(window.options).toMatchObject({ titleBarStyle: 'hidden' })
       expect(window.options).not.toHaveProperty('vibrancy')
+      expect(harness.menu.setApplicationMenu).toHaveBeenCalledWith(null)
     }
     expect(harness.hosts).toHaveLength(0)
   })
@@ -729,7 +737,7 @@ describe('desktop main startup', () => {
     expect((await handler(new Request('dsh-app://foreign/index.html'))).status).toBe(404)
   })
 
-  it.each(['darwin', 'win32'] as const)('relays the %s fullscreen state on transitions and after each load', async (platform) => {
+  it.each(['darwin', 'win32', 'linux'] as const)('relays the %s fullscreen state on transitions and after each load', async (platform) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -752,14 +760,44 @@ describe('desktop main startup', () => {
     expect(sent()).toHaveLength(relayed)
   })
 
-  it.each(['linux'] as const)('registers no fullscreen relay on %s', async (platform) => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+  it('registers no fullscreen relay on a platform without caption chrome', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('freebsd')
     await import('../src/main.ts')
     await harness.preparing.promise
     const window = harness.windows[0]!
     window.emit('enter-full-screen')
     window.webContents.emit('did-finish-load')
     expect(window.webContents.send.mock.calls.filter(([channel]) => channel === DESKTOP_IPC.windowFullscreen)).toHaveLength(0)
+  })
+
+  it('registers Linux caption window controls that drive the primary window', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    const minimize = harness.handlers.get(DESKTOP_IPC.windowMinimize)!
+    const toggle = harness.handlers.get(DESKTOP_IPC.windowToggleMaximize)!
+    const close = harness.handlers.get(DESKTOP_IPC.windowClose)!
+    const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
+    minimize(event)
+    expect(window.minimize).toHaveBeenCalledOnce()
+    window.maximized = false
+    toggle(event)
+    expect(window.maximize).toHaveBeenCalledOnce()
+    window.maximized = true
+    toggle(event)
+    expect(window.unmaximize).toHaveBeenCalledOnce()
+    close(event)
+    expect(window.close).toHaveBeenCalledOnce()
+    // The maximize state reaches the caption buttons after each transition and load.
+    const sent = () => window.webContents.send.mock.calls.filter(([channel]) => channel === DESKTOP_IPC.windowMaximized)
+    window.maximize()
+    expect(sent().at(-1)).toEqual([DESKTOP_IPC.windowMaximized, true])
+    window.unmaximize()
+    expect(sent().at(-1)).toEqual([DESKTOP_IPC.windowMaximized, false])
+    window.maximized = true
+    window.webContents.emit('did-finish-load')
+    expect(sent().at(-1)).toEqual([DESKTOP_IPC.windowMaximized, true])
   })
 
   it('covers the macOS vibrancy reattach gap with an opaque base while minimized or hidden', async () => {
@@ -869,8 +907,8 @@ describe('desktop main startup', () => {
     await edit
   })
 
-  it.each(['darwin', 'linux'] as const)('adds the product File menu and standard window commands only on macOS (%s)', async (platform) => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+  it('adds the product File menu and standard window commands only on macOS', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     await import('../src/main.ts')
     await harness.preparing.promise
     const describeItem = (item: MenuItemConstructorOptions): string | undefined =>
@@ -879,13 +917,10 @@ describe('desktop main startup', () => {
       .map(call => call[0])
       .find(items => items.some(item => item.role === 'editMenu'))
     if (template === undefined) throw new Error('application menu missing')
-    expect(template.map(describeItem)).toEqual(platform === 'darwin'
-      ? ['Desktop test', en.fileMenu, 'editMenu', 'windowMenu']
-      : ['Application', 'editMenu'])
+    expect(template.map(describeItem)).toEqual(['Desktop test', en.fileMenu, 'editMenu', 'windowMenu'])
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
-    expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
-      ? ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
-      : ['about', 'separator', en.checkUpdatesMenu, 'separator', 'quit'])
+    expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(
+      ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit'])
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
@@ -2213,22 +2248,28 @@ it.each(['failed', 'expired'] as const)('focuses DSH once when browser authoriza
   expect(window.focus).toHaveBeenCalledTimes(1)
 })
 
-it.each([['light', false], ['dark', true]] as const)('opens Platform authorization in the effective %s palette', async (theme, shouldUseDarkColors) => {
+it('opens the cookie sign-in window when an attempt waits for the browser', async () => {
   await import('../src/main.ts')
   await harness.preparing.promise
   harness.prepared.resolve()
   await harness.hostStarted.promise
   harness.hosts[0]!.ready.resolve()
   await Promise.resolve(invoke(DESKTOP_IPC.boot))
-  harness.nativeTheme.shouldUseDarkColors = shouldUseDarkColors
   const state: AccountView = {
     status: 'signed-out', links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' },
-    attempt: { id: 'test-theme-attempt' as NonNullable<AccountView['attempt']>['id'], phase: 'waiting-browser',
+    attempt: { id: 'test-cookie-attempt' as NonNullable<AccountView['attempt']>['id'], phase: 'waiting-browser',
       authorizeUrl: 'https://platform.deepseek.com/dsh/authorize?state=state-1' },
   }
   harness.publishAccount(state)
   harness.publishAccount(state)
-  expect(harness.openExternal).toHaveBeenCalledExactlyOnceWith(`https://platform.deepseek.com/dsh/authorize?state=state-1&theme=${theme}`)
+  // The sign-in page stays ours to run: it opens in an owned window that polls
+  // for the session cookie, not in the system browser.
+  expect(harness.openExternal).not.toHaveBeenCalled()
+  const signIn = harness.windows.at(-1)!
+  expect(signIn.options).toMatchObject({ width: 520, height: 760, autoHideMenuBar: true })
+  expect(signIn.urls).toEqual(['https://platform.deepseek.com/dsh/authorize?state=state-1'])
+  // A second watch callback for the same attempt never reopens the window.
+  expect(harness.windows).toHaveLength(2)
 })
 
 it('disables native product events for a disabled Desktop launch', async () => {

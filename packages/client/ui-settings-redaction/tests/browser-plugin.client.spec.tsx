@@ -39,6 +39,12 @@ async function bench() {
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
+  // The badge registration declares 'sessions' and reads the shared chat
+  // preference namespace; neither needs a real provider in this bench.
+  ctx.provide('sessions', {})
+  ctx.provide('configForms', {
+    get: () => ({ set: () => Promise.resolve() }),
+  })
   class RemoteService extends Service {
     constructor(serviceCtx: Context) {
       super(serviceCtx, 'remote')
@@ -54,6 +60,7 @@ async function bench() {
     drop: vi.fn(),
     setEnabled: vi.fn(),
     example: vi.fn(),
+    entries: vi.fn().mockResolvedValue({ ok: true, value: [] }),
   })
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, status }
 }
@@ -71,7 +78,7 @@ describe('ui-settings-redaction browser plugin', () => {
   })
 
   it('declares only the services the Settings contribution reads', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.redaction'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.redaction', 'sessions'])
   })
 
   it('registers a localized tab without reading the Remote eagerly', async () => {
@@ -79,7 +86,9 @@ describe('ui-settings-redaction browser plugin', () => {
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
 
-    const entry = b.slots.entries('settings.plugins.tab')[0]!
+    const tabEntries = b.slots.entries('settings.plugins.tab')
+    expect(tabEntries).toHaveLength(1)
+    const entry = tabEntries[0]!
     expect(entry.component).toBe(RedactionStatusTab)
     expect(entry.options).toMatchObject({ id: 'redaction', order: 20 })
     expect(entry.locale).toBe(NS)

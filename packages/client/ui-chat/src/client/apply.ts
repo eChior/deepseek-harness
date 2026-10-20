@@ -37,21 +37,36 @@ import { TranscriptViewRow, type TranscriptViewRowInjected } from './settings/Tr
 import { createChatStore } from './stores.ts'
 import { TranscriptViewPolicy } from './transcript-view.ts'
 import { derivePresentationPolicy } from './presentation-policy.ts'
-import { CHAT_SETTINGS_NAMESPACE, DEFAULT_LINK_OPENING, DEFAULT_TRANSCRIPT_VIEW_MODE, type ChatSettings } from '../chat-settings.ts'
+import { CHAT_SETTINGS_NAMESPACE, DEFAULT_LINK_OPENING, DEFAULT_REDACTION_USER_VIEW, DEFAULT_TRANSCRIPT_VIEW_MODE, type ChatSettings, type RedactionUserView } from '../chat-settings.ts'
 import { LinkOpeningRow, type LinkOpeningRowInjected } from './settings/LinkOpeningRow.tsx'
 import { PerformanceUsageRow, type PerformanceUsageRowInjected } from './settings/PerformanceUsageRow.tsx'
 import { PerformanceUsagePolicy } from './performance-usage.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
 
-function chatNodeInject(userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>): ChatNodeInjected {
+function chatNodeInject(
+  userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>,
+  userView: ObservableSnapshot<RedactionUserView>,
+): ChatNodeInjected {
+  // Placeholders restore in the view only while the user reads originals; the
+  // badge's "show placeholders" choice flips the same store every renderer sees.
+  const visible = createSnapshotStore<ReadonlyMap<string, string> | null>(null)
+  // `null` keeps renderers in the pre-provider state (placeholders visible);
+  // an empty map means a provider answered but this view shows placeholders.
+  const project = (): void => {
+    const map = userPlaceholders.getSnapshot()
+    visible.set(userView.getSnapshot() === 'original' ? map : map === null ? null : new Map())
+  }
+  project()
+  userPlaceholders.subscribe(project)
+  userView.subscribe(project)
   return {
     hooks: {
       turnData: (_standard, { turnData }) => function useTurnData(key) {
         return useTurnDataValue(turnData, key)
       },
       disclosure: (_standard, { disclosureReset }) => bindDisclosure(disclosureReset),
-      userPlaceholders,
+      userPlaceholders: visible,
     },
   }
 }
@@ -158,14 +173,21 @@ export function apply(ctx: Context): void {
   // read once per connection. A `null` value means no provider answered yet;
   // renderers keep the placeholders visible instead of guessing.
   const userPlaceholders = createSnapshotStore<ReadonlyMap<string, string> | null>(null)
+  const userView = createSnapshotStore<RedactionUserView>(
+    chatSettings.getSnapshot().value?.redactionUserView ?? DEFAULT_REDACTION_USER_VIEW,
+  )
+  ctx.effect(() => chatSettings.subscribe(() => {
+    userView.set(chatSettings.getSnapshot().value?.redactionUserView ?? DEFAULT_REDACTION_USER_VIEW)
+  }))
   const readUserPlaceholders = async (): Promise<void> => {
     const redaction = ctx.get('remote.redaction') as { entries?: () => Promise<unknown> } | undefined
     if (redaction?.entries === undefined) return
     try {
-      const result = await redaction.entries() as { ok: boolean; value?: readonly { placeholder: string; original: string }[] }
-      if (result.ok && Array.isArray(result.value)) {
-        userPlaceholders.set(new Map(result.value.map(entry => [entry.placeholder, entry.original])))
-      }
+      const result = await redaction.entries() as { ok: boolean; value?: unknown }
+      const rows = result.ok && Array.isArray(result.value)
+        ? result.value as readonly { placeholder: string; original: string }[]
+        : []
+      userPlaceholders.set(new Map(rows.map(entry => [entry.placeholder, entry.original])))
     } catch (_error) {
       // An absent or failing provider leaves the placeholders visible.
     }
@@ -203,7 +225,7 @@ export function apply(ctx: Context): void {
       label: () => t('view.chat'),
       locale: NS,
       children: {
-        'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: chatNodeInject(userPlaceholders) },
+        'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: chatNodeInject(userPlaceholders, userView) },
         'conversation.message.images': { kind: 'single', scope: 'session' },
       },
       store: chatStore,

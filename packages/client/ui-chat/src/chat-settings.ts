@@ -46,6 +46,12 @@ export type LinkOpening = 'sidebar' | 'new-tab'
 /** Preserve the built-in browser for users without an explicit preference. */
 export const DEFAULT_LINK_OPENING: LinkOpening = 'sidebar'
 
+/** What the signed-in user reads in place of redaction placeholders. */
+export type RedactionUserView = 'original' | 'placeholder'
+
+/** Redacted text renders its real values until the user asks for placeholders. */
+export const DEFAULT_REDACTION_USER_VIEW: RedactionUserView = 'original'
+
 /** Durable Chat section shared by the Host schema and browser scope. */
 export interface ChatSettings {
   /** Work-details preference; absence uses the client default, and legacy saved values remain accepted. */
@@ -54,11 +60,14 @@ export interface ChatSettings {
   performanceUsage: PerformanceUsageMode
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: LinkOpening
+  /** What the user reads in place of redaction placeholders. */
+  redactionUserView: RedactionUserView
 }
 
 /** Durable Chat schema; also the wire envelope the browser scope validates against. */
 export const ChatSettingsFields = {
   linkOpening: z.union(['sidebar', 'new-tab']).default(DEFAULT_LINK_OPENING),
+  redactionUserView: z.union(['original', 'placeholder']).default(DEFAULT_REDACTION_USER_VIEW),
   performanceUsage: z.union([...PERFORMANCE_USAGE_MODES]).default(DEFAULT_PERFORMANCE_USAGE),
   // Missing and unrecognized modes defer to the client's default.
   [TRANSCRIPT_VIEW_FIELD]: z.union([...TRANSCRIPT_VIEW_SETTING_VALUES]).loose(),

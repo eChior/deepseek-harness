@@ -17,10 +17,14 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: the ctx.remote Context merge and the forwarded-event key face.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// Type-only: pulls the ui-conversation SlotMap merge (the input.right seat).
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { RedactionBadge, type RedactionBadgeInjected } from './RedactionBadge.tsx'
 import { RedactionStatusTab, type RedactionStatusTabInjected } from './RedactionStatusTab.tsx'
 import { en, zh, type RedactionLocaleKey } from './locales.ts'
 
 export type { RedactionStatusTabInjected, RedactionStatusTabProps } from './RedactionStatusTab.tsx'
+export type { RedactionBadgeInjected, RedactionBadgeProps } from './RedactionBadge.tsx'
 export type { RedactionLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -34,7 +38,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const NS = 'settings.redaction'
 
 /** Services required by the Settings registration and generated Remote face. */
-export const inject = ['slots', 'locale', 'remote', 'remote.redaction']
+export const inject = ['slots', 'locale', 'remote', 'remote.redaction', 'sessions']
 
 /** Contribute the redaction tab to the Plugins settings section. */
 export function apply(ctx: ClientContext): void {
@@ -61,6 +65,29 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: (): RedactionStatusTabInjected => injected,
   }, RedactionStatusTab))
+
+  // The composer badge: one cell before the model selector, listing the
+  // placeholders this machine issued and owning the user-side view choice.
+  // The shared chat preference store is read lazily inside the inject face:
+  // the ui-chat namespace may be absent (an old client build), and the badge
+  // then renders without the toggle rather than failing the composer.
+  const badgeInjected = (): RedactionBadgeInjected => ({
+    entries: async () => unwrap('entries', await remote.entries()),
+    setUserView: (view) => {
+      const chatSettings = ctx.configForms.get<{ redactionUserView?: 'original' | 'placeholder' }>('ui-chat')
+      void chatSettings.set('redactionUserView', view).catch((_error: unknown) => {
+        // The choice stays session-local when persistence is unavailable.
+      })
+    },
+  })
+
+  ctx.slots.inject('conversation.input.right', () => ctx.slots.register({
+    name: 'conversation.input.right',
+    id: 'redaction-badge',
+    order: -10,
+    locale: NS,
+    inject: (): RedactionBadgeInjected => badgeInjected(),
+  }, RedactionBadge))
 }
 
 /**

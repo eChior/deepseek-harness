@@ -317,9 +317,9 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     minWidth: 520,
     minHeight: 600,
     show,
-    // GTK desktops draw this menu bar inside the window, where it costs a full row on top of the
-    // window manager's own title bar. Keep it reachable with Alt instead of always visible.
-    ...(process.platform === 'linux' ? { autoHideMenuBar: true } : {}),
+    // Linux draws its own caption menus and window controls inside the page
+    // (see refreshApplicationMenu), so the native menu bar is suppressed entirely.
+    ...(process.platform === 'linux' && primary ? { titleBarStyle: 'hidden' as const } : {}),
     // Linux panels and task switchers read the icon off the window itself. The menu entry having
     // the right icon is not enough: without this the running app shows the theme's generic
     // executable glyph, and StartupWMClass only aligns the two once the window carries it too.
@@ -358,7 +358,7 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     if (['http:', 'https:'].includes(new URL(url).protocol)) void shell.openExternal(url)
     return { action: 'deny' }
   })
-  if (process.platform === 'darwin' || process.platform === 'win32') {
+  if (process.platform === 'darwin' || process.platform === 'win32' || process.platform === 'linux') {
     // Fullscreen hides native window controls; overlays drop their caption clearance.
     const sendFullscreen = (): void => {
       if (!window.isDestroyed()) window.webContents.send(DESKTOP_IPC.windowFullscreen, window.isFullScreen())
@@ -368,6 +368,15 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     // Reloads and navigations re-register the preload listener; resend the
     // current state so a fullscreen reload does not fall back to windowed CSS.
     window.webContents.on('did-finish-load', sendFullscreen)
+  }
+  if (process.platform === 'win32' || process.platform === 'linux') {
+    // Linux caption buttons mirror the window state through this relay.
+    const sendMaximized = (): void => {
+      if (!window.isDestroyed()) window.webContents.send(DESKTOP_IPC.windowMaximized, window.isMaximized())
+    }
+    window.on('maximize', sendMaximized)
+    window.on('unmaximize', sendMaximized)
+    window.webContents.on('did-finish-load', sendMaximized)
   }
   if (process.platform === 'darwin') {
     // Deminiaturize reattaches the NSVisualEffectView material late
@@ -766,8 +775,7 @@ async function main(): Promise<void> {
     // A confirmation on a hidden window would go unseen, so it waits for the next show; the mandatory
     // flow keeps its own taskbar and Dock attention instead.
     if (!isMandatory()) await windowShown()
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A quit can begin while the show is awaited.
-    if (quitting) return state
+    if (isQuitting()) return state
     return updates.install(version)
   }
   const windowShown = (): Promise<void> => new Promise((resolve) => {
@@ -1114,6 +1122,14 @@ async function main(): Promise<void> {
     { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
   ]
   const refreshApplicationMenu = (): void => {
+    // Linux draws its own caption menus and window controls inside the page,
+    // so the native menu bar is suppressed entirely: top-level `visible: false`
+    // items still render in the GTK menu bar and would leak hidden DevTools
+    // toggles into the caption.
+    if (process.platform === 'linux') {
+      Menu.setApplicationMenu(null)
+      return
+    }
     Menu.setApplicationMenu(Menu.buildFromTemplate(process.platform === 'win32' ? devToolsItems : [{
       label: darwin ? app.name : currentDesktopLocale().messages.application,
       submenu: [...applicationItems(), ...devToolsItems],
@@ -1162,7 +1178,7 @@ async function main(): Promise<void> {
     ...(process.platform === 'win32' ? { icon: nativeImage.createFromPath(trayIconPath) } : {}),
   })
 
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' || process.platform === 'linux') {
     ipcMain.handle(DESKTOP_IPC.windowsMenu, (event, name: unknown, x: unknown, y: unknown) => {
       assertDesktopSender(event, ['app'])
       if (mainWindow === undefined || event.sender !== mainWindow.webContents
@@ -1195,6 +1211,29 @@ async function main(): Promise<void> {
         Menu.buildFromTemplate(items).popup({ window, x: Math.round(x * zoom), y: Math.round(y * zoom), callback: resolve })
       })
     })
+    if (process.platform === 'linux') {
+      // Linux hides native chrome entirely, so the caption buttons drive the
+      // window state directly through these handlers.
+      ipcMain.handle(DESKTOP_IPC.windowMinimize, (event) => {
+        assertDesktopSender(event, ['app'])
+        if (mainWindow === undefined || event.sender !== mainWindow.webContents
+          || event.senderFrame !== mainWindow.webContents.mainFrame) return
+        mainWindow.minimize()
+      })
+      ipcMain.handle(DESKTOP_IPC.windowToggleMaximize, (event) => {
+        assertDesktopSender(event, ['app'])
+        if (mainWindow === undefined || event.sender !== mainWindow.webContents
+          || event.senderFrame !== mainWindow.webContents.mainFrame) return
+        if (mainWindow.isMaximized()) mainWindow.unmaximize()
+        else mainWindow.maximize()
+      })
+      ipcMain.handle(DESKTOP_IPC.windowClose, (event) => {
+        assertDesktopSender(event, ['app'])
+        if (mainWindow === undefined || event.sender !== mainWindow.webContents
+          || event.senderFrame !== mainWindow.webContents.mainFrame) return
+        mainWindow.close()
+      })
+    }
     ipcMain.on(DESKTOP_IPC.windowsAppearance, (event, language: unknown, color: unknown, symbolColor: unknown) => {
       if (mainWindow === undefined || event.sender !== mainWindow.webContents
         || event.senderFrame !== mainWindow.webContents.mainFrame) return
