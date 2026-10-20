@@ -22,6 +22,8 @@ export interface RedactionHit {
   /** The term or pattern that matched. */
   readonly source: string
   readonly kind: 'term' | 'pattern'
+  /** Fixed code the hit is replaced with; absent = numbered placeholder. */
+  readonly code?: string
 }
 
 /** The redacted text plus what was replaced. */
@@ -62,6 +64,7 @@ export function findHits(text: string, rules: readonly RedactionRule[]): Redacti
         text: matched,
         source: rule.source,
         kind: rule.kind,
+        ...rule.code === undefined ? {} : { code: rule.code },
       })
     }
   }
@@ -121,7 +124,12 @@ export function redactText(
   let output = ''
   let cursor = 0
   for (const hit of hits) {
-    const placeholder = map.placeholder(hit.category, hit.label, hit.text)
+    // A rule with a fixed code replaces every hit with that code — a product's
+    // assigned letter, a holder company's abbreviation — instead of a numbered
+    // placeholder; the map still records the pairing so restore can undo it.
+    const placeholder = hit.code === undefined
+      ? map.placeholder(hit.category, hit.label, hit.text)
+      : map.code(hit.category, hit.code, hit.text)
     placeholders.push(placeholder)
     output += text.slice(cursor, hit.start) + placeholder
     cursor = hit.end

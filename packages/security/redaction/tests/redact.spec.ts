@@ -113,3 +113,23 @@ describe('redactText', () => {
     expect(twice.hits).toEqual([])
   })
 })
+
+describe('fixed codes', () => {
+  it('replaces every hit with the rule code and records the pairing', () => {
+    const map = new RedactionMap()
+    const rule = { ...term('product', '产品', '红霉素肠溶胶囊'), code: 'A' }
+    const text = '红霉素肠溶胶囊与红霉素肠溶胶囊的差异'
+    const result = redactText(text, [rule], map)
+    expect(result.text).toBe('A与A的差异')
+    expect(result.placeholders).toEqual(['A', 'A'])
+    const [entry] = map.entries()
+    expect(entry).toEqual({ placeholder: 'A', category: 'product', original: '红霉素肠溶胶囊' })
+    expect(map.restore(result.text)).toBe(text)
+  })
+
+  it('keeps numbered placeholders when the rule carries no code', () => {
+    const map = new RedactionMap()
+    const result = redactText('红霉素肠溶胶囊', [term('product', '产品', '红霉素肠溶胶囊')], map)
+    expect(result.text).toBe('[产品-1]')
+  })
+})

@@ -121,3 +121,116 @@ describe('compileRules', () => {
     expect(rules).toEqual([])
   })
 })
+
+describe('fixed codes', () => {
+  it('carries a category code through parsing and compilation', () => {
+    const parsed = parseTermList([
+      'version: 1',
+      "revision: 'codes-1'",
+      'categories:',
+      '  - id: product',
+      '    label: 产品',
+      '    code: A',
+      '    terms:',
+      '      - 红霉素肠溶胶囊',
+      '    patterns: []',
+    ].join('\n'))
+    expect(parsed.problems).toEqual([])
+    expect(parsed.categories[0]?.code).toBe('A')
+    const [rule] = compileRules(parsed)
+    expect(rule?.code).toBe('A')
+    expect(rule?.regex.test('红霉素肠溶胶胶囊')).toBe(false)
+    expect(rule?.regex.test('红霉素肠溶胶囊')).toBe(true)
+  })
+
+  it('leaves the code off when the category declares none', () => {
+    const parsed = parseTermList(TERMS)
+    expect(parsed.categories.every(entry => entry.code === undefined)).toBe(true)
+    expect(compileRules(parsed).every(rule => rule.code === undefined)).toBe(true)
+  })
+
+  it('rejects a code that is not 1-8 letters or digits', () => {
+    const parsed = parseTermList([
+      'version: 1',
+      "revision: 'codes-2'",
+      'categories:',
+      '  - id: product',
+      '    label: 产品',
+      '    code: "A/B"',
+      '    terms:',
+      '      - 红霉素肠溶胶囊',
+      '    patterns: []',
+    ].join('\n'))
+    expect(parsed.problems.some(problem => problem.message.includes('must be 1-8 letters or digits'))).toBe(true)
+    expect(isUsable(parsed)).toBe(false)
+  })
+
+  it('reports a code outside a category', () => {
+    const parsed = parseTermList([
+      'version: 1',
+      "revision: 'codes-3'",
+      'categories:',
+      '    code: Z',
+      '  - id: product',
+      '    label: 产品',
+      '    terms:',
+      '      - 红霉素',
+      '    patterns: []',
+    ].join('\n'))
+    expect(parsed.problems.some(problem => problem.message === 'code outside a category')).toBe(true)
+  })
+})
+
+describe('per-term codes', () => {
+  it('parses a codes section and compiles each term with its own code', () => {
+    const parsed = parseTermList([
+      'version: 1',
+      "revision: 'codes-4'",
+      'categories:',
+      '  - id: product',
+      '    label: 产品',
+      '    terms: []',
+      '    patterns: []',
+      '    codes:',
+      '      - 红霉素肠溶胶囊|A',
+      '      - 叶酸片|O',
+    ].join('\n'))
+    expect(parsed.problems).toEqual([])
+    expect(parsed.categories[0]?.codeMap).toEqual({ '红霉素肠溶胶囊': 'A', '叶酸片': 'O' })
+    const rules = compileRules(parsed)
+    expect(rules).toHaveLength(2)
+    expect(rules[0]?.code).toBe('A')
+    expect(rules[1]?.code).toBe('O')
+  })
+
+  it('rejects a malformed codes entry', () => {
+    const parsed = parseTermList([
+      'version: 1',
+      "revision: 'codes-5'",
+      'categories:',
+      '  - id: product',
+      '    label: 产品',
+      '    terms: []',
+      '    patterns: []',
+      '    codes:',
+      '      - 红霉素肠溶胶囊',
+    ].join('\n'))
+    expect(parsed.problems.some(problem => problem.message.includes('`term|code`'))).toBe(true)
+  })
+
+  it('lets a codes-only category pass the matches-nothing check', () => {
+    const parsed = parseTermList([
+      'version: 1',
+      "revision: 'codes-6'",
+      'categories:',
+      '  - id: product',
+      '    label: 产品',
+      '    terms: []',
+      '    patterns: []',
+      '    codes:',
+      '      - 红霉素肠溶胶囊|A',
+    ].join('\n'))
+    expect(parsed.problems).toEqual([])
+    expect(isUsable(parsed)).toBe(true)
+  })
+})

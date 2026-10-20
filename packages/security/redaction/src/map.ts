@@ -44,6 +44,26 @@ export class RedactionMap {
   }
 
   /**
+   * Fixed code for `original`, allocating nothing: the code comes from the term
+   * list, so every sighting of the same value yields the same short code (a
+   * product's assigned letter, a holder company's abbreviation) rather than a
+   * numbered placeholder. Still recorded in the entry log, so the restore tool
+   * can put the full name back.
+   * @param category Category that owns the code.
+   * @param code Fixed code the list declares.
+   * @param original Value the code stands for.
+   * @returns The code, reused when this value was seen before.
+   */
+  code(category: string, code: string, original: string): string {
+    const existing = this.#byOriginal.get(original)
+    if (existing !== undefined) return existing
+    this.#byOriginal.set(original, code)
+    this.#byPlaceholder.set(code, original)
+    this.#entries.push({ placeholder: code, category, original })
+    return code
+  }
+
+  /**
    * Original behind a placeholder, or undefined when this process never issued it.
    * @param placeholder Placeholder text to resolve.
    * @returns The value it stands for, or undefined for a placeholder from another process.
@@ -60,7 +80,15 @@ export class RedactionMap {
    */
   restore(text: string): string {
     if (this.#byPlaceholder.size === 0) return text
-    return text.replace(/\[[^\]\n]{1,32}-\d{1,6}\]/g, match => this.#byPlaceholder.get(match) ?? match)
+    // Numbered placeholders match by shape; fixed codes (a bare `A`, `ZY`) do
+    // not, so they are spliced back by direct lookup wherever they appear.
+    let restored = text.replace(/\[[^\]\n]{1,32}-\d{1,6}\]/g, match => this.#byPlaceholder.get(match) ?? match)
+    for (const [code, original] of this.#byPlaceholder) {
+      if (code.startsWith('[')) continue
+      if (!restored.includes(code)) continue
+      restored = restored.split(code).join(original)
+    }
+    return restored
   }
 
   /** Distinct values this process has replaced. */
@@ -74,6 +102,17 @@ export class RedactionMap {
    */
   entries(): readonly RedactionEntry[] {
     return this.#entries
+  }
+
+  /**
+   * Everything this process replaced, in first-seen order, forgetting it at the
+   * same moment — the hand-off form for persisting one session's table.
+   * @returns The recorded entries; empty before the first replacement.
+   */
+  takeEntries(): readonly RedactionEntry[] {
+    const taken = [...this.#entries]
+    this.clear()
+    return taken
   }
 
   /** Forget every placeholder and value, returning the map to its initial state. */

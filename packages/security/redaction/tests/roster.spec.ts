@@ -1,8 +1,8 @@
 /**
  * The staff directory is the only place a colleague's department is written
- * down, and the only list that can tell an ordinary word from a person's name.
- * Both jobs are asserted here: naming the department an upload belongs to, and
- * contributing colleagues and departments to the rules.
+ * down. It stays an attribution source - naming the department an upload
+ * belongs to and the account card - but no longer feeds redaction rules, so
+ * the tests here assert what still reads it and that names pass through.
  *
  * Every case seals its own directory and hands the key over through the
  * environment, because the alternative is reading the list this build ships —
@@ -101,20 +101,21 @@ async function loaded(includeRoster: boolean): Promise<Context> {
 }
 
 describe('staff directory', () => {
-  it('turns colleagues and departments into rules', async () => {
+  it('keeps the directory out of the rules but the published list in force', async () => {
     const ctx = await loaded(true)
-    expect(ctx.redaction.status.roster).toBe(3)
-    expect(ctx.redaction.redactText('张三')).not.toBe('张三')
-    expect(ctx.redaction.redactText('质量管理部')).not.toBe('质量管理部')
-    // The published half is still in force; the directory only adds to it.
+    expect(ctx.redaction.status.roster).toBe(0)
+    // Names and departments pass through untouched now.
+    expect(ctx.redaction.redactText('张三')).toBe('张三')
+    expect(ctx.redaction.redactText('质量管理部')).toBe('质量管理部')
+    // The published half is still in force.
     expect(ctx.redaction.redactText('结晶温度')).not.toBe('结晶温度')
   })
 
-  it('leaves the departed colleague out of the rules', async () => {
+  it('still identifies both colleagues for attribution', async () => {
     const ctx = await loaded(true)
-    expect(ctx.redaction.redactText('张三')).not.toBe('张三')
-    expect(ctx.redaction.redactText('李四')).toBe('李四')
-    expect(ctx.redaction.redactText('生产部')).not.toBe('生产部')
+    expect(ctx.redaction.identify('张三')?.department).toBe('质量管理部')
+    expect(ctx.redaction.identify('李四')?.department).toBe('生产部')
+    expect(ctx.redaction.attributionFor('李四')).toEqual({ author: '李四', department: '生产部' })
   })
 
   it('names the department of the colleague asking', async () => {

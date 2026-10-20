@@ -22,7 +22,9 @@ import type {} from '@deepseek-ai/dsh-tools'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { Session } from '@deepseek-ai/dsh-session'
 import { fileURLToPath } from 'node:url'
 import {
   listLocalTermFiles,
@@ -140,6 +142,8 @@ export interface Config {
    * that ships here.
    */
   rosterPath?: string
+  /** Persist the placeholder table to the local mappings directory when a session ends. */
+  mappings?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -247,6 +251,7 @@ export class RedactionService extends Service {
       visionTimeoutMs: config.visionTimeoutMs ?? DEFAULT_VISION_TIMEOUT_MS,
       includeRoster: config.includeRoster ?? true,
       rosterPath: config.rosterPath ?? ROSTER_PATH,
+      mappings: config.mappings ?? true,
     }
     this.current = {
       enabled: true,
@@ -298,6 +303,13 @@ export class RedactionService extends Service {
         ...meta === undefined ? {} : { meta },
         ...decision.additionalContexts === undefined ? {} : { additionalContexts: decision.additionalContexts },
       }
+    })
+    // A session's placeholders only stay restorable while the mapping exists, so
+    // the mapping goes to the local mappings directory the moment the session
+    // leaves the store. The restore tool reads it there, puts the originals back
+    // into exported files, and deletes the file afterwards.
+    ctx.on('session/disposed', (session: Session) => {
+      void this.writeMappings(session)
     })
   }
 
@@ -503,22 +515,17 @@ export class RedactionService extends Service {
   }
 
   /**
-   * Turn the staff directory into categories the rules can use.
+   * The staff directory no longer contributes redaction rules.
    *
-   * Colleagues and departments become terms of their own rather than a handful
-   * of narrow patterns, because whether an ordinary word is a name is knowable
-   * only from a list of names. Off, or not readable, contributes nothing.
-   * @returns Departments first, then colleagues; empty when either is unavailable.
+   * It used to turn colleagues and departments into `person`/`department`
+   * terms; the confidentiality office retired that behaviour because redacting
+   * the people a colleague mentions makes the conversation unreadable. The
+   * roster itself stays loaded: {@link identify} and {@link attributionFor}
+   * still read it to stamp uploads and describe the signed-in account.
+   * @returns Always empty; kept so the recompile seam stays in one place.
    */
   private rosterCategories(): RedactionCategory[] {
-    const roster = this.roster
-    if (!this.config.includeRoster || roster === undefined) return []
-    const colleagues = roster.people.filter(person => person.active).map(person => person.name)
-    const departments = [...roster.departments]
-    return [
-      ...departments.length === 0 ? [] : [{ id: 'department', label: '部门', terms: departments, patterns: [] }],
-      ...colleagues.length === 0 ? [] : [{ id: 'person', label: '人名', terms: colleagues, patterns: [] }],
-    ]
+    return []
   }
 
   /**
@@ -665,6 +672,26 @@ export class RedactionService extends Service {
     const pending = requests.filter(request => request.state === 'pending').length
     if (pending !== this.current.pending) this.current = { ...this.current, pending }
     return pending
+  }
+
+  /**
+   * Write the placeholder table out for one ended session and hand the map back
+   * to an empty state, so nothing restorable lingers in memory past the session
+   * that produced it.
+   * @param session The session that just left the store.
+   */
+  private async writeMappings(session: Session): Promise<void> {
+    const entries = this.map.takeEntries()
+    if (!this.config.mappings || entries.length === 0) return
+    const directory = join(this.config.cacheDirectory, 'mappings')
+    try {
+      await mkdir(directory, { recursive: true })
+      const body = entries.map(entry => JSON.stringify({ placeholder: entry.placeholder, category: entry.category, original: entry.original })).join('\n') + '\n'
+      await writeFile(join(directory, `${session.id}.jsonl`), body, 'utf8')
+    } catch {
+      // A mapping that cannot be written only costs the restore step; placeholders
+      // in the session stay in force and no error escapes disposal.
+    }
   }
 
   /**

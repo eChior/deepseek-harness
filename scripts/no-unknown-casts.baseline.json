@@ -71,7 +71,8 @@
     "e46a2f88f5bcac6be4336f4a9b106f5cb17c1eec4610b29145dc413254471a94": 1
   },
   "apps/desktop/tests/update-schedule.spec.ts": {
-    "d8502ebfa0f7381727d04f3999c1a1e85c27ca770ef336e6cbe9dfd41d6b53bd": 1
+    "4cca49b07c1137c636df16502e2fcd4ed883eb2d9294048c134e119d3f130dea": 1,
+    "8ff35ab2d5d66a14669deb1d66d610efb0fa861736867812195384120da23f05": 1
   },
   "apps/desktop/tests/windows-sign.spec.ts": {
     "7fe58280287ff63d40e979e72329f975e11015a95e9a8eec207a5a78748d3c89": 2

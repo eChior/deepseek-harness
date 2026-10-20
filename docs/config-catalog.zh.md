@@ -2420,7 +2420,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:106`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:108`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**
@@ -2470,6 +2470,8 @@ export interface Config {
    * that ships here.
    */
   rosterPath?: string
+  /** Persist the placeholder table to the local mappings directory when a session ends. */
+  mappings?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->

@@ -13,6 +13,10 @@ export interface RedactionCategory {
   readonly label: string
   readonly terms: readonly string[]
   readonly patterns: readonly string[]
+  /** Fixed code every term of this category is replaced with; absent = numbered placeholders. */
+  readonly code?: string
+  /** Per-term fixed codes; a term listed here replaces with its own code. */
+  readonly codeMap?: Readonly<Record<string, string>>
 }
 
 /** A parsed term list. */
@@ -47,6 +51,8 @@ export interface RedactionRule {
   /** The line from the list that produced this rule, for reporting a hit. */
   readonly source: string
   readonly regex: RegExp
+  /** Fixed code the hit is replaced with instead of a numbered placeholder. */
+  readonly code?: string
 }
 
 const CATEGORY_ID = /^[a-z][a-z0-9-]*$/
@@ -66,6 +72,8 @@ interface MutableCategory {
   label: string
   terms: string[]
   patterns: string[]
+  code: string
+  codes: Map<string, string>
   readonly line: number
 }
 
@@ -84,7 +92,7 @@ export function parseTermList(text: string): ParsedTermList {
   let enabled = true
   let declared = false
   let category: MutableCategory | undefined
-  let section: 'terms' | 'patterns' | undefined
+  let section: 'terms' | 'patterns' | 'codes' | undefined
   const fail = (line: number, message: string): void => {
     problems.push({ line, message })
   }
@@ -97,7 +105,7 @@ export function parseTermList(text: string): ParsedTermList {
 
     let match = /^  - id:\s*(.*)$/.exec(raw)
     if (match !== null) {
-      category = { id: stripQuotes(match[1]), label: '', terms: [], patterns: [], line }
+      category = { id: stripQuotes(match[1]), label: '', terms: [], patterns: [], code: '', codes: new Map(), line }
       categories.push(category)
       section = undefined
       continue
@@ -108,10 +116,16 @@ export function parseTermList(text: string): ParsedTermList {
       else category.label = stripQuotes(match[1])
       continue
     }
-    match = /^    (terms|patterns):\s*(\[\])?\s*$/.exec(raw)
+    match = /^    code:\s*(.*)$/.exec(raw)
+    if (match !== null) {
+      if (category === undefined) fail(line, 'code outside a category')
+      else category.code = stripQuotes(match[1])
+      continue
+    }
+    match = /^    (terms|patterns|codes):\s*(\[\])?\s*$/.exec(raw)
     if (match !== null) {
       if (category === undefined) fail(line, `${match[1]} outside a category`)
-      else section = match[1] as 'terms' | 'patterns'
+      else section = match[1] as 'terms' | 'patterns' | 'codes'
       continue
     }
     match = /^      - (.*)$/.exec(raw)
@@ -121,6 +135,19 @@ export function parseTermList(text: string): ParsedTermList {
         continue
       }
       const value = stripQuotes(match[1])
+      if (section === 'codes') {
+        const separator = value.lastIndexOf('|')
+        if (separator <= 0 || separator === value.length - 1) {
+          fail(line, 'a codes entry must be `term|code`')
+          continue
+        }
+        const term = value.slice(0, separator).trim()
+        const code = value.slice(separator + 1).trim()
+        if (term === '') fail(line, 'a codes entry must be `term|code`')
+        else if (!/^[A-Za-z0-9]{1,8}$/.test(code)) fail(line, `code "${code}" must be 1-8 letters or digits`)
+        else category.codes.set(term, code)
+        continue
+      }
       if (section === 'patterns') {
         try {
           new RegExp(value)
@@ -176,7 +203,10 @@ export function parseTermList(text: string): ParsedTermList {
     else if (seen.has(entry.id)) fail(entry.line, `duplicate category id "${entry.id}"`)
     seen.add(entry.id)
     if (entry.label === '') fail(entry.line, `category "${entry.id}" has no label`)
-    if (entry.terms.length === 0 && entry.patterns.length === 0) {
+    if (entry.code !== '' && !/^[A-Za-z0-9]{1,8}$/.test(entry.code)) {
+      fail(entry.line, `category "${entry.id}" has a code "${entry.code}" that must be 1-8 letters or digits`)
+    }
+    if (entry.terms.length === 0 && entry.patterns.length === 0 && entry.codes.size === 0) {
       fail(entry.line, `category "${entry.id}" matches nothing`)
     }
   }
@@ -186,7 +216,10 @@ export function parseTermList(text: string): ParsedTermList {
   return {
     version,
     revision,
-    categories,
+    categories: categories.map(({ code, codes, ...rest }) => {
+      const withCode = code === '' ? rest : { ...rest, code }
+      return codes.size === 0 ? withCode : { ...withCode, codeMap: Object.fromEntries(codes) }
+    }),
     ...department === '' ? {} : { department },
     ...author === '' ? {} : { author },
     ...declared ? { enabled } : {},
@@ -217,6 +250,18 @@ function escapeRegExp(value: string): string {
 export function compileRules(list: RedactionTermList): RedactionRule[] {
   const rules: RedactionRule[] = []
   for (const category of list.categories) {
+    if (category.codeMap !== undefined) {
+      for (const [term, code] of Object.entries(category.codeMap)) {
+        rules.push({
+          category: category.id,
+          label: category.label,
+          kind: 'term',
+          source: term,
+          regex: new RegExp(escapeRegExp(term), 'g'),
+          code,
+        })
+      }
+    }
     for (const term of category.terms) {
       rules.push({
         category: category.id,
@@ -224,6 +269,7 @@ export function compileRules(list: RedactionTermList): RedactionRule[] {
         kind: 'term',
         source: term,
         regex: new RegExp(escapeRegExp(term), 'g'),
+        ...category.code === undefined ? {} : { code: category.code },
       })
     }
     for (const pattern of category.patterns) {
