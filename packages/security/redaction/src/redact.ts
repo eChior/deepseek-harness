@@ -46,6 +46,54 @@ export interface RedactionResult {
 export const DEFAULT_PRIORITY: readonly string[] = ['identifier', 'person']
 
 /**
+ * Ranges a rule may never rewrite, because a model has to act on them verbatim.
+ *
+ * A tool envelope names the file it touched inside `<path>`; rewriting a product
+ * name there turns `D:\…\红霉素肠溶胶囊工艺.docx` into `D:\…\A工艺.docx`, and the
+ * next tool call fails to find a file that was never renamed. A file is located
+ * by this string, so the string has to survive the guard. Exactly the same
+ * reasoning covers the attachment handle's saved path.
+ */
+const PROTECTED_SPANS: readonly RegExp[] = [
+  /<path>[^\n]*?<\/path>/gu,
+  // The attachment handle names the file twice — a display name and the saved
+  // address. Both are how the model refers to the file afterwards, so neither
+  // may be rewritten.
+  /\[File "[^"\n]*"/gu,
+  // A quoted Windows path keeps its spaces. The attachment handle always quotes
+  // the saved copy, and `C:\Users\A B\report.docx` is a real address: cutting it
+  // at the first space would leave the product name exposed while still
+  // producing a path the model cannot open.
+  /"[A-Za-z]:\\[^"\n]*"/gu,
+  // An unquoted Windows path that ends in a file extension keeps its spaces too,
+  // and stops at the extension so the sentence around it is still scanned. An
+  // extension is letters only, which is what keeps `3.5mg` from being read as
+  // the end of a path.
+  /[A-Za-z]:\\(?:[^"'<>\n\\]*\\)*[^"'<>\n\\]*?\.[A-Za-z]{1,8}(?![.\w])/gu,
+  /[A-Za-z]:\\[^\s"'<>]*/gu,
+  // The same two shapes on a POSIX path, so a folder whose name carries a space
+  // (`/srv/华润三九众益 资料/…`) is protected whole rather than up to the space.
+  /(?:^|[\s"'(])\/(?:[^"'<>\n\/]*\/)*[^"'<>\n\/]*?\.[A-Za-z]{1,8}(?![.\w])/gu,
+  /(?:^|[\s"'(])\/(?:[^\s"'<>)]+\/?)+/gu,
+]
+
+/**
+ * Spans a rule must leave alone, as half-open `[start, end)` pairs.
+ * @param text Text about to be scanned.
+ * @returns The protected ranges, in no particular order.
+ */
+export function protectedSpans(text: string): readonly (readonly [number, number])[] {
+  const spans: [number, number][] = []
+  for (const pattern of PROTECTED_SPANS) {
+    for (const match of text.matchAll(pattern)) {
+      const start = match.index
+      spans.push([start, start + match[0].length])
+    }
+  }
+  return spans
+}
+
+/**
  * Every match of every rule, overlaps included.
  * @param text Text to scan.
  * @param rules Compiled rules to run against it.
@@ -125,7 +173,13 @@ export function redactText(
   map: RedactionMap,
   priority: readonly string[] = DEFAULT_PRIORITY,
 ): RedactionResult {
-  const hits = resolveOverlaps(findHits(text, rules), priority)
+  const spans = protectedSpans(text)
+  const accepted = resolveOverlaps(findHits(text, rules), priority)
+  // A hit inside a path or a `<path>` envelope is dropped, not clipped: half a
+  // file name is neither the original nor a placeholder the reader can restore.
+  const hits = spans.length === 0
+    ? accepted
+    : accepted.filter(hit => !spans.some(([start, end]) => hit.start < end && start < hit.end))
   if (hits.length === 0) return { text, hits: [], placeholders: [] }
   const placeholders: string[] = []
   let output = ''

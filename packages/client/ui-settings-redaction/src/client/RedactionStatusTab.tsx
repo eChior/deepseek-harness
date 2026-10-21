@@ -116,7 +116,9 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
         <dt className={css.term}>{t('checkedLabel')}</dt>
         <dd className={css.value}>{view.lastChecked ?? t('never')}</dd>
         <dt className={css.term}>{t('imageToolLabel')}</dt>
-        <dd className={css.value}>{t('imageToolDenied')}</dd>
+        <dd className={css.value}>{view.imageTool ? t('toggleOn') : t('imageToolDenied')}</dd>
+        <dt className={css.term}>{t('mappingsLabel')}</dt>
+        <dd className={css.value}>{view.mappings ? t('toggleOn') : t('toggleOff')}</dd>
       </dl>
       <p className={css.hint}>{t('rulesHint')}</p>
       {view.detail !== null && <p className={css.note}>{t('detailBlocked', { detail: view.detail })}</p>}

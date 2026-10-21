@@ -440,6 +440,7 @@ function makeHarness(
     actions: chat.actions,
     usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView)),
     useUserPlaceholders: bindSnapshotSelector(createSnapshotStore<ReadonlyMap<string, string> | null>(null)),
+    useRedactionHighlight: bindSnapshotSelector(createSnapshotStore('#d92d20')),
     renderSlot,
     SessionProvider: SessionProviderStub,
     inspectCall: (callId: string) => { openView('trajectory', callId) },

@@ -7,6 +7,7 @@ import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserViewInjected } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
+import { DEFAULT_REDACTION_HIGHLIGHT } from '../../chat-settings.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
@@ -39,6 +40,14 @@ function contentParts(content: readonly unknown[]): {
   }
   return { text: texts.join(''), attachments, rest }
 }
+
+/**
+ * U+2060 word joiner. A fixed code or alias group is published wrapped in this
+ * so the bare letters (`A`, `ZY`, `公司1-1`) are never spliced out of a natural
+ * word. Declared locally rather than imported: a client plugin may not take a
+ * value import from another plugin's package.
+ */
+const CODE_JOINER = '\u2060'
 
 function retrySeconds(milliseconds: number): number {
   return Math.max(1, Math.ceil(milliseconds / 1_000))
@@ -160,28 +169,98 @@ function TurnMaxTokensItem({ t }: {
   )
 }
 
+/** Numbered placeholders the provider hands out; only these match by shape. */
+const NUMBERED_PLACEHOLDER = /\[[^\]\n]{1,32}-\d{1,6}]/g
+
+/** One run of the view text, flagged when it replaces a placeholder. */
+interface ViewPiece {
+  readonly text: string
+  readonly restored: boolean
+}
+
+/** The view text plus the spans a reader should be able to tell apart. */
+interface RestoredView {
+  readonly text: string
+  /** Half-open `[start, end)` offsets into `text` holding restored values. */
+  readonly spans: readonly (readonly [number, number])[]
+}
+
+/** Swap every unreplaced run of `pieces` on `needle`, flagging the replacements. */
+function replaceInPieces(pieces: ViewPiece[], needle: string, replacement: string): boolean {
+  let replaced = false
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index]
+    if (piece === undefined || piece.restored || !piece.text.includes(needle)) continue
+    const parts: ViewPiece[] = []
+    let cursor = 0
+    let hit = piece.text.indexOf(needle)
+    while (hit !== -1) {
+      if (hit > cursor) parts.push({ text: piece.text.slice(cursor, hit), restored: false })
+      parts.push({ text: replacement, restored: true })
+      cursor = hit + needle.length
+      hit = piece.text.indexOf(needle, cursor)
+    }
+    if (cursor < piece.text.length) parts.push({ text: piece.text.slice(cursor), restored: false })
+    pieces.splice(index, 1, ...parts)
+    replaced = true
+  }
+  return replaced
+}
+
+/** Swap numbered placeholders by shape; unknown ones stay visible as logged. */
+function restoreNumbered(pieces: ViewPiece[], placeholders: ReadonlyMap<string, string>): void {
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index]
+    if (piece === undefined || piece.restored) continue
+    const parts: ViewPiece[] = []
+    let cursor = 0
+    for (const match of piece.text.matchAll(NUMBERED_PLACEHOLDER)) {
+      const original = placeholders.get(match[0])
+      if (original === undefined) continue
+      const start = match.index
+      if (start > cursor) parts.push({ text: piece.text.slice(cursor, start), restored: false })
+      parts.push({ text: original, restored: true })
+      cursor = start + match[0].length
+    }
+    if (parts.length === 0) continue
+    if (cursor < piece.text.length) parts.push({ text: piece.text.slice(cursor), restored: false })
+    pieces.splice(index, 1, ...parts)
+  }
+}
+
 /**
  * Swap every placeholder this machine issued back for its value, for the view
- * only. Numbered placeholders match by shape; fixed codes and alias groups are
- * stored wrapped in the placeholder map key exactly as the provider hands them
- * over, so a plain splice by key can never hit a natural word in the text.
+ * only. Numbered placeholders match by shape; fixed codes and alias groups
+ * travel wrapped in U+2060 word joiners so a natural occurrence of the letters
+ * is never spliced, and the entry log carries the bare code — the wrapping is
+ * put back here rather than looked for in the text.
  * @param text Text as the session logged it.
  * @param placeholders Placeholder to original, from the provider's table.
- * @returns The text with every known placeholder restored.
+ * @returns The restored text and the spans that hold a restored value.
  */
-function restoreUserView(text: string, placeholders: ReadonlyMap<string, string>): string {
-  let restored = text.replace(/\[[^\]\n]{1,32}-\d{1,6}]/g, match => placeholders.get(match) ?? match)
+function restoreUserView(text: string, placeholders: ReadonlyMap<string, string>): RestoredView {
+  const pieces: ViewPiece[] = [{ text, restored: false }]
+  restoreNumbered(pieces, placeholders)
   for (const [key, original] of placeholders) {
-    if (key.startsWith('[') || key === original || !restored.includes(key)) continue
-    restored = restored.split(key).join(original)
+    if (key.startsWith('[') || key === original) continue
+    // Searching for the bare code would leave the joiners stranded in the
+    // rendered text; the wrapped form is what the session actually holds.
+    if (replaceInPieces(pieces, `${CODE_JOINER}${key}${CODE_JOINER}`, original)) continue
+    replaceInPieces(pieces, key, original)
   }
-  return restored
+  let restored = ''
+  const spans: (readonly [number, number])[] = []
+  for (const piece of pieces) {
+    if (piece.restored && piece.text !== '') spans.push([restored.length, restored.length + piece.text.length])
+    restored += piece.text
+  }
+  return { text: restored, spans }
 }
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
   content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], skillNames = [],
-  previewAttachments, references, useUserPlaceholders, t,
+  previewAttachments, references, useUserPlaceholders, useRedactionHighlight, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -200,6 +279,8 @@ function UserStyleBubble({
   references?: Pick<ChatNodeOwnerProps, 'openFile' | 'openSkill'>
   /** Placeholder-to-original map hook; absent rows keep the placeholder visible. */
   useUserPlaceholders?: SnapshotSelectorHook<ReadonlyMap<string, string> | null>
+  /** Colour a restored original is painted in; the user owns the preference. */
+  useRedactionHighlight?: SnapshotSelectorHook<string>
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, attachments: contentAttachments, rest } = contentParts(content)
@@ -208,8 +289,9 @@ function UserStyleBubble({
   // machine issued back for its value in the view only. The session log and
   // every outbound request keep the placeholder; unknown placeholders and the
   // pre-provider state render exactly what was logged.
-  const viewText = placeholders === null || placeholders === undefined || placeholders.size === 0
-    ? text
+  const highlightColor = useRedactionHighlight?.(value => value) ?? DEFAULT_REDACTION_HIGHLIGHT
+  const view: RestoredView = placeholders === null || placeholders === undefined || placeholders.size === 0
+    ? { text, spans: [] }
     : restoreUserView(text, placeholders)
   const attachments = previewAttachments ?? contentAttachments
   const compactImages = attachments.length > 1
@@ -249,7 +331,14 @@ function UserStyleBubble({
           </div>
         )}
         {showBubble && <div className={css.bubble}>
-          {projectUserText(viewText, referenceLabels, skillNames, 'skill', references)}
+          {projectUserText(
+            view.text,
+            referenceLabels,
+            skillNames,
+            'skill',
+            references,
+            view.spans.length === 0 ? undefined : { spans: view.spans, color: highlightColor },
+          )}
           {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
         </div>}
         {referenceLabels.length > 0 && (
@@ -348,7 +437,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, openFile, openSkill, useUserPlaceholders, t,
+  node, renderMessageImages, openFile, openSkill, useUserPlaceholders, useRedactionHighlight, t,
 }: ChatNodeViewProps<'user' | 'steering'> & InjectFace<UserViewInjected>) {
   const data = node.data
   return (
@@ -357,6 +446,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       references={{ openFile, openSkill }}
       renderMessageImages={renderMessageImages}
       useUserPlaceholders={useUserPlaceholders}
+      useRedactionHighlight={useRedactionHighlight}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
       {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
       t={t}

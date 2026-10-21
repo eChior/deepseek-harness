@@ -26,6 +26,7 @@ const READY: RedactionStatusView = {
   localFiles: 0,
   roster: 0,
   imageTool: true,
+  mappings: true,
 }
 
 const ROSTER: RedactionRosterView = {

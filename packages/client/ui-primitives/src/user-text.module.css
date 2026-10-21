@@ -8,6 +8,15 @@
   line-height: inherit;
 }
 
+/* A value restored from a redaction placeholder. The colour arrives inline from
+   the user's own preference; only the weight and the underline are ours, so the
+   text reads as restored rather than as a reference chip. */
+.restoredHit {
+  font-weight: 500;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 .refChip {
   /* Plain inline, NOT inline-flex: a flex container takes its baseline from
      its first flex item — the icon svg, which has no text baseline — so the

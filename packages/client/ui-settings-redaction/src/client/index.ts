@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the ctx.configForms Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: the Plugins page's SlotMap merge (the 'settings.plugins.tab' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: the ctx.remote Context merge and the forwarded-event key face.
@@ -37,8 +38,29 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'settings.redaction'
 
-/** Services required by the Settings registration and generated Remote face. */
-export const inject = ['slots', 'locale', 'remote', 'remote.redaction', 'sessions']
+/**
+ * Services required by the Settings registration, the composer badge, and the
+ * generated Remote face.
+ *
+ * `configForms` is not optional: the badge's view toggle writes the `ui-chat`
+ * preference through it, and a missing key would make that write throw inside
+ * a click handler where nothing catches it.
+ */
+export const inject = ['slots', 'locale', 'remote', 'remote.redaction', 'sessions', 'configForms']
+
+/** The Chat namespace holding the transcript view preference. */
+const CHAT_NAMESPACE = 'ui-chat'
+
+/** The Chat preferences this plugin reads and writes. */
+interface ChatPreferences {
+  /** `placeholder` keeps what the model read; `original` shows what was typed. */
+  redactionUserView?: 'original' | 'placeholder'
+  /** Colour a restored original is painted in. */
+  redactionHighlightColor?: string
+}
+
+/** Colour a restored original is painted in when the preference is unset. */
+const DEFAULT_HIGHLIGHT = '#d92d20'
 
 /** Contribute the redaction tab to the Plugins settings section. */
 export function apply(ctx: ClientContext): void {
@@ -70,14 +92,68 @@ export function apply(ctx: ClientContext): void {
   // placeholders this machine issued and owning the user-side view choice.
   // The shared chat preference store is read lazily inside the inject face:
   // the ui-chat namespace may be absent (an old client build), and the badge
-  // then renders without the toggle rather than failing the composer.
-  const badgeInjected = (): RedactionBadgeInjected => ({
-    entries: async () => unwrap('entries', await remote.entries()),
-    setUserView: (view) => {
-      const chatSettings = ctx.configForms.get<{ redactionUserView?: 'original' | 'placeholder' }>('ui-chat')
-      void chatSettings.set('redactionUserView', view).catch((_error: unknown) => {
-        // The choice stays session-local when persistence is unavailable.
+  // then reports the default rather than failing the composer.
+  const chatForm = (): ConfigForm<ChatPreferences> => ctx.configForms.get<ChatPreferences>(CHAT_NAMESPACE)
+
+  const chatView = (): 'original' | 'placeholder' => {
+    try {
+      return chatForm().getSnapshot().value?.redactionUserView ?? 'original'
+    } catch (_error) {
+      // No Chat settings provider: the transcript reads originals by default.
+      return 'original'
+    }
+  }
+
+  const chatHighlight = (): string => {
+    try {
+      return chatForm().getSnapshot().value?.redactionHighlightColor ?? DEFAULT_HIGHLIGHT
+    } catch (_error) {
+      // No Chat settings provider: fall back to the shipped colour.
+      return DEFAULT_HIGHLIGHT
+    }
+  }
+
+  // The table is asked for by session: a mapping file belongs to one task, and
+  // two conversations may hand the same placeholder to different values.
+  const badgeInjected = (sessionId: string): RedactionBadgeInjected => ({
+    entries: async () => unwrap('entries', await remote.entries({ sessionId })),
+    status: async () => unwrap('status', await remote.status()),
+    highlightColor: chatHighlight(),
+    setHighlightColor: (color) => {
+      try {
+        void chatForm().set('redactionHighlightColor', color).catch((_error: unknown) => {
+          // The colour stays in this session when persistence is unavailable.
+        })
+      } catch (_error) {
+        // No Chat settings provider: nothing can be written, nothing breaks.
+      }
+    },
+    // The mapping switch lives on the Host guard, not in a client preference:
+    // the session-end write happens in the Host process.
+    setMappings: (enabled) => {
+      void remote.setMappings({ enabled }).catch((_error: unknown) => {
+        // A refused write leaves the switch where the next poll reports it.
       })
+    },
+    userView: chatView(),
+    readUserView: chatView,
+    // The toggle's highlight has to follow the stored preference even when the
+    // write lands after the click; a static face would leave the old button lit.
+    subscribeUserView: (listener) => {
+      try {
+        return chatForm().subscribe(listener)
+      } catch (_error) {
+        return () => {}
+      }
+    },
+    setUserView: (view) => {
+      try {
+        void chatForm().set('redactionUserView', view).catch((_error: unknown) => {
+          // The choice stays session-local when persistence is unavailable.
+        })
+      } catch (_error) {
+        // No Chat settings provider: nothing can be written, nothing breaks.
+      }
     },
   })
 
@@ -86,7 +162,7 @@ export function apply(ctx: ClientContext): void {
     id: 'redaction-badge',
     order: -10,
     locale: NS,
-    inject: (): RedactionBadgeInjected => badgeInjected(),
+    inject: (sessionId): RedactionBadgeInjected => badgeInjected(sessionId),
   }, RedactionBadge))
 }
 

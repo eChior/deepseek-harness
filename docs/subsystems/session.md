@@ -782,6 +782,13 @@ Rewrite the text of an admitted prompt into stable placeholders, so the values i
 
 ```ts cordis-catalog
 /**
+ * Turn the mapping write-back on or off for the rest of this process.
+ * @param on - whether an ended session should leave a restorable table behind.
+ * @returns The value now in force.
+ */
+setMappings(on: boolean): boolean
+
+/**
  * Load a term list and start refreshing it.
  *
  * The cached copy is preferred because it is the one this machine last saw a
@@ -879,20 +886,33 @@ async pendingRequests(): Promise<TermRequest[]>
 async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
 
 /**
- * The placeholder table this process is holding, for a reader that renders
- * session text to the user. The values are what the model must not see but
- * the user may: they cross to the browser that renders this machine's own
- * sessions and nowhere else.
- * @returns Every recorded entry, in the order the values were first seen.
+ * The table one session was written with, read from that session's own file.
+ * @param sessionId Session whose conversation is being rendered.
+ * @returns The entries that file records, in the order they were written.
+ */
+async mappingsFor(sessionId: string): Promise<readonly RedactionEntry[]>
+
+/**
+ * Every pairing this machine can currently restore, for a reader that renders
+ * session text to the user. The values are what the model must not see but the
+ * user may: they cross to the browser that renders this machine's own sessions
+ * and nowhere else.
+ *
+ * Includes what earlier processes wrote to a mapping file, because a session
+ * outlives the process that wrote it and a reader coming back to an older
+ * conversation must still be shown the originals behind its placeholders.
+ * @returns Every restorable entry, this process's own first.
  */
 entries(): readonly RedactionEntry[]
 
 /**
  * Turn the placeholders this session emitted back into the values they stand for.
  * @param text Text that may carry placeholders.
- * @returns The text with every placeholder this process issued restored.
+ * @param sessionId Session the text belongs to. When given, only that
+ *   conversation's mapping file and this process's live work are consulted.
+ * @returns The text with every placeholder it carries restored.
  */
-restore(text: string): string
+restore(text: string, sessionId?: string): string
 
 /**
  * Look one colleague up by the name the account service reports.

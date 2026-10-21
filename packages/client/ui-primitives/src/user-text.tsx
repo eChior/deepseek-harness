@@ -45,6 +45,18 @@ export interface UserTextReferences {
 }
 
 /**
+ * Spans of `text` the caller restored from a redaction placeholder, and the
+ * colour to paint them in, so a reader can tell restored values from what they
+ * typed.
+ */
+export interface UserTextHighlight {
+  /** Half-open `[start, end)` offsets into the projected text. */
+  readonly spans: readonly (readonly [number, number])[]
+  /** Any CSS colour; the caller owns the preference behind it. */
+  readonly color: string
+}
+
+/**
  * Split one sent text into inline plain runs and reference chips.
  * @param text - the logged model text of the message or queue row.
  * @param sessionLabels - exact session mention labels associated by an adjacent recall.
@@ -53,6 +65,8 @@ export interface UserTextReferences {
  * (unsent queue rows pass none).
  * @param slashKind - the chip kind those tokens render as.
  * @param references - optional file and skill preview actions; session and command tokens stay labels.
+ * @param highlight - optional spans the caller restored from a redaction placeholder,
+ *   painted in the colour it gives so a reader can tell them from ordinary text.
  * @returns inline nodes covering the whole text.
  */
 export function projectUserText(
@@ -61,6 +75,7 @@ export function projectUserText(
   slashNames: readonly string[] = [],
   slashKind: 'skill' | 'command' = 'skill',
   references?: UserTextReferences,
+  highlight?: UserTextHighlight,
 ): ReactNode {
   const ranges: DecorationRange[] = []
   SESSION_WIRE_RE.lastIndex = 0
@@ -100,8 +115,27 @@ export function projectUserText(
   ranges.sort((a, b) => a.start - b.start || rankOf(a) - rankOf(b) || b.end - a.end)
   const parts: ReactNode[] = []
   let cursor = 0
+  // A restored original is ordinary text to every other reader of this string,
+  // so it is painted here rather than flagged at the source: the range list
+  // arrives already offset into `text`.
+  const hits = highlight === undefined
+    ? []
+    : [...highlight.spans]
+      .filter(([start, end]) => start < end)
+      .sort((a, b) => a[0] - b[0])
   const pushPlain = (from: number, to: number): void => {
-    parts.push(<span key={`t${from}`} className={css.plainRun}>{text.slice(from, to)}</span>)
+    let at = from
+    for (const [start, end] of hits) {
+      if (end <= at || start >= to) continue
+      const open = Math.max(start, at)
+      const close = Math.min(end, to)
+      if (open > at) parts.push(<span key={`t${at}`} className={css.plainRun}>{text.slice(at, open)}</span>)
+      parts.push(
+        <span key={`h${open}`} className={css.restoredHit} style={{ color: highlight?.color }}>{text.slice(open, close)}</span>,
+      )
+      at = close
+    }
+    if (at < to) parts.push(<span key={`t${at}`} className={css.plainRun}>{text.slice(at, to)}</span>)
   }
   for (const range of ranges) {
     if (range.start < cursor) continue
@@ -150,7 +184,7 @@ export function projectUserText(
       </button>)
     cursor = end
   }
-  if (parts.length === 0) return <span className={css.plainRun}>{text}</span>
+  if (parts.length === 0 && hits.length === 0) return <span className={css.plainRun}>{text}</span>
   if (cursor < text.length) pushPlain(cursor, text.length)
   return <>{parts}</>
 }

@@ -155,6 +155,8 @@ export interface ChatNodeInjected {
     disclosure: SlotHookFactory<'conversation.chat.node', UseDisclosure>
     /** Placeholder-to-original map served by the redaction provider, or null while unavailable. */
     userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>
+    /** Colour the user picked for a restored original, so a reader sees what was replaced. */
+    redactionHighlight: ObservableSnapshot<string>
   }
 }
 
@@ -196,6 +198,8 @@ export interface UserViewInjected {
   hooks: {
     /** Placeholder to original, live; absent when no provider serves this machine. */
     userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>
+    /** Colour a restored original is painted in. */
+    redactionHighlight: ObservableSnapshot<string>
   }
 }
 
@@ -245,6 +249,8 @@ export interface ChatViewInjected {
     presentation: ObservableSnapshot<ChatPresentationPolicy>
     /** Placeholder-to-original map served by the redaction provider, or null while unavailable. */
     userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>
+    /** Colour a restored original is painted in. */
+    redactionHighlight: ObservableSnapshot<string>
   }
   keyedHooks: {
     /** Resolve the stable source for one Chat Node key. */

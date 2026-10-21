@@ -1828,6 +1828,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Rewrite the text of an admitted prompt into stable placeholders, so the values it replaced reach neither the session log nor a model request.',
     methods: [
       {
+        signature: 'setMappings(on: boolean): boolean',
+        description: 'Turn the mapping write-back on or off for the rest of this process.',
+        parameters: [{ name: 'on', description: 'whether an ended session should leave a restorable table behind.' }],
+        returns: 'The value now in force.',
+      },
+      {
         signature: 'async load(): Promise<RedactionStatus>',
         description: 'Load a term list and start refreshing it.\n\nThe cached copy is preferred because it is the one this machine last saw a publisher confirm, and the copy inside the package is the fallback for an install that never reached the publisher — except when the package carries a later revision, which is what an upgrade looks like. A refresh follows whenever a list was loaded and the deployment tracks a repository.',
         parameters: [],
@@ -1883,16 +1889,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'What the attempt did with the queue.',
       },
       {
-        signature: 'entries(): readonly RedactionEntry[]',
-        description: 'The placeholder table this process is holding, for a reader that renders session text to the user. The values are what the model must not see but the user may: they cross to the browser that renders this machine\'s own sessions and nowhere else.',
-        parameters: [],
-        returns: 'Every recorded entry, in the order the values were first seen.',
+        signature: 'async mappingsFor(sessionId: string): Promise<readonly RedactionEntry[]>',
+        description: 'The table one session was written with, read from that session\'s own file.',
+        parameters: [{ name: 'sessionId', description: 'Session whose conversation is being rendered.' }],
+        returns: 'The entries that file records, in the order they were written.',
       },
       {
-        signature: 'restore(text: string): string',
+        signature: 'entries(): readonly RedactionEntry[]',
+        description: 'Every pairing this machine can currently restore, for a reader that renders session text to the user. The values are what the model must not see but the user may: they cross to the browser that renders this machine\'s own sessions and nowhere else.\n\nIncludes what earlier processes wrote to a mapping file, because a session outlives the process that wrote it and a reader coming back to an older conversation must still be shown the originals behind its placeholders.',
+        parameters: [],
+        returns: 'Every restorable entry, this process\'s own first.',
+      },
+      {
+        signature: 'restore(text: string, sessionId?: string): string',
         description: 'Turn the placeholders this session emitted back into the values they stand for.',
-        parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }],
-        returns: 'The text with every placeholder this process issued restored.',
+        parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }, { name: 'sessionId', description: 'Session the text belongs to. When given, only that conversation\'s mapping file and this process\'s live work are consulted.' }],
+        returns: 'The text with every placeholder it carries restored.',
       },
       {
         signature: 'identify(account: string): RosterPerson | undefined',
@@ -6330,7 +6342,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly roster: number;\n    readonly imageTool: boolean;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n}',
   },
   {
     name: 'Registry',

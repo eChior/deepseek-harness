@@ -39,6 +39,8 @@ export interface RedactionStatusView {
   readonly localFiles: number
   /** Names the staff directory contributed to the rules. */
   readonly roster: number
+  /** Whether an ended session writes its placeholder table to the local mappings directory. */
+  readonly mappings: boolean
   /** Whether the read-image tool is denied for every agent of this deployment. */
   readonly imageTool: boolean
 }

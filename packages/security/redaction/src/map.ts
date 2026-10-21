@@ -55,6 +55,14 @@ export class RedactionMap {
   readonly #groups = new Map<string, number>()
   readonly #spellings = new Map<string, number>()
   readonly #entries: RedactionEntry[] = []
+  /**
+   * Entries read back from earlier processes, filed under the session whose
+   * mapping file recorded them. Kept apart from {@link #entries} — that one is
+   * this process's own work, the count a reader sees — and filed per session,
+   * because one task owns one mapping: two sessions may hand `[工艺-1]` to
+   * different values, and a single merged table would restore the wrong original.
+   */
+  readonly #history = new Map<string, RedactionEntry[]>()
 
   /**
    * Placeholder for `original` in `category`, allocating the next sequence number
@@ -68,8 +76,12 @@ export class RedactionMap {
   placeholder(category: string, label: string, original: string): string {
     const existing = this.#byOriginal.get(original)
     if (existing !== undefined) return existing
-    const next = (this.#counters.get(category) ?? 0) + 1
-    this.#counters.set(category, next)
+    // The counter is keyed by the visible label, not the category id: two
+    // categories that share one label (`craft` and `craft-metric` both read
+    // 「工艺」) would otherwise hand out the same placeholder for different
+    // values, and no restore tool could tell them apart.
+    const next = (this.#counters.get(label) ?? 0) + 1
+    this.#counters.set(label, next)
     const placeholder = `[${label}-${next}]`
     this.#byOriginal.set(original, placeholder)
     this.#byPlaceholder.set(placeholder, original)
@@ -130,6 +142,53 @@ export class RedactionMap {
   }
 
   /**
+   * File the entries one session's mapping file recorded, so that session's text
+   * still restores after a restart.
+   *
+   * The entries do NOT enter this process's own tables. A session's table is
+   * returned by {@link entriesFor} when that session is rendered, and only then:
+   * merging every file on the machine into one lookup would let a placeholder
+   * from another task resolve to the wrong value. What the files do contribute
+   * here is the counter position — {@link #seed} keeps every fresh value from
+   * taking a number one of them already used.
+   * @param sessionId Session the file belongs to.
+   * @param entries Entries the file records, in the order they were written.
+   */
+  adopt(sessionId: string, entries: readonly RedactionEntry[]): void {
+    const filed = this.#history.get(sessionId) ?? []
+    for (const entry of entries) {
+      this.#seed(entry.category, entry.placeholder)
+      if (filed.some(known => known.placeholder === entry.placeholder)) continue
+      filed.push({ placeholder: entry.placeholder, category: entry.category, original: entry.original })
+    }
+    this.#history.set(sessionId, filed)
+  }
+
+  /**
+   * Raise the counter that covers one placeholder an earlier process issued.
+   * Without this a value first seen after a restart takes a number an older file
+   * already gave to something else, and one of the two restores wrong.
+   * @param category Category the entry was recorded under.
+   * @param placeholder Placeholder from a mapping file: numbered or grouped.
+   */
+  #seed(category: string, placeholder: string): void {
+    const numbered = /^\[(?<label>.+)-(?<sequence>\d{1,6})\]$/.exec(placeholder)
+    if (numbered?.groups !== undefined) {
+      const label = numbered.groups['label'] as string
+      const sequence = Number(numbered.groups['sequence'])
+      this.#counters.set(label, Math.max(this.#counters.get(label) ?? 0, sequence))
+      return
+    }
+    // A grouped placeholder (`公司<n>-<m>`) records no group key, only the spare
+    // number, so a company never met before still takes a free one.
+    const grouped = /^公司(?<group>\d+)-(?<spelling>\d+)$/.exec(placeholder)
+    if (grouped?.groups === undefined) return
+    const allKey = `${category}\u0000all`
+    const group = Number(grouped.groups['group'])
+    this.#groups.set(allKey, Math.max(this.#groups.get(allKey) ?? 0, group))
+  }
+
+  /**
    * Original behind a placeholder, or undefined when this process never issued it.
    * @param placeholder Placeholder text to resolve.
    * @returns The value it stands for, or undefined for a placeholder from another process.
@@ -139,23 +198,73 @@ export class RedactionMap {
   }
 
   /**
-   * Swap every placeholder this process issued back for its original. Used where a
-   * human reads the text (rendering a reply); never on the way into a session.
+   * Swap every placeholder back for its original. Used where a human reads the
+   * text (rendering a reply); never on the way into a session.
    * @param text Text that may carry placeholders.
-   * @returns The text with every placeholder this process issued restored.
+   * @param sessionId Session the text belongs to. When given, only its own
+   *   mapping file and this process's live work are consulted, so `[工艺-1]` in
+   *   one conversation never resolves to another conversation's value. Without
+   *   it every table on this machine is consulted, which is what a caller that
+   *   holds no session identity can do.
+   * @returns The text with the placeholders it carries restored.
    */
-  restore(text: string): string {
-    if (this.#byPlaceholder.size === 0) return text
+  restore(text: string, sessionId?: string): string {
+    const table = this.#tableFor(sessionId)
+    if (table.size === 0) return text
     // Numbered placeholders match by shape; fixed codes (a bare `A`, `ZY`) do
     // not, so they are spliced back by their wrapped form only — a natural
     // letter in the text never matches.
-    let restored = text.replace(/\[[^\]\n]{1,32}-\d{1,6}\]/g, match => this.#byPlaceholder.get(match) ?? match)
-    for (const [code, original] of this.#byPlaceholder) {
+    let restored = text.replace(/\[[^\]\n]{1,32}-\d{1,6}\]/g, match => table.get(match) ?? match)
+    for (const [code, original] of table) {
       if (code.startsWith('[')) continue
       if (!restored.includes(code)) continue
       restored = restored.split(code).join(original)
     }
     return restored
+  }
+
+  /**
+   * The lookup one restore runs against.
+   * @param sessionId Session in view, or undefined for every table on the machine.
+   * @returns Placeholder (in the shape it wears in text) to original.
+   */
+  #tableFor(sessionId: string | undefined): ReadonlyMap<string, string> {
+    if (sessionId === undefined) {
+      if (this.#history.size === 0) return this.#byPlaceholder
+      const merged = new Map(this.#byPlaceholder)
+      for (const filed of this.#history.values()) {
+        for (const entry of filed) {
+          const shaped = codeShape(entry.placeholder)
+          // A live entry for the same shape wins: this process issued it and
+          // knows what it stands for right now.
+          if (!merged.has(shaped)) merged.set(shaped, entry.original)
+        }
+      }
+      return merged
+    }
+    const table = new Map<string, string>()
+    const filed = this.#history.get(sessionId)
+    if (filed !== undefined) {
+      for (const entry of filed) table.set(codeShape(entry.placeholder), entry.original)
+    }
+    for (const entry of this.#entries) {
+      const shaped = codeShape(entry.placeholder)
+      if (!table.has(shaped)) table.set(shaped, entry.original)
+    }
+    return table
+  }
+
+  /**
+   * The pairings one session restores with: what its own mapping file recorded,
+   * then what this process issued for the conversation still being lived in.
+   * @param sessionId Session whose conversation is being rendered.
+   * @returns That session's entries; empty when no file and no live work exist.
+   */
+  entriesFor(sessionId: string): readonly RedactionEntry[] {
+    const filed = this.#history.get(sessionId) ?? []
+    if (this.#entries.length === 0) return filed
+    const seen = new Set(filed.map(entry => entry.placeholder))
+    return [...filed, ...this.#entries.filter(entry => !seen.has(entry.placeholder))]
   }
 
   /** Distinct values this process has replaced. */
@@ -190,5 +299,6 @@ export class RedactionMap {
     this.#groups.clear()
     this.#spellings.clear()
     this.#entries.length = 0
+    this.#history.clear()
   }
 }

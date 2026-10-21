@@ -52,6 +52,9 @@ export type RedactionUserView = 'original' | 'placeholder'
 /** Redacted text renders its real values until the user asks for placeholders. */
 export const DEFAULT_REDACTION_USER_VIEW: RedactionUserView = 'original'
 
+/** Colour the transcript paints a restored original in, so a reader sees what was replaced. */
+export const DEFAULT_REDACTION_HIGHLIGHT = '#d92d20'
+
 /** Durable Chat section shared by the Host schema and browser scope. */
 export interface ChatSettings {
   /** Work-details preference; absence uses the client default, and legacy saved values remain accepted. */
@@ -62,12 +65,15 @@ export interface ChatSettings {
   linkOpening: LinkOpening
   /** What the user reads in place of redaction placeholders. */
   redactionUserView: RedactionUserView
+  /** Hex colour the transcript paints restored originals in. */
+  redactionHighlightColor: string
 }
 
 /** Durable Chat schema; also the wire envelope the browser scope validates against. */
 export const ChatSettingsFields = {
   linkOpening: z.union(['sidebar', 'new-tab']).default(DEFAULT_LINK_OPENING),
   redactionUserView: z.union(['original', 'placeholder']).default(DEFAULT_REDACTION_USER_VIEW),
+  redactionHighlightColor: z.string().default(DEFAULT_REDACTION_HIGHLIGHT),
   performanceUsage: z.union([...PERFORMANCE_USAGE_MODES]).default(DEFAULT_PERFORMANCE_USAGE),
   // Missing and unrecognized modes defer to the client's default.
   [TRANSCRIPT_VIEW_FIELD]: z.union([...TRANSCRIPT_VIEW_SETTING_VALUES]).loose(),

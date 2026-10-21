@@ -53,3 +53,6 @@ apps/desktop/resources/wps/wps2pdf
 
 # The staff roster travels as ciphertext; the key it was sealed with is a CI secret.
 packages/security/redaction/assets/roster.key
+
+# Scratch files the file tools and the dev launcher leave behind.
+.dsh-ops-update-*.lock

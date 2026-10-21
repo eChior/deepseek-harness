@@ -81,24 +81,51 @@ export class RedactionController extends TypertRemoteService {
       pending: view.pending,
       localFiles: view.localFiles,
       roster: view.roster,
+      mappings: view.mappings,
       imageTool: view.imageTool,
     })
   }
 
   /**
-   * The placeholder table this machine is holding, for the browser that renders
-   * its own sessions. Each entry is one value the model must not see but the
-   * signed-in user may; the client swaps these back into the text it renders
-   * and never stores or transmits them further.
-   * @returns Every recorded entry, in the order the values were first seen.
+   * Turn the mapping write-back on or off.
+   *
+   * With it on, an ended session writes its placeholder table to the local
+   * mappings directory so the restore tool can put the originals back into an
+   * exported file. With it off nothing is written and the table stays in memory
+   * until this process ends.
+   * @param request - Whether write-back should be on.
+   * @returns The value now in force.
    */
   @Remote
-  entries(): Promise<readonly RedactionEntryView[]> {
-    return Promise.resolve(this.ctx.redaction.entries().map(entry => ({
+  setMappings(request: { readonly enabled: boolean }): Promise<{ readonly enabled: boolean }> {
+    return Promise.resolve({ enabled: this.ctx.redaction.setMappings(request.enabled) })
+  }
+
+  /**
+   * The placeholder table one conversation restores with, for the browser that
+   * renders it. Each entry is one value the model must not see but the signed-in
+   * user may; the client swaps these back into the text it renders and never
+   * stores or transmits them further.
+   *
+   * A mapping file is per task, so the table is asked for by session: two
+   * conversations may hand `[工艺-1]` to different values, and a table that
+   * mixed them would put the wrong original back. Without a session the live
+   * table of this process is reported, which is the one the running conversation
+   * is writing.
+   * @param request - Session whose conversation is being rendered, when known.
+   * @returns Every entry that conversation restores with, first-seen order.
+   */
+  @Remote
+  async entries(request: { readonly sessionId?: string }): Promise<readonly RedactionEntryView[]> {
+    const sessionId = request.sessionId
+    const entries = sessionId === undefined || sessionId === ''
+      ? this.ctx.redaction.entries()
+      : await this.ctx.redaction.mappingsFor(sessionId)
+    return entries.map(entry => ({
       placeholder: entry.placeholder,
       category: entry.category,
       original: entry.original,
-    })))
+    }))
   }
 
   /**

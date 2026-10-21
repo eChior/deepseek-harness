@@ -78,7 +78,8 @@ describe('ui-settings-redaction browser plugin', () => {
   })
 
   it('declares only the services the Settings contribution reads', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.redaction', 'sessions'])
+    // `configForms` carries the transcript view preference the badge writes.
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.redaction', 'sessions', 'configForms'])
   })
 
   it('registers a localized tab without reading the Remote eagerly', async () => {

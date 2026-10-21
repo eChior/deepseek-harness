@@ -153,7 +153,7 @@ describe('Chat apply wiring', () => {
     expect(b.chatSettings.set).toHaveBeenCalledWith('transcriptView', choice)
 
     b.chatSettings.publish({
-      status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'compact', redactionUserView: 'original', performanceUsage: 'detailed' }, revision: 1, writable: true,
+      status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'compact', redactionUserView: 'original', redactionHighlightColor: '#d92d20', performanceUsage: 'detailed' }, revision: 1, writable: true,
     })
     expect(face.hooks.transcriptView.getSnapshot()).toBe('compact')
   })
@@ -165,7 +165,7 @@ describe('Chat apply wiring', () => {
     expect(face.hooks.performanceUsage.getSnapshot()).toBe('detailed')
     face.setPerformanceUsage('compact')
     expect(b.chatSettings.set).toHaveBeenCalledWith('performanceUsage', 'compact')
-    b.chatSettings.publish({ value: { linkOpening: 'sidebar', transcriptView: 'compact', redactionUserView: 'original', performanceUsage: 'compact' } })
+    b.chatSettings.publish({ value: { linkOpening: 'sidebar', transcriptView: 'compact', redactionUserView: 'original', redactionHighlightColor: '#d92d20', performanceUsage: 'compact' } })
     expect(face.hooks.performanceUsage.getSnapshot()).toBe('compact')
     for (const entry of [
       b.runtime.slots.entries('conversation.composer.dock').find(entry => entry.options.id === 'stats')!,

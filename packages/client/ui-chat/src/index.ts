@@ -9,7 +9,7 @@ import { TRANSCRIPT_VIEW_FIELD } from './chat-settings.ts'
 import { ChatSettingsFields } from './chat-settings.ts'
 
 export {
-  CHAT_SETTINGS_NAMESPACE, DEFAULT_REDACTION_USER_VIEW, DEFAULT_TRANSCRIPT_VIEW_MODE,
+  CHAT_SETTINGS_NAMESPACE, DEFAULT_REDACTION_HIGHLIGHT, DEFAULT_REDACTION_USER_VIEW, DEFAULT_TRANSCRIPT_VIEW_MODE,
   LEGACY_TRANSCRIPT_VIEW_MODE, LEGACY_EXPANDED_TRANSCRIPT_VIEW_MODE, TRANSCRIPT_VIEW_FIELD,
   TRANSCRIPT_VIEW_MODES, type ChatSettings, type RedactionUserView, type TranscriptViewMode,
 } from './chat-settings.ts'
@@ -24,6 +24,8 @@ export interface Config {
   linkOpening: Volatile<LinkOpening>
   /** What the user reads in place of redaction placeholders. */
   redactionUserView: Volatile<RedactionUserView>
+  /** Hex colour the transcript paints restored originals in. */
+  redactionHighlightColor: Volatile<string>
 }
 
 /** Live preferences projected to the browser. */
@@ -32,6 +34,7 @@ export const Config = z.object({
   performanceUsage: ChatSettingsFields['performanceUsage'].volatile(),
   linkOpening: ChatSettingsFields.linkOpening.volatile(),
   redactionUserView: ChatSettingsFields.redactionUserView.volatile(),
+  redactionHighlightColor: ChatSettingsFields.redactionHighlightColor.volatile(),
 })
 
 /** Host preferences are consumed through the configuration form projection.

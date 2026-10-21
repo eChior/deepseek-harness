@@ -7,65 +7,280 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 2px 8px;
-  border: none;
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm);
   background: transparent;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .badge:hover {
-  background: var(--dsw-alias-fill-secondary);
+  border-color: var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
+/* The transcript is reading placeholders: the badge says so at a glance. */
+.badgePlaceholder {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The guard is always on; this dot is the switch that says so, and it turns
+   amber when the session-end write-back is off, because that is the one part of
+   the guard a reader can lose to a setting. */
 .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--dsw-alias-state-warning-primary);
+  background: var(--dsw-alias-state-success-primary);
 }
 
+.dotOff {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.name {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.count {
+  min-width: 10px;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Which form the transcript is reading, carried on the button itself: a reader
+   should not have to open the panel to notice they are looking at placeholders. */
+.viewChip {
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.viewChipPlaceholder {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* Solid surface, not a tint: the panel covers transcript text behind it, so a
+   translucent fill would let the message underneath read through the list. */
 .panel {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 8px);
   left: 0;
-  z-index: 30;
+  z-index: 40;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 320px;
-  max-height: 280px;
-  padding: 12px;
-  border: 0.5px solid var(--dsw-alias-border-secondary);
+  gap: 10px;
+  box-sizing: border-box;
+  width: 360px;
+  max-height: min(480px, 60vh);
+  padding: 14px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-fill-primary);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+  background: var(--dsw-alias-bg-base);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
 }
 
 .head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
+.close {
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Guard state and counters: two columns, label dim, value on the right. */
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.facts dt {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.facts dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.on {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.off {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.switches {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.switchRow:first-child {
+  justify-content: flex-start;
+}
+
+.switchLabel {
+  flex: 1;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.hint {
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.segmented {
+  display: inline-flex;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+}
+
+.segment {
+  padding: 3px 10px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.segment:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.segmentActive {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.colorGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color {
+  width: 44px;
+  height: 22px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Publishing a colour is an explicit act: dragging the picker only stages a
+   draft, so the transcript does not walk through every intermediate hue. */
+.apply {
+  padding: 1px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.apply:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+/* The chosen colour, on the button itself: a reader sees which hue the
+   transcript paints originals in without opening the panel. */
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 20%);
+}
+
+.entriesHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.refresh {
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  color: var(--dsw-alias-link);
+  cursor: pointer;
+}
+
 .list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 0;
   padding: 0;
   overflow-y: auto;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .row {
@@ -78,14 +293,14 @@
 
 .placeholder {
   flex: none;
-  font-family: var(--dsw-font-mono, monospace);
+  font-family: var(--ds-font-family-code);
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .arrow {
   flex: none;
-  color: var(--dsw-alias-label-quaternary, var(--dsw-alias-label-tertiary));
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .original {
@@ -95,29 +310,9 @@
   white-space: nowrap;
 }
 
-.footer {
-  display: flex;
-  gap: 8px;
-  border-top: 0.5px solid var(--dsw-alias-border-secondary);
-  padding-top: 8px;
-}
-
-.viewToggle {
-  flex: 1;
-  padding: 4px 8px;
-  border: 0.5px solid var(--dsw-alias-border-secondary);
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
+.empty {
+  margin: 0;
   font-size: 12px;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-}
-
-.viewToggle:hover:not(:disabled) {
-  background: var(--dsw-alias-fill-secondary);
-}
-
-.viewToggle:disabled {
-  opacity: 0.5;
-  cursor: default;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
 }

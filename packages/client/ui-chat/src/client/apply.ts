@@ -37,16 +37,20 @@ import { TranscriptViewRow, type TranscriptViewRowInjected } from './settings/Tr
 import { createChatStore } from './stores.ts'
 import { TranscriptViewPolicy } from './transcript-view.ts'
 import { derivePresentationPolicy } from './presentation-policy.ts'
-import { CHAT_SETTINGS_NAMESPACE, DEFAULT_LINK_OPENING, DEFAULT_REDACTION_USER_VIEW, DEFAULT_TRANSCRIPT_VIEW_MODE, type ChatSettings, type RedactionUserView } from '../chat-settings.ts'
+import { CHAT_SETTINGS_NAMESPACE, DEFAULT_LINK_OPENING, DEFAULT_REDACTION_HIGHLIGHT, DEFAULT_REDACTION_USER_VIEW, DEFAULT_TRANSCRIPT_VIEW_MODE, type ChatSettings, type RedactionUserView } from '../chat-settings.ts'
 import { LinkOpeningRow, type LinkOpeningRowInjected } from './settings/LinkOpeningRow.tsx'
 import { PerformanceUsageRow, type PerformanceUsageRowInjected } from './settings/PerformanceUsageRow.tsx'
 import { PerformanceUsagePolicy } from './performance-usage.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
 
+/** Re-read interval for the redaction placeholder table, in milliseconds. */
+const PLACEHOLDER_POLL_MS = 2000
+
 function chatNodeInject(
   userPlaceholders: ObservableSnapshot<ReadonlyMap<string, string> | null>,
   userView: ObservableSnapshot<RedactionUserView>,
+  redactionHighlight: ObservableSnapshot<string>,
 ): ChatNodeInjected {
   // Placeholders restore in the view only while the user reads originals; the
   // badge's "show placeholders" choice flips the same store every renderer sees.
@@ -67,6 +71,7 @@ function chatNodeInject(
       },
       disclosure: (_standard, { disclosureReset }) => bindDisclosure(disclosureReset),
       userPlaceholders: visible,
+      redactionHighlight,
     },
   }
 }
@@ -169,30 +174,70 @@ export function apply(ctx: Context): void {
   const performancePolicy = new PerformanceUsagePolicy(chatSettings)
   ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
   const performanceUsage = performancePolicy.mode
-  // The user's own view of redacted text: the provider's placeholder table,
-  // read once per connection. A `null` value means no provider answered yet;
-  // renderers keep the placeholders visible instead of guessing.
+  // The user's own view of redacted text: the provider's placeholder table.
+  // A `null` value means no provider answered yet; renderers keep the
+  // placeholders visible instead of guessing. The table is re-read on a timer
+  // because a session issues new placeholders continuously — reading it once at
+  // mount would leave every later turn showing placeholders the reader could
+  // not restore.
   const userPlaceholders = createSnapshotStore<ReadonlyMap<string, string> | null>(null)
   const userView = createSnapshotStore<RedactionUserView>(
     chatSettings.getSnapshot().value?.redactionUserView ?? DEFAULT_REDACTION_USER_VIEW,
   )
+  const redactionHighlight = createSnapshotStore<string>(
+    chatSettings.getSnapshot().value?.redactionHighlightColor ?? DEFAULT_REDACTION_HIGHLIGHT,
+  )
   ctx.effect(() => chatSettings.subscribe(() => {
     userView.set(chatSettings.getSnapshot().value?.redactionUserView ?? DEFAULT_REDACTION_USER_VIEW)
+    redactionHighlight.set(chatSettings.getSnapshot().value?.redactionHighlightColor ?? DEFAULT_REDACTION_HIGHLIGHT)
   }))
+  // Which conversation is on screen. A mapping file is per task, so the table
+  // has to be asked for by session: two conversations may hand the same
+  // placeholder to different values, and one merged table would restore the
+  // wrong original into whichever conversation the reader opened.
+  const viewingSession = createSnapshotStore<string | null>(null)
   const readUserPlaceholders = async (): Promise<void> => {
-    const redaction = ctx.get('remote.redaction') as { entries?: () => Promise<unknown> } | undefined
+    const redaction = ctx.get('remote.redaction') as
+      { entries?: (request?: { sessionId?: string }) => Promise<unknown> } | undefined
     if (redaction?.entries === undefined) return
+    const sessionId = viewingSession.getSnapshot()
     try {
-      const result = await redaction.entries() as { ok: boolean; value?: unknown }
+      const result = await redaction.entries(sessionId === null ? {} : { sessionId }) as { ok: boolean; value?: unknown }
       const rows = result.ok && Array.isArray(result.value)
         ? result.value as readonly { placeholder: string; original: string }[]
         : []
+      // The view may have moved on while the call was in flight; an answer for
+      // the conversation the reader just left must not be published.
+      if (sessionId !== viewingSession.getSnapshot()) return
+      const previous = userPlaceholders.getSnapshot()
+      // Publish a new map only when the table changed, so a steady session does
+      // not invalidate every renderer on every tick.
+      if (previous !== null && previous.size === rows.length
+        && rows.every(entry => previous.get(entry.placeholder) === entry.original)) return
       userPlaceholders.set(new Map(rows.map(entry => [entry.placeholder, entry.original])))
     } catch (_error) {
       // An absent or failing provider leaves the placeholders visible.
     }
   }
+  ctx.effect(() => {
+    const current = ctx.uiSession.adapter.current
+    const sync = (): void => {
+      const next = current.getSnapshot().key ?? null
+      if (next === viewingSession.getSnapshot()) return
+      viewingSession.set(next)
+      // The previous conversation's table would restore the wrong originals.
+      userPlaceholders.set(null)
+      void readUserPlaceholders()
+    }
+    const unsubscribe = current.subscribe(sync)
+    sync()
+    return () => { unsubscribe() }
+  }, 'ui-chat: redaction table of the Session on screen')
   void readUserPlaceholders()
+  ctx.effect(() => {
+    const timer = window.setInterval(() => { void readUserPlaceholders() }, PLACEHOLDER_POLL_MS)
+    return () => { window.clearInterval(timer) }
+  }, 'ui-chat: redaction placeholder table')
   registerChatNodeRenderers(ctx, performanceUsage, presentation)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
@@ -225,7 +270,11 @@ export function apply(ctx: Context): void {
       label: () => t('view.chat'),
       locale: NS,
       children: {
-        'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: chatNodeInject(userPlaceholders, userView) },
+        'conversation.chat.node': {
+          kind: 'keyed',
+          scope: 'session',
+          inject: chatNodeInject(userPlaceholders, userView, redactionHighlight),
+        },
         'conversation.message.images': { kind: 'single', scope: 'session' },
       },
       store: chatStore,
@@ -236,7 +285,7 @@ export function apply(ctx: Context): void {
         const chat = chatSource(binding)
         const conversation = ctx.uiConversation.binding(binding)
         return {
-          hooks: { presentation, userPlaceholders },
+          hooks: { presentation, userPlaceholders, redactionHighlight },
           keyedHooks: {
             chatNode: key => chat.getSnapshot().nodes.source(key),
             chatNodeProcess: key => chat.getSnapshot().nodes.processSource(key),

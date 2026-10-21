@@ -22,7 +22,7 @@ import type {} from '@deepseek-ai/dsh-tools'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { fileURLToPath } from 'node:url'
@@ -161,6 +161,8 @@ export const Config: z<Config> = z.object({
   visionTimeoutMs: z.number().default(DEFAULT_VISION_TIMEOUT_MS),
   includeRoster: z.boolean().default(true),
   rosterPath: z.string().default(ROSTER_PATH),
+  mappings: z.boolean().default(true),
+  readImage: z.boolean().default(true),
 })
 
 /** What the provider has loaded and how much it has replaced so far. */
@@ -189,6 +191,8 @@ export interface RedactionStatus {
   readonly localFiles: number
   /** Names the shipped staff directory contributed to the rules, or 0 when it is off. */
   readonly roster: number
+  /** Whether an ended session writes its placeholder table to the local mappings directory. */
+  readonly mappings: boolean
   /** Whether the read-image tool is denied for every agent of this deployment. */
   readonly imageTool: boolean
 }
@@ -241,6 +245,17 @@ export class RedactionService extends Service {
   /** Staff directory as last read, absent when it is off or could not be opened. */
   private roster: Roster | undefined = undefined
   private current: RedactionStatus
+  /**
+   * Switches the settings surface can flip at runtime. They start from the
+   * deployment defaults and live past the constructor, so turning the mapping
+   * write-back off does not need a restart.
+   */
+  private mappingsOn: boolean
+  private readImageOn: boolean
+  /** How many entries have already reached a mapping file on this machine. */
+  private written = 0
+  /** The read-back of the mapping files, awaited before the first write. */
+  private readonly ready: Promise<void>
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'redaction')
@@ -259,6 +274,11 @@ export class RedactionService extends Service {
       mappings: config.mappings ?? true,
       readImage: config.readImage ?? true,
     }
+    this.mappingsOn = this.config.mappings
+    this.readImageOn = this.config.readImage
+    // Started here rather than in an effect: a session can end before an effect
+    // runs, and a write must never outrun the read it depends on.
+    this.ready = this.loadMappings()
     this.current = {
       enabled: true,
       revision: null,
@@ -272,7 +292,8 @@ export class RedactionService extends Service {
       pending: 0,
       localFiles: 0,
       roster: 0,
-      imageTool: true,
+      mappings: this.config.mappings,
+      imageTool: this.config.readImage,
     }
     ctx.effect(() => {
       void this.load()
@@ -322,11 +343,27 @@ export class RedactionService extends Service {
     // would hand a picture to the provider. Deny the tool for every agent this
     // deployment creates; the status view tells the settings page it happened.
     ctx.on('agent/created', ({ agent }: { agent: Agent; source: SessionStartSource; signal?: AbortSignal }) => {
-      if (!this.config.readImage) return
+      if (!this.readImageOn) return
       agent.ctx.tools.guard(execution => execution.name === 'read_image'
         ? 'read_image is not available: this deployment reads images through local OCR'
         : undefined)
     })
+  }
+
+  /** Whether an ended session writes its placeholder table to the mappings directory. */
+  get mappings(): boolean {
+    return this.mappingsOn
+  }
+
+  /**
+   * Turn the mapping write-back on or off for the rest of this process.
+   * @param on - whether an ended session should leave a restorable table behind.
+   * @returns The value now in force.
+   */
+  setMappings(on: boolean): boolean {
+    this.mappingsOn = on
+    this.current = { ...this.current, mappings: on }
+    return this.mappingsOn
   }
 
   /** What the term list declares and how many replacements this process has made. */
@@ -527,7 +564,8 @@ export class RedactionService extends Service {
       ...main === undefined ? {} : { source: main.source },
       localFiles: uploaded.length,
       roster: roster.reduce((count, category) => count + category.terms.length, 0),
-      imageTool: this.config.readImage,
+      mappings: this.mappingsOn,
+      imageTool: this.readImageOn,
     }
   }
 
@@ -692,31 +730,86 @@ export class RedactionService extends Service {
   }
 
   /**
-   * Write the placeholder table out for one ended session and hand the map back
-   * to an empty state, so nothing restorable lingers in memory past the session
-   * that produced it.
+   * Append the placeholders this process issued to the mapping file of the
+   * session that just ended.
+   *
+   * One task, one file: the file is named after the session, so a reader coming
+   * back to a conversation reads exactly the table that conversation was written
+   * with and no other. Repeated turns append to the same file.
+   *
+   * The map is NOT emptied. An entry that leaves memory stops restoring while the
+   * reader is still looking at the session, and the counters would restart from
+   * one and hand a fresh value a number this file already gave to another.
    * @param session The session that just left the store.
    */
   private async writeMappings(session: Session): Promise<void> {
-    const entries = this.map.takeEntries()
-    if (!this.config.mappings || entries.length === 0) return
+    // Checked before anything is read: with write-back off nothing leaves this
+    // process at all.
+    if (!this.mappingsOn) return
+    await this.ready
+    const all = this.map.entries()
+    // Only what this process added since the last file. The entries read back at
+    // startup are not in the log at all, and the ones already appended must not
+    // be appended twice.
+    const fresh = all.slice(this.written)
+    if (fresh.length === 0) return
+    this.written = all.length
     const directory = join(this.config.cacheDirectory, 'mappings')
     try {
       await mkdir(directory, { recursive: true })
-      const body = entries.map(entry => JSON.stringify({ placeholder: entry.placeholder, category: entry.category, original: entry.original })).join('\n') + '\n'
-      await writeFile(join(directory, `${session.id}.jsonl`), body, 'utf8')
+      const body = fresh.map(entry => JSON.stringify({ placeholder: entry.placeholder, category: entry.category, original: entry.original })).join('\n') + '\n'
+      await appendFile(join(directory, `${session.id}.jsonl`), body, 'utf8')
     } catch {
-      // A mapping that cannot be written only costs the restore step; placeholders
-      // in the session stay in force and no error escapes disposal.
+      // A mapping that cannot be written only costs the restore step; the
+      // placeholders in the session stay in force and this process keeps
+      // restoring them for as long as it lives.
     }
   }
 
   /**
-   * The placeholder table this process is holding, for a reader that renders
-   * session text to the user. The values are what the model must not see but
-   * the user may: they cross to the browser that renders this machine's own
-   * sessions and nowhere else.
-   * @returns Every recorded entry, in the order the values were first seen.
+   * Read the mapping files this machine already holds back into the map, so
+   * text from an earlier process still restores and a fresh value never takes a
+   * number one of those files already used.
+   *
+   * Files are read in name order and the first entry for a value wins, which is
+   * the order the restore tool applies them in.
+   */
+  private async loadMappings(): Promise<void> {
+    const directory = join(this.config.cacheDirectory, 'mappings')
+    // One task, one file: each file is filed under the session its name carries,
+    // never folded into a machine-wide table.
+    for (const name of await mappingFiles(directory)) {
+      const entries = await readMappingFile(directory, name)
+      if (entries.length === 0) continue
+      this.map.adopt(name.replace(/\.jsonl$/u, ''), entries)
+    }
+    this.written = this.map.entries().length
+  }
+
+  /**
+   * The table one session was written with, read from that session's own file.
+   * @param sessionId Session whose conversation is being rendered.
+   * @returns The entries that file records, in the order they were written.
+   */
+  async mappingsFor(sessionId: string): Promise<readonly RedactionEntry[]> {
+    await this.ready
+    const recorded = this.map.entriesFor(sessionId)
+    if (recorded.length > 0) return recorded
+    // Nothing filed for this session yet: it may predate the load, or its file
+    // may have been written by a process that never read this one.
+    return readMappingFile(join(this.config.cacheDirectory, 'mappings'), `${sessionId}.jsonl`)
+  }
+
+  /**
+   * Every pairing this machine can currently restore, for a reader that renders
+   * session text to the user. The values are what the model must not see but the
+   * user may: they cross to the browser that renders this machine's own sessions
+   * and nowhere else.
+   *
+   * Includes what earlier processes wrote to a mapping file, because a session
+   * outlives the process that wrote it and a reader coming back to an older
+   * conversation must still be shown the originals behind its placeholders.
+   * @returns Every restorable entry, this process's own first.
    */
   entries(): readonly RedactionEntry[] {
     return this.map.entries()
@@ -725,10 +818,12 @@ export class RedactionService extends Service {
   /**
    * Turn the placeholders this session emitted back into the values they stand for.
    * @param text Text that may carry placeholders.
-   * @returns The text with every placeholder this process issued restored.
+   * @param sessionId Session the text belongs to. When given, only that
+   *   conversation's mapping file and this process's live work are consulted.
+   * @returns The text with every placeholder it carries restored.
    */
-  restore(text: string): string {
-    return this.map.restore(text)
+  restore(text: string, sessionId?: string): string {
+    return this.map.restore(text, sessionId)
   }
 
   /**
@@ -844,5 +939,60 @@ export class RedactionService extends Service {
    */
   async localExample(): Promise<string> {
     return await readFile(LOCAL_EXAMPLE_PATH, 'utf8')
+  }
+}
+
+/**
+ * Names of the mapping files in one directory, oldest name first; empty when the
+ * directory does not exist yet.
+ * @param directory Directory that holds one `.jsonl` file per task.
+ * @returns The file names, sorted, or an empty list.
+ */
+async function mappingFiles(directory: string): Promise<string[]> {
+  try {
+    return (await readdir(directory)).filter(name => name.endsWith('.jsonl')).sort()
+  } catch {
+    // No directory yet: this install has never ended a session with the
+    // write-back on.
+    return []
+  }
+}
+
+/**
+ * Entries recorded in one mapping file.
+ * @param directory Directory that holds the file.
+ * @param name File name to read.
+ * @returns The entries it records; empty when it is missing or empty.
+ */
+async function readMappingFile(directory: string, name: string): Promise<RedactionEntry[]> {
+  let body: string
+  try {
+    body = await readFile(join(directory, name), 'utf8')
+  } catch {
+    return []
+  }
+  const entries: RedactionEntry[] = []
+  for (const line of body.split('\n')) {
+    const entry = parseMappingLine(line)
+    if (entry !== undefined) entries.push(entry)
+  }
+  return entries
+}
+
+/**
+ * One line of a mapping file, or undefined when it is blank or malformed.
+ * @param line Raw line from a `.jsonl` mapping file.
+ * @returns The entry it records, when it records a complete one.
+ */
+function parseMappingLine(line: string): RedactionEntry | undefined {
+  if (line.trim() === '') return undefined
+  try {
+    const parsed: unknown = JSON.parse(line)
+    if (typeof parsed !== 'object' || parsed === null) return undefined
+    const { placeholder, category, original } = parsed as Partial<RedactionEntry>
+    if (typeof placeholder !== 'string' || typeof category !== 'string' || typeof original !== 'string') return undefined
+    return { placeholder, category, original }
+  } catch {
+    return undefined
   }
 }

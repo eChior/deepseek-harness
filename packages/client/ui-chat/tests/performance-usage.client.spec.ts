@@ -21,10 +21,10 @@ describe('PerformanceUsagePolicy', () => {
 
   it('adopts accepted Host settings at construction and after updates', () => {
     const host = stubConfigForm<ChatSettings>()
-    host.publish({ value: { linkOpening: 'sidebar', transcriptView: 'normal', redactionUserView: 'original', performanceUsage: 'compact' } })
+    host.publish({ value: { linkOpening: 'sidebar', transcriptView: 'normal', redactionUserView: 'original', redactionHighlightColor: '#d92d20', performanceUsage: 'compact' } })
     const policy = new PerformanceUsagePolicy(host.scope)
     expect(policy.mode.getSnapshot()).toBe('compact')
-    host.publish({ value: { linkOpening: 'sidebar', transcriptView: 'normal', redactionUserView: 'original', performanceUsage: 'detailed' } })
+    host.publish({ value: { linkOpening: 'sidebar', transcriptView: 'normal', redactionUserView: 'original', redactionHighlightColor: '#d92d20', performanceUsage: 'detailed' } })
     expect(policy.mode.getSnapshot()).toBe('detailed')
   })
 })
