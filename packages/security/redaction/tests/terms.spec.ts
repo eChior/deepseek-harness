@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { compileRules, isUsable, parseTermList } from '../src/index.ts'
+
+/** The identity-card shape the shipped list carries; written out so a change to it fails here. */
+const PERSON_PATTERN = '(?<!\\d)[1-8]\\d{5}(?:19|20)\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx](?![\\dXx])'
 
 const TERMS = [
   'version: 1',
@@ -232,5 +236,26 @@ describe('per-term codes', () => {
     ].join('\n'))
     expect(parsed.problems).toEqual([])
     expect(isUsable(parsed)).toBe(true)
+  })
+})
+
+describe('the shipped person pattern', () => {
+  it('matches a real identity card and leaves other 18-digit runs alone', () => {
+    const [rule] = compileRules({ version: '1', revision: 't', categories: [{ id: 'person', label: '人员', terms: [], patterns: [PERSON_PATTERN] }] })
+    const matched = (text: string): readonly string[] => [...text.matchAll(rule!.regex)].map(match => match[0])
+    expect(matched('身份证 11010519900307123X 存档')).toEqual(['11010519900307123X'])
+    expect(matched('证号330106199001011234')).toEqual(['330106199001011234'])
+    expect(matched('人员编号 010004008000000000')).toEqual([])
+    expect(matched('成本中心 000000000000004000')).toEqual([])
+    expect(matched('订单 0100040080000000000000')).toEqual([])
+    expect(matched('110105199013011234')).toEqual([])
+  })
+
+  it('reads the pattern the list actually ships with', () => {
+    const text = readFileSync(new URL('../assets/terms.yaml', import.meta.url), 'utf8')
+    const parsed = parseTermList(text)
+    expect(parsed.problems).toEqual([])
+    const person = parsed.categories.find(entry => entry.id === 'person')
+    expect(person?.patterns).toContain(PERSON_PATTERN)
   })
 })

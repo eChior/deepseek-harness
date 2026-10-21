@@ -23,7 +23,7 @@
 # ============================================================================
 
 version: 1
-revision: '2026-10-23'
+revision: '2026-10-24'
 
 categories:
   # ── 标识类：编号、单号。信息量最高、误伤最低，优先保证覆盖 ──────────────
@@ -322,7 +322,11 @@ categories:
       #     不建议把普通员工姓名全列进来：几千个名字维护不动、误伤高，
       #     交给 R3 的本地 NER 更实际。
     patterns:
-      - '\d{17}[\dXx]'
+      # GB 11643 shape, not just 18 digits: a head office cost centre or a
+      # bank reference is also 18 digits, and redacting those as a person
+      # loses real numbers while protecting nothing. The province prefix,
+      # a 19xx/20xx year and a real month and day are what tells them apart.
+      - '(?<!\d)[1-8]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?![\dXx])'
       - '(?:身份证|证件)号[:：]?\s*[A-Za-z0-9]{6,20}'
 
   - id: contact
