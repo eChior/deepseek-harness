@@ -199,6 +199,30 @@ jobs:
             Write-Output "published $assetName to $tag"
           }
 
+      - name: Summarize the packaging failure
+        if: failure()
+        shell: pwsh
+        # Reading a job log needs a repository admin token, so a failed package step writes
+        # what it recorded into the summary instead: `package-target.ts` appends one JSON line
+        # per step to `packaging-runs/<stamp>/events.jsonl`, and the last lines name the error.
+        run: |
+          $summary = $env:GITHUB_STEP_SUMMARY
+          $runs = Get-ChildItem 'apps/desktop/.desktop-build/packaging-runs' -Directory -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
+          if ($null -eq $runs) {
+            'No packaging record was written.' | Out-File -Append -Encoding utf8 $summary
+            exit 0
+          }
+          $events = Join-Path $runs[0].FullName 'events.jsonl'
+          if (-not (Test-Path $events)) {
+            [string]::Format('No events.jsonl under {0}.', $runs[0].FullName) | Out-File -Append -Encoding utf8 $summary
+            exit 0
+          }
+          [string]::Format('Newest packaging record: {0}', $runs[0].Name) | Out-File -Append -Encoding utf8 $summary
+          '```json' | Out-File -Append -Encoding utf8 $summary
+          Get-Content $events -Tail 60 | Out-File -Append -Encoding utf8 $summary
+          '```' | Out-File -Append -Encoding utf8 $summary
+
       - name: Upload packaging logs
         if: always()
         uses: actions/upload-artifact@v4
