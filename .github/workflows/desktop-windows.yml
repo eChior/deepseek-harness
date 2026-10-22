@@ -21,6 +21,10 @@ on:
       - '.github/workflows/desktop-windows.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      # The packaging and release steps live here: `package-target.ts` runs
+      # `release:pack`, and a reader under scripts/ decided whether a lane could
+      # read the archives that step wrote.
+      - 'scripts/**'
 
 permissions:
   contents: read

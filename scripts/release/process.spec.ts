@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -42,6 +42,22 @@ describe('release tarball readers', () => {
     // GNU tar reads the colon in a Windows drive path as a remote host, so the readers run beside the archive.
     const archive = await packedTarball('@deepseek-ai/dsh-probe', '1.2.3')
     expect(tarballFiles(archive)).toEqual(expect.arrayContaining(['package/package.json', 'package/index.js']))
+  })
+
+  it('reads a name a ustar header cannot hold', async () => {
+    // `pnpm pack` stores a long or non-ASCII name in a pax record, and GNU tar
+    // refused that record on a Windows lane while accepting the same archive
+    // everywhere else. The reader takes the name from the record directly.
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-tarball-'))
+    directories.push(directory)
+    const nested = join(directory, 'package', 'assets', '一份很长的目录名'.repeat(4))
+    await mkdir(nested, { recursive: true })
+    const leaf = '改善提案报告-空白模板.xlsx'
+    await writeFile(join(nested, leaf), '')
+    const archive = join(directory, 'pax.tgz')
+    execFileSync('tar', ['-czf', basename(archive), 'package'], { cwd: dirname(archive) })
+    const expected = `package/assets/${'一份很长的目录名'.repeat(4)}/${leaf}`
+    expect(tarballFiles(archive)).toContain(expected)
   })
 
   it('reads what an archive declares about itself', async () => {
