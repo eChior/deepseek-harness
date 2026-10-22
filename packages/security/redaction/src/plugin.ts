@@ -256,6 +256,8 @@ export class RedactionService extends Service {
   private readImageOn: boolean
   /** How many entries have already reached a mapping file on this machine. */
   private written = 0
+  private flushTimer: ReturnType<typeof setTimeout> | undefined
+  private flushing: Promise<void> = Promise.resolve()
   /** The read-back of the mapping files, awaited before the first write. */
   private readonly ready: Promise<void>
 
@@ -341,7 +343,7 @@ export class RedactionService extends Service {
     // the pairings another task still shows. The restore tool reads it there,
     // puts the originals back into exported files, and leaves the file in place.
     ctx.on('session/disposed', () => {
-      void this.writeMappings()
+      this.flushMappings()
     })
     // Images go through the local reader, so the model never needs a tool that
     // would hand a picture to the provider. Deny the tool for every agent this
@@ -614,6 +616,7 @@ export class RedactionService extends Service {
     const result = applyRules(text, this.rules, this.map)
     if (result.hits.length > 0) {
       this.current = { ...this.current, replacements: this.current.replacements + result.hits.length }
+      this.scheduleMappings()
     }
     return result.text
   }
@@ -745,6 +748,33 @@ export class RedactionService extends Service {
    * reader is still looking at the session, and the counters would restart from
    * one and hand a fresh value a number this file already gave to another.
    */
+  /**
+   * Keep the mapping file current while the process is alive.
+   *
+   * Waiting for `session/disposed` was not enough: the desktop app is closed by
+   * exiting the process, that event never runs, and every pairing of the run was
+   * lost. A short debounce collapses a burst of hits into one append and still
+   * writes long before a user can quit the app.
+   */
+  private scheduleMappings(): void {
+    if (!this.mappingsOn || this.flushTimer !== undefined) return
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = undefined
+      this.flushMappings()
+    }, 400)
+    // Never hold the process open for a pending write.
+    this.flushTimer.unref()
+  }
+
+  /** Flush whatever is pending, in one chain so two appends never interleave. */
+  private flushMappings(): void {
+    if (this.flushTimer !== undefined) {
+      clearTimeout(this.flushTimer)
+      this.flushTimer = undefined
+    }
+    this.flushing = this.flushing.then(() => this.writeMappings()).catch(() => {})
+  }
+
   private async writeMappings(): Promise<void> {
     // Checked before anything is read: with write-back off nothing leaves this
     // process at all.

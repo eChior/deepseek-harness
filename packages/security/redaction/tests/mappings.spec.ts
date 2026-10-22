@@ -79,6 +79,19 @@ describe('redaction mapping files', () => {
     )
   })
 
+  it('writes while the process is alive, without waiting for the session to end', async () => {
+    const { cache, termsPath } = await scratch()
+    const ctx = await mount(cache, termsPath)
+    ctx.redaction.redactText('结晶温度偏高')
+    // The desktop app quits by exiting its process, so `session/disposed` never
+    // runs there. A pairing has to reach the disk on its own or the next launch
+    // shows placeholders it can no longer read.
+    const file = join(cache, 'mappings', 'mappings.jsonl')
+    await vi.waitFor(async () => {
+      await expect(readFile(file, 'utf8')).resolves.toContain('结晶温度')
+    })
+  })
+
   it('appends every task to the same file', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)

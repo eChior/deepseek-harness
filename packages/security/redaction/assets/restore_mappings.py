@@ -6,7 +6,8 @@ JSON object per line: `{"placeholder":…, "category":…, "original":…}`. The
 redacted text lives in exported files; this tool reads the mapping files and
 swaps every placeholder for the value it stood for. Mapping files are KEPT so
 that old sessions stay readable (the client view uses them too); pass
-`--consume` to delete each mapping file after a fully successful restore.
+The mapping files are never deleted: a placeholder written months ago still
+restores from them, and the office asked for exactly that.
 
 Placeholder shapes — every one is bracketed:
   - numbered:   `[工艺-1]`   — one value, one number
@@ -19,7 +20,7 @@ never bracketed it; a mapping file it wrote may still hold that bare form. Those
 old shapes are matched too, so an old mapping still restores what it produced.
 
 Usage:
-    python restore_mappings.py FILE... [--mappings-dir DIR] [--dry-run] [--consume]
+    python restore_mappings.py FILE... [--mappings-dir DIR] [--dry-run]
 
 Options:
     FILE...              Files whose placeholders should be restored, in place.
@@ -149,8 +150,6 @@ def main() -> int:
     parser.add_argument("files", nargs="+", type=Path, help="files to restore in place")
     parser.add_argument("--mappings-dir", type=Path, default=default_mappings_dir())
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--consume", action="store_true",
-                        help="delete mapping files after a fully successful restore (default: keep)")
     args = parser.parse_args()
 
     table = load_mappings(args.mappings_dir)
@@ -167,15 +166,7 @@ def main() -> int:
     if touched == 0:
         print("no placeholders found in the given files; mapping files kept")
         return 0
-    if args.consume and not args.dry_run:
-        for path in sorted(args.mappings_dir.glob("*.jsonl")):
-            try:
-                path.unlink()
-                print(f"removed {path}")
-            except OSError as error:
-                print(f"warning: cannot remove {path}: {error}", file=sys.stderr)
-    elif not args.consume:
-        print("mapping files kept")
+    print("mapping files kept")
     return 0
 
 

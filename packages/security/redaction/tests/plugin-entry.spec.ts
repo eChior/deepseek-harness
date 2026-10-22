@@ -83,7 +83,7 @@ describe('plugin entry point', () => {
     expect(prompt).toContain('不得替换、改写、翻译、扩写、缩写或修改其描述')
     expect(prompt).toContain('无需推断占位字段本身指代什么')
     expect(prompt).toContain('2. 基于当前材料回答')
-    expect(prompt).toContain('3. 同义词合并总结')
+    expect(prompt).toContain('3. 区分编号与同义词组')
     expect(prompt).toContain('4. 冲突处理')
   })
 })
