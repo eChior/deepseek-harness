@@ -1,5 +1,6 @@
 /** Assistant reasoning disclosure, independent of Tool-call presentation. */
 import { memo, useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { DisclosureRow, IconThinkOutlineRegular, MarkdownText, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps, UseDisclosure, UsePresentation } from '../contract/slots.ts'
 import { markdownLabels } from '../markdown-labels.ts'
@@ -41,14 +42,19 @@ function latestCompletedParagraphFirstLine(text: string): string {
  * @param props.running - whether this block is the streaming tail.
  * @param props.usePresentation - live display-policy selector for this reasoning row.
  * @param props.useDisclosure - independent open state with enclosing-Turn resets.
+ * @param props.transformText - rewriter the expanded Markdown uses to restore a
+ * redacted value in the reader's own view.
  * @param props.t - conversation locale seat for status and Markdown actions.
  * @returns the reasoning disclosure.
  */
-export const ReasoningRow = memo(function ReasoningRow({ text, running, usePresentation, useDisclosure, t }: {
+export const ReasoningRow = memo(function ReasoningRow({
+  text, running, usePresentation, useDisclosure, transformText, t,
+}: {
   text: string
   running: boolean
   useDisclosure: UseDisclosure
   usePresentation: UsePresentation
+  transformText?: ((value: string) => ReactNode) | undefined
   t: ChatViewSlotProps['t']
 }) {
   const { expanded, toggle } = useDisclosure()
@@ -69,9 +75,10 @@ export const ReasoningRow = memo(function ReasoningRow({ text, running, usePrese
   ), [running, summary])
   const content = useMemo(() => expanded ? (
     <div className={css.thinkBody}>
-      <MarkdownText text={text} streaming={running} labels={labels} variant="compact" />
+      <MarkdownText text={text} streaming={running} labels={labels} transformText={transformText}
+        variant="compact" />
     </div>
-  ) : undefined, [expanded, labels, running, text])
+  ) : undefined, [expanded, labels, running, text, transformText])
 
   return (
     <div

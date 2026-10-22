@@ -129,18 +129,27 @@
         # composition rather than the user's settings document. A models page
         # can still unset the provider, but that only drops the settings
         # overlay: this declaration is what the merged section falls back to,
-        # so the route never disappears. `openai-responses` is the wire
+        # so the route never disappears. `openai-completions` is the wire
         # protocol the gateway speaks; the model sizes are its advertised
         # context window and output ceiling.
         providers:
           qwen:
             displayName: 千问AI大模型
-            api: openai-responses
+            api: openai-completions
             baseURL: http://10.151.5.175:18080/v1
             # The credential the launch profile already stores; without the
             # reference the route would fall through to pi-ai's own ambient
             # discovery and could authenticate as some unrelated tenant.
             apiKeyEnv: QWEN_API_KEY
+            # pi-ai's `qwen` thinking branch is what makes the levels mean
+            # something on this protocol: it sends `enable_thinking` with
+            # every request and, once a level is picked, the mapped
+            # `reasoning_effort`. The gateway honours both — `off` comes back
+            # with no reasoning at all, and a thinking answer carries
+            # `reasoning_content`, which the UI renders as a thinking block.
+            compat:
+              thinkingFormat: qwen
+              supportsReasoningEffort: true
             models:
               - id: qwen3.8-flash
                 name: Qwen3.8-Flash
@@ -148,13 +157,14 @@
                 maxTokens: 131000
                 # The gateway reasons, so the picker has to offer the levels
                 # instead of presenting a model with no thinking mode at all.
-                # `openai-responses` dispatches these as `reasoning.effort`;
-                # `off` sends no effort field rather than an empty one.
+                # The wire values the compat block above dispatches: `off`
+                # switches thinking off instead of sending an effort, and the
+                # three thinking levels are the ones this gateway honours.
                 reasoningEfforts:
                   off: null
                   low: low
                   medium: medium
-                  high: high
+                  xhigh: xhigh
 
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'

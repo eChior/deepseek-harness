@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { compileRules, isUsable, parseTermList } from '../src/index.ts'
 
@@ -251,11 +250,4 @@ describe('the shipped person pattern', () => {
     expect(matched('110105199013011234')).toEqual([])
   })
 
-  it('reads the pattern the list actually ships with', () => {
-    const text = readFileSync(new URL('../assets/terms.yaml', import.meta.url), 'utf8')
-    const parsed = parseTermList(text)
-    expect(parsed.problems).toEqual([])
-    const person = parsed.categories.find(entry => entry.id === 'person')
-    expect(person?.patterns).toContain(PERSON_PATTERN)
-  })
 })

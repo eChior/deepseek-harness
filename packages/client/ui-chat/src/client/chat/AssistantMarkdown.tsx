@@ -1,10 +1,13 @@
 import { Fragment, memo, useMemo } from 'react'
 import { fileMediaUrl } from '@deepseek-ai/dsh-util-workspace-path'
 import type { ReactNode } from 'react'
-import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { highlightRestoredSpans, JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownFileMentions, MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps, UseDisclosure, UsePresentation } from '../contract/slots.ts'
 import type { AssistantBlock } from '../contract/snapshot.ts'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
+import { DEFAULT_REDACTION_HIGHLIGHT } from '../../chat-settings.ts'
+import { restoreUserView } from './restore-view.ts'
 import { markdownLabels } from '../markdown-labels.ts'
 import { ReasoningRow } from './ReasoningRow.tsx'
 import { useSearchableHidden } from './searchable-hidden.ts'
@@ -48,13 +51,28 @@ export interface AssistantMarkdownProps {
   mentions?: MarkdownFileMentions | undefined
   /** The owning view's locale seat, passed down as a plain prop. */
   t: ChatViewSlotProps['t']
+  /** Placeholder-to-original map hook; absent rows keep the placeholder visible. */
+  useUserPlaceholders?: SnapshotSelectorHook<ReadonlyMap<string, string> | null>
+  /** Colour a restored original is painted in; the user owns the preference. */
+  useRedactionHighlight?: SnapshotSelectorHook<string>
 }
 
 /** Reasoning block as the Think variant summary row (figma 39:28304). */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   blocks, streaming, interrupted, renderMessageImages, groupPart, useDisclosure,
   reasoningHidden = false, usePresentation, revealProcess, mentions, t,
+  useUserPlaceholders, useRedactionHighlight,
 }: AssistantMarkdownProps) {
+  // The reader may read what the model must not: assistant prose restores every
+  // placeholder this machine issued, exactly as the user's own bubble does. The
+  // session log and the outbound request keep the placeholder either way.
+  const placeholders = useUserPlaceholders?.(value => value)
+  const highlightColor = useRedactionHighlight?.(value => value) ?? DEFAULT_REDACTION_HIGHLIGHT
+  const transformText = useMemo<(value: string) => ReactNode>(() => (value) => {
+    if (placeholders === null || placeholders === undefined || placeholders.size === 0) return value
+    const view = restoreUserView(value, placeholders)
+    return view.spans.length === 0 ? value : highlightRestoredSpans(view.text, view.spans, highlightColor)
+  }, [placeholders, highlightColor])
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
   const labels = useMemo(() => markdownLabels(t), [t])
@@ -86,6 +104,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             labels={labels}
             fileMentions={mentions}
             pathImages={pathImages}
+            transformText={transformText}
           />,
         )
         break
@@ -97,7 +116,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             reveal={revealProcess}
           >
             <ReasoningRow text={block.text} running={streaming && i === last} usePresentation={usePresentation}
-              useDisclosure={useDisclosure} t={t} />
+              useDisclosure={useDisclosure} transformText={transformText} t={t} />
           </ProcessReasoning>,
         )
         break

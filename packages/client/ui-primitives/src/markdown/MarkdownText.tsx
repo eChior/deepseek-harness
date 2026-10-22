@@ -32,6 +32,7 @@ function renderSettled(
   labels: MarkdownLabels,
   fileMentions: MarkdownFileMentions | undefined,
   pathImages: MarkdownPathImages | undefined,
+  transformText: ((value: string) => ReactNode) | undefined,
 ): ReactNode[] {
   const root = parseGfmWithMath(text)
   const targets = createReferenceTargets()
@@ -44,6 +45,7 @@ function renderSettled(
     targets,
     footnoteOrder: [],
     footnoteCounts: new Map(),
+    transformText,
   }
   const blocks = wrapBlockChildren(
     renderBlocks(root.children.map((node, index) => ({
@@ -74,8 +76,16 @@ class StreamingRenderer {
   private lastText: string | null = null
   private lastRendered: ReactNode[] = []
 
-  /** @param labels - Localized Markdown chrome baked into cached elements; the owner replaces the renderer when it changes. */
-  constructor(private readonly labels: MarkdownLabels) {}
+  /**
+   * @param labels - Localized Markdown chrome baked into cached elements; the owner replaces the renderer when it changes.
+   * @param transformText - Text-node rewriter baked into the frozen elements;
+   * the owner replaces the renderer when it changes, so a restored-value colour
+   * or view switch never leaves stale copy in the frozen half of a reply.
+   */
+  constructor(
+    private readonly labels: MarkdownLabels,
+    private readonly transformText: ((value: string) => ReactNode) | undefined,
+  ) {}
 
   /**
    * Render the current accumulated text. Idempotent per text value, so React
@@ -113,6 +123,7 @@ class StreamingRenderer {
         targets: frameTargets,
         footnoteOrder: this.frozenFootnoteOrder,
         footnoteCounts: this.frozenFootnoteCounts,
+        transformText: this.transformText,
       }
       // Separator newlines are cached alongside the elements so the
       // assembled children match the settled pipeline's block wrapping.
@@ -132,6 +143,7 @@ class StreamingRenderer {
       targets: frameTargets,
       footnoteOrder: [...this.frozenFootnoteOrder],
       footnoteCounts: new Map(this.frozenFootnoteCounts),
+      transformText: this.transformText,
     }
     const children = [...this.frozenElements]
     for (const element of renderBlocks(tail, tailContext)) {
@@ -172,28 +184,32 @@ class StreamingRenderer {
  * absolute HTTP(S) images render directly.
  */
 export const MarkdownText = memo(function MarkdownText({
-  text, streaming = false, labels, fileMentions, pathImages, variant = 'body',
+  text, streaming = false, labels, fileMentions, pathImages, transformText, variant = 'body',
 }: {
   text: string
   streaming?: boolean
   labels: MarkdownLabels
   fileMentions?: MarkdownFileMentions | undefined
   pathImages?: MarkdownPathImages | undefined
+  transformText?: ((value: string) => ReactNode) | undefined
   variant?: 'body' | 'compact'
 }) {
   const streamRef = useRef<StreamingRenderer | null>(null)
   const streamLabelsRef = useRef<MarkdownLabels>(labels)
+  const streamTransformRef = useRef(transformText)
   const children = useMemo(() => {
     if (!streaming) {
       streamRef.current = null
-      return renderSettled(text, labels, fileMentions, pathImages)
+      return renderSettled(text, labels, fileMentions, pathImages, transformText)
     }
-    if (streamRef.current === null || streamLabelsRef.current !== labels) {
-      streamRef.current = new StreamingRenderer(labels)
+    if (streamRef.current === null || streamLabelsRef.current !== labels
+      || streamTransformRef.current !== transformText) {
+      streamRef.current = new StreamingRenderer(labels, transformText)
       streamLabelsRef.current = labels
+      streamTransformRef.current = transformText
     }
     return streamRef.current.render(text)
-  }, [text, streaming, labels, fileMentions, pathImages])
+  }, [text, streaming, labels, fileMentions, pathImages, transformText])
   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
     data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>
 })

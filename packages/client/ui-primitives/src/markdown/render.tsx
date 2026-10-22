@@ -201,6 +201,12 @@ export interface MarkdownRenderContext {
   readonly footnoteOrder: string[]
   /** References rendered per identifier; drives the section's back-reference count. */
   readonly footnoteCounts: Map<string, number>
+  /**
+   * Rewrites one rendered text node; a consumer that restores redacted values
+   * paints them here, because a Markdown tree has no other plain-text exit.
+   * Absent renders the source verbatim.
+   */
+  readonly transformText?: ((value: string) => ReactNode) | undefined
 }
 
 /**
@@ -272,8 +278,14 @@ function renderChildren(
 
 function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderContext): ReactNode {
   switch (node.type) {
-    case 'text':
-      return node.value
+    case 'text': {
+      if (context.transformText === undefined) return node.value
+      const replaced = context.transformText(node.value)
+      // A rewriter that paints part of the text returns a list of pieces, and
+      // the list needs the key of the node it stands for; the wrapper adds no
+      // element to the DOM, so plain text still renders exactly as authored.
+      return typeof replaced === 'string' ? replaced : <Fragment key={key}>{replaced}</Fragment>
+    }
     case 'paragraph':
       return <p key={key}>{renderChildren(node.children, context)}</p>
     case 'heading':

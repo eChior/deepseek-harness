@@ -15,6 +15,7 @@
  * tokens (`/plan。`) stay plain even for a loaded name.
  */
 import type { ReactNode } from 'react'
+import { Fragment } from 'react'
 import clsx from 'clsx'
 import { ReferenceIconRegular } from './ReferenceIcon.tsx'
 import css from './user-text.module.css'
@@ -187,4 +188,37 @@ export function projectUserText(
   if (parts.length === 0 && hits.length === 0) return <span className={css.plainRun}>{text}</span>
   if (cursor < text.length) pushPlain(cursor, text.length)
   return <>{parts}</>
+}
+
+/**
+ * Paint the spans of `text` that a caller restored from a redaction placeholder.
+ * Ordinary text stays a bare string, so a reader with nothing to restore adds no
+ * wrapper element to the surrounding markup.
+ * @param text - the already-restored text.
+ * @param spans - half-open `[start, end)` offsets holding a restored value.
+ * @param color - any CSS colour; the caller owns the preference behind it.
+ * @returns the text with each restored run wrapped in the highlight span.
+ */
+export function highlightRestoredSpans(
+  text: string,
+  spans: readonly (readonly [number, number])[],
+  color: string,
+): ReactNode {
+  const hits = spans
+    .filter(([start, end]) => start < end && end <= text.length)
+    .sort((left, right) => left[0] - right[0])
+  if (hits.length === 0) return text
+  const parts: ReactNode[] = []
+  let cursor = 0
+  for (const [start, end] of hits) {
+    const open = Math.max(start, cursor)
+    if (open >= end) continue
+    if (open > cursor) parts.push(text.slice(cursor, open))
+    parts.push(
+      <span key={`h${open}`} className={css.restoredHit} style={{ color }}>{text.slice(open, end)}</span>,
+    )
+    cursor = end
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor))
+  return <Fragment>{parts}</Fragment>
 }
