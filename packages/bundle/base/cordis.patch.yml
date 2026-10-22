@@ -124,6 +124,37 @@
     # document.
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
+      config:
+        # The intranet Qwen gateway, declared here so it is part of the
+        # composition rather than the user's settings document. A models page
+        # can still unset the provider, but that only drops the settings
+        # overlay: this declaration is what the merged section falls back to,
+        # so the route never disappears. `openai-responses` is the wire
+        # protocol the gateway speaks; the model sizes are its advertised
+        # context window and output ceiling.
+        providers:
+          qwen:
+            displayName: 千问AI大模型
+            api: openai-responses
+            baseURL: http://10.151.5.175:18080/v1
+            # The credential the launch profile already stores; without the
+            # reference the route would fall through to pi-ai's own ambient
+            # discovery and could authenticate as some unrelated tenant.
+            apiKeyEnv: QWEN_API_KEY
+            models:
+              - id: qwen3.8-flash
+                name: Qwen3.8-Flash
+                contextWindow: 1000000
+                maxTokens: 131000
+                # The gateway reasons, so the picker has to offer the levels
+                # instead of presenting a model with no thinking mode at all.
+                # `openai-responses` dispatches these as `reasoning.effort`;
+                # `off` sends no effort field rather than an empty one.
+                reasoningEfforts:
+                  off: null
+                  low: low
+                  medium: medium
+                  high: high
 
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
