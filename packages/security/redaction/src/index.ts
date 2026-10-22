@@ -7,7 +7,22 @@
  * tests use. The rule list is the pluggable half (see `terms.ts`).
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { RedactionService, type Config } from './plugin.ts'
+
+/**
+ * How a model has to treat a placeholder this provider leaves in the text.
+ *
+ * A placeholder reads like an ordinary bracketed word, so a model asked to
+ * summarise or translate will rewrite it — and a rewritten placeholder no longer
+ * restores. The rule rides in the system prompt rather than in the settings page
+ * because it has to hold for every request in every session, and because the
+ * person who needs it is the model, not the user.
+ */
+const PLACEHOLDER_PROMPT = '1. 占位字段原样输出：[XX-<整数>] 是脱敏工具生成的占位字段，属于正常文本，其中 <整数> 可为任意整数，如 [XX-1]、[XX-2]、[XX-10] 等。'
+  + '正文输出和总结中必须逐字原样输出，包括方括号、XX、连字符和整数；不得替换、改写、翻译、扩写、缩写或修改其描述。'
+  + ' 2. 同义词合并总结：[XX1-1] 和 [XX1-2] 视为同义词，表示同一含义。正文中按原形式保留；总结时可按同一意思合并归纳，不必分别展开。'
+  + ' 3. 冲突处理：若规则理解有冲突，优先保证 [XX-<整数>] 在正文和总结中原样输出；同义词仅在总结层面合并，不改变正文中的标签形式。'
 
 /**
  * Register the redaction service as `ctx.redaction`.
@@ -22,6 +37,16 @@ import { RedactionService, type Config } from './plugin.ts'
  */
 export function apply(ctx: Context, config: Config = {}): void {
   ctx.plugin(RedactionService, config)
+  // Scoped to this plugin, so the section disappears with it. The provider has no
+  // off switch, which is why the instruction is unconditional: a session with
+  // placeholders in it always needs the rule that keeps them intact.
+  ctx.inject(['systemPrompt'], (scope) => {
+    scope.systemPrompt.section({
+      name: 'redaction:placeholders',
+      order: scope.systemPrompt.getSectionOrder('REDACTION_PLACEHOLDERS'),
+      text: PLACEHOLDER_PROMPT,
+    })
+  })
 }
 
 export {
@@ -42,7 +67,7 @@ export {
   type LocalTermFile,
   type LocalTermList,
 } from './local.ts'
-export { CODE_JOINER, RedactionMap, codeShape, groupShape, type RedactionEntry } from './map.ts'
+export { RedactionMap, codeShape, groupShape, type RedactionEntry } from './map.ts'
 export {
   Config,
   RedactionService,

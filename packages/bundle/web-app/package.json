@@ -181,9 +181,10 @@
     "@deepseek-ai/dsh-client-ui-settings-session-log": "workspace:*",
     "@michengai/dsh-archive-manager": "1.1.6",
     "@michengai/dsh-skills-manager": "1.2.9",
-    "billion-context": "^0.1.202",
+    "billion-context": "^0.1.204",
     "dsh-better-sidebar": "0.26.1",
     "dsh-notify-me": "1.10.2",
+    "dsh-rewind-plugin": "0.15.3",
     "dsh-zh-thinking": "git+https://github.com/yingjian666/dsh-zh-thinking.git#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe",
     "dshmarket": "1.66.45",
     "superpowers-dsh": "0.3.0"

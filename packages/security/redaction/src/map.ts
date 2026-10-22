@@ -16,35 +16,40 @@ export interface RedactionEntry {
 }
 
 /**
- * Invisible separator (U+2060 word joiner) wrapped around every fixed code that
- * leaves this process. A code like `A` is an ordinary word; in running text the
- * letter occurs naturally, so the bare code could be spliced back over text it
- * never stood for. Wrapped, the code is a unique token nothing else collides
- * with — and restore matches the exact wrapped shape, never the bare code.
+ * Every placeholder wears one shape: square brackets around a label.
+ *
+ * A single value reads `[工艺-1]`; a value that belongs to a family of
+ * synonymous spellings reads `[公司1-1]`, `[公司1-2]` — the same label with the
+ * family number glued on, then a spelling number. One shape means the model can
+ * be told a single rule (`[XX-…]` and `[XX1-…]` are placeholders, copy them
+ * verbatim) instead of a rule per category, and restore matches by the brackets
+ * rather than by a per-category pattern.
  */
-export const CODE_JOINER = '\u2060'
 
 /**
- * The form a fixed code takes in redacted text: the code wrapped in invisible
- * separators. Numbered placeholders (`[产品-3]`) are already unique by shape and
- * pass through untouched.
- * @param placeholder A bare fixed code (`A`, `ZY`) from the entry log.
- * @returns The wrapped form to search for in redacted text.
+ * The form any placeholder takes in redacted text.
+ *
+ * An invisible separator (U+2060 word joiner) used to wrap a bare code so that a
+ * letter like `A` could not be spliced back over ordinary text. The brackets do
+ * that job now, so nothing invisible is written and the code travels as `[A]`.
+ * @param placeholder A placeholder or bare code from the entry log.
+ * @returns The bracketed form to search for in redacted text.
  */
 export function codeShape(placeholder: string): string {
-  return placeholder.startsWith('[') ? placeholder : `${CODE_JOINER}${placeholder}${CODE_JOINER}`
+  return placeholder.startsWith('[') ? placeholder : `[${placeholder}]`
 }
 
 /**
- * The visible form of an alias-group placeholder: `公司1-1` (group 1, spelling 1).
- * The term list spells it `1.1` because `|` separates the code; the dash form is
- * what humans see and what the session keeps.
- * @param group Group number, allocated per category in first-seen order.
- * @param spelling Spelling number inside the group, also first-seen order.
- * @returns The dashed visible form, e.g. `公司1-1`.
+ * The visible form of a group placeholder: `[公司1-1]` (family 1, spelling 1).
+ * The term list spells the code `1.1` because `|` separates it from the term;
+ * the bracketed dashed form is what the model and the session see.
+ * @param label Display label of the category, e.g. `公司` or `产品`.
+ * @param group Family number, allocated per category in first-seen order.
+ * @param spelling Spelling number inside the family, also first-seen order.
+ * @returns The bracketed form, e.g. `[公司1-1]`.
  */
-export function groupShape(group: number, spelling: number): string {
-  return `公司${group}-${spelling}`
+export function groupShape(label: string, group: number, spelling: number): string {
+  return `[${label}${group}-${spelling}]`
 }
 
 /** Hand out placeholders, resolve them back, and remember nothing after a restart. */
@@ -120,24 +125,34 @@ export class RedactionMap {
    * the first time takes the next free pair, in first-seen order, so restore
    * can put every spelling back exactly.
    * @param category Category that owns the group sequences.
-   * @param group Group key — one company across all its spellings.
+   * @param label Display label the placeholder carries, e.g. `公司`.
+   * @param group Group key — one family across all its spellings.
    * @param original The spelling as it appeared in the text.
-   * @returns The dashed placeholder, reused when this spelling was seen before.
+   * @param fixed Numbers the term list spells out (`13.1` → family 13, spelling
+   *   1). When given they are used verbatim, so the list — not first-seen order —
+   *   decides the numbering and `[产品13-1]` means the same product everywhere.
+   *   Absent for a category whose list names no number, where the map allocates.
+   * @returns The bracketed placeholder, reused when this spelling was seen before.
    */
-  group(category: string, group: string, original: string): string {
+  group(
+    category: string,
+    label: string,
+    group: string,
+    original: string,
+    fixed?: { readonly group: number; readonly spelling: number },
+  ): string {
     const existing = this.#byOriginal.get(original)
     if (existing !== undefined) return existing
     const allKey = `${category}\u0000all`
-    const nextGroup = this.#groups.get(group) ?? (this.#groups.get(allKey) ?? 0) + 1
+    const nextGroup = fixed?.group ?? this.#groups.get(group) ?? (this.#groups.get(allKey) ?? 0) + 1
     this.#groups.set(group, nextGroup)
     this.#groups.set(allKey, Math.max(this.#groups.get(allKey) ?? 0, nextGroup))
-    const nextSpelling = (this.#spellings.get(group) ?? 0) + 1
-    this.#spellings.set(group, nextSpelling)
-    const shaped = codeShape(groupShape(nextGroup, nextSpelling))
+    const nextSpelling = fixed?.spelling ?? (this.#spellings.get(group) ?? 0) + 1
+    const shaped = groupShape(label, nextGroup, nextSpelling)
+    this.#spellings.set(group, Math.max(this.#spellings.get(group) ?? 0, nextSpelling))
     this.#byOriginal.set(original, shaped)
     this.#byPlaceholder.set(shaped, original)
-    // The entry log carries the bare dashed form; wrapping is transport detail.
-    this.#entries.push({ placeholder: groupShape(nextGroup, nextSpelling), category, original })
+    this.#entries.push({ placeholder: shaped, category, original })
     return shaped
   }
 
@@ -172,16 +187,19 @@ export class RedactionMap {
    * @param placeholder Placeholder from a mapping file: numbered or grouped.
    */
   #seed(category: string, placeholder: string): void {
-    const numbered = /^\[(?<label>.+)-(?<sequence>\d{1,6})\]$/.exec(placeholder)
+    // The group form is tried first: `[公司1-1]` also fits the numbered pattern,
+    // read as label `公司1` with sequence `1`, and would raise the wrong counter.
+    const groupedFirst = /^\[[^\[\]\d]+\d+-\d+\]$/.test(placeholder)
+    const numbered = groupedFirst ? null : /^\[(?<label>.+)-(?<sequence>\d{1,6})\]$/.exec(placeholder)
     if (numbered?.groups !== undefined) {
       const label = numbered.groups['label'] as string
       const sequence = Number(numbered.groups['sequence'])
       this.#counters.set(label, Math.max(this.#counters.get(label) ?? 0, sequence))
       return
     }
-    // A grouped placeholder (`公司<n>-<m>`) records no group key, only the spare
-    // number, so a company never met before still takes a free one.
-    const grouped = /^公司(?<group>\d+)-(?<spelling>\d+)$/.exec(placeholder)
+    // A grouped placeholder (`[公司<n>-<m>]`) records no group key, only the
+    // spare number, so a company never met before still takes a free one.
+    const grouped = /^\[[^\[\]\d]+(?<group>\d+)-(?<spelling>\d+)\]$/.exec(placeholder)
     if (grouped?.groups === undefined) return
     const allKey = `${category}\u0000all`
     const group = Number(grouped.groups['group'])
@@ -211,13 +229,12 @@ export class RedactionMap {
   restore(text: string, sessionId?: string): string {
     const table = this.#tableFor(sessionId)
     if (table.size === 0) return text
-    // Numbered placeholders match by shape; fixed codes (a bare `A`, `ZY`) do
-    // not, so they are spliced back by their wrapped form only — a natural
-    // letter in the text never matches.
+    // Every placeholder is bracketed, so one pattern covers both the numbered
+    // form (`[工艺-1]`) and the group form (`[公司1-1]`). A code without a
+    // sequence (`[A]`) is spliced back by its exact bracketed text.
     let restored = text.replace(/\[[^\]\n]{1,32}-\d{1,6}\]/g, match => table.get(match) ?? match)
     for (const [code, original] of table) {
-      if (code.startsWith('[')) continue
-      if (!restored.includes(code)) continue
+      if (!code.startsWith('[') || !restored.includes(code)) continue
       restored = restored.split(code).join(original)
     }
     return restored

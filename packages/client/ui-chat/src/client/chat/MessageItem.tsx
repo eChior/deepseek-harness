@@ -41,14 +41,6 @@ function contentParts(content: readonly unknown[]): {
   return { text: texts.join(''), attachments, rest }
 }
 
-/**
- * U+2060 word joiner. A fixed code or alias group is published wrapped in this
- * so the bare letters (`A`, `ZY`, `公司1-1`) are never spliced out of a natural
- * word. Declared locally rather than imported: a client plugin may not take a
- * value import from another plugin's package.
- */
-const CODE_JOINER = '\u2060'
-
 function retrySeconds(milliseconds: number): number {
   return Math.max(1, Math.ceil(milliseconds / 1_000))
 }
@@ -230,10 +222,9 @@ function restoreNumbered(pieces: ViewPiece[], placeholders: ReadonlyMap<string, 
 
 /**
  * Swap every placeholder this machine issued back for its value, for the view
- * only. Numbered placeholders match by shape; fixed codes and alias groups
- * travel wrapped in U+2060 word joiners so a natural occurrence of the letters
- * is never spliced, and the entry log carries the bare code — the wrapping is
- * put back here rather than looked for in the text.
+ * only. Numbered and grouped placeholders match by shape; a fixed code (`[A]`,
+ * `[ZY]`) is spliced by its exact bracketed text. Every form is bracketed, so no
+ * invisible marker is written around it and none has to be looked for here.
  * @param text Text as the session logged it.
  * @param placeholders Placeholder to original, from the provider's table.
  * @returns The restored text and the spans that hold a restored value.
@@ -242,10 +233,7 @@ function restoreUserView(text: string, placeholders: ReadonlyMap<string, string>
   const pieces: ViewPiece[] = [{ text, restored: false }]
   restoreNumbered(pieces, placeholders)
   for (const [key, original] of placeholders) {
-    if (key.startsWith('[') || key === original) continue
-    // Searching for the bare code would leave the joiners stranded in the
-    // rendered text; the wrapped form is what the session actually holds.
-    if (replaceInPieces(pieces, `${CODE_JOINER}${key}${CODE_JOINER}`, original)) continue
+    if (key === original) continue
     replaceInPieces(pieces, key, original)
   }
   let restored = ''

@@ -27,9 +27,13 @@ export interface RedactionHit {
   /**
    * Alias-group key the hit belongs to; present only when the rule's code is a
    * `group.spelling` pair. All rules sharing the key replace with the same
-   * `公司<n>-<m>` placeholder.
+   * `[公司<n>-<m>]` placeholder.
    */
   readonly group?: string
+  /** Family number the term list spells out, e.g. the `13` of `13.1`. */
+  readonly groupNumber?: number
+  /** Spelling number inside that family, e.g. the `1` of `13.1`. */
+  readonly spellingNumber?: number
 }
 
 /** The redacted text plus what was replaced. */
@@ -120,6 +124,8 @@ export function findHits(text: string, rules: readonly RedactionRule[]): Redacti
         kind: rule.kind,
         ...rule.code === undefined ? {} : { code: rule.code },
         ...rule.group === undefined ? {} : { group: rule.group },
+        ...rule.groupNumber === undefined ? {} : { groupNumber: rule.groupNumber },
+        ...rule.spellingNumber === undefined ? {} : { spellingNumber: rule.spellingNumber },
       })
     }
   }
@@ -188,10 +194,19 @@ export function redactText(
     // A rule with a fixed code replaces every hit with that code — a product's
     // assigned letter, a holder company's abbreviation — instead of a numbered
     // placeholder; the map still records the pairing so restore can undo it.
-    // A group rule (the holder's alias set) replaces with `公司<n>-<m>` instead:
-    // one group number per company, one spelling number per distinct wording.
+    // A group rule (a holder's alias set, a product's spellings) replaces with
+    // `[公司<n>-<m>]` instead: one family number per company or product, one
+    // spelling number per distinct wording, both taken from the term list.
     const placeholder = hit.group !== undefined
-      ? map.group(hit.category, hit.group, hit.text)
+      ? map.group(
+        hit.category,
+        hit.label,
+        hit.group,
+        hit.text,
+        hit.groupNumber === undefined || hit.spellingNumber === undefined
+          ? undefined
+          : { group: hit.groupNumber, spelling: hit.spellingNumber },
+      )
       : hit.code === undefined
         ? map.placeholder(hit.category, hit.label, hit.text)
         : map.code(hit.category, hit.code, hit.text)

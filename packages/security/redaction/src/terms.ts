@@ -54,11 +54,15 @@ export interface RedactionRule {
   /** Fixed code the hit is replaced with instead of a numbered placeholder. */
   readonly code?: string
   /**
-   * Alias-group key the hit belongs to: every rule carrying the same key
-   * replaces its matches with the same `公司<n>-<m>` placeholder, one spelling
+   * Alias-group key the rule belongs to: every rule carrying the same key
+   * replaces its matches with the same `[公司<n>-<m>]` placeholder, one spelling
    * number per distinct original. Absent = not a group member.
    */
   readonly group?: string
+  /** Family number the list spells out, e.g. the `13` of `13.1`. */
+  readonly groupNumber?: number
+  /** Spelling number inside that family, e.g. the `1` of `13.1`. */
+  readonly spellingNumber?: number
 }
 
 const CATEGORY_ID = /^[a-z][a-z0-9-]*$/
@@ -260,8 +264,11 @@ export function compileRules(list: RedactionTermList): RedactionRule[] {
     if (category.codeMap !== undefined) {
       for (const [term, code] of Object.entries(category.codeMap)) {
         // A dotted code (`1.1`) marks an alias-group member: all entries sharing
-        // the integer part replace with the same `公司<n>-<m>` placeholder.
-        const group = /^\d{1,4}\.\d{1,4}$/.test(code) ? `${category.id}\u0000${code.split('.')[0]}` : undefined
+        // the integer part replace with the same `[公司<n>-<m>]` placeholder. The
+        // numbers come from the list verbatim rather than from first-seen order,
+        // so `[产品13-1]` names the same product in every session and after every
+        // restart — the list is the numbering authority.
+        const pair = /^(?<group>\d{1,4})\.(?<spelling>\d{1,4})$/u.exec(code)
         rules.push({
           category: category.id,
           label: category.label,
@@ -269,7 +276,13 @@ export function compileRules(list: RedactionTermList): RedactionRule[] {
           source: term,
           regex: new RegExp(escapeRegExp(term), 'g'),
           code,
-          ...group === undefined ? {} : { group },
+          ...pair?.groups === undefined
+            ? {}
+            : {
+              group: `${category.id}\u0000${pair.groups['group'] as string}`,
+              groupNumber: Number(pair.groups['group']),
+              spellingNumber: Number(pair.groups['spelling']),
+            },
         })
       }
     }

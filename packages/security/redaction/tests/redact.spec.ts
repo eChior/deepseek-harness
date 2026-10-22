@@ -153,8 +153,8 @@ describe('alias groups', () => {
   it('gives one company one group number and one spelling per wording', () => {
     const map = new RedactionMap()
     const result = redactText('浙江华润三九众益制药有限公司由众益代持', ZY, map)
-    expect(result.text).toBe(`${codeShape(groupShape(1, 1))}由${codeShape(groupShape(1, 2))}代持`)
-    expect(result.placeholders).toEqual([codeShape(groupShape(1, 1)), codeShape(groupShape(1, 2))])
+    expect(result.text).toBe(`${groupShape('公司', 1, 1)}由${groupShape('公司', 1, 2)}代持`)
+    expect(result.placeholders).toEqual([groupShape('公司', 1, 1), groupShape('公司', 1, 2)])
   })
 
   it('keeps the same spelling on the same numbers across calls', () => {
@@ -163,7 +163,7 @@ describe('alias groups', () => {
     // `众益` took 1-1 on its first sighting; the longer spelling takes the next
     // free spelling number of the same group on its own first sighting.
     const again = redactText('浙江华润三九众益制药有限公司与顺峰开会', [...ZY, ...SF], map)
-    expect(again.text).toBe(`${codeShape(groupShape(1, 2))}与${codeShape(groupShape(2, 1))}开会`)
+    expect(again.text).toBe(`${groupShape('公司', 1, 2)}与${groupShape('公司', 2, 1)}开会`)
   })
 
   it('restores every spelling back to its original wording', () => {

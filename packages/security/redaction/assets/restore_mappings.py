@@ -8,13 +8,15 @@ swaps every placeholder for the value it stood for. Mapping files are KEPT so
 that old sessions stay readable (the client view uses them too); pass
 `--consume` to delete each mapping file after a fully successful restore.
 
-Placeholder shapes:
-  - numbered:   `[产品-3]`            — matched by shape
-  - fixed code: `A`, `ZY`             — stored wrapped in AI word joiners
-                (U+2060, invisible):  `<U+2060>A<U+2060>`; the wrapping is
-                transport detail, this tool matches the wrapped form so a
-                natural letter `A` in the text is never touched
-  - alias group: `公司1-2`            — same wrapping as fixed codes
+Placeholder shapes — every one is bracketed:
+  - numbered:   `[工艺-1]`   — one value, one number
+  - fixed code: `[A]`, `[ZY]` — a product letter or a company abbreviation
+  - group:      `[公司1-2]`  — family 1 (one company), spelling 2 (one wording);
+                `[产品13-1]` and `[产品13-2]` are the same product written two
+                ways, so a summary may treat them as one thing
+An older build wrapped a bare code in an invisible word joiner (U+2060) and
+never bracketed it; a mapping file it wrote may still hold that bare form. Those
+old shapes are matched too, so an old mapping still restores what it produced.
 
 Usage:
     python restore_mappings.py FILE... [--mappings-dir DIR] [--dry-run] [--consume]
@@ -40,6 +42,10 @@ from pathlib import Path
 
 JOINER = "\u2060"
 NUMBERED = re.compile(r"\[[^\]\n]{1,32}-\d{1,6}\]")
+# An old-build group placeholder, e.g. `公司1-2`, written without brackets.
+LEGACY_GROUP = re.compile(r"公司\d+-\d+")
+# An old-build numbered or fixed-code placeholder, published without brackets.
+LEGACY_BARE = re.compile(r"[^\W\d_]+-\d{1,6}")
 
 
 def default_mappings_dir() -> Path:
@@ -79,9 +85,11 @@ def load_mappings(directory: Path) -> dict[str, str]:
 def build_patterns(table: dict[str, str]) -> re.Pattern[str]:
     """One alternation over the TEXT forms of every placeholder.
 
-    Bare codes and group placeholders appear in text wrapped in U+2060 on both
-    sides; numbered placeholders appear as-is. Longest first so a longer code
-    wins over a shorter one inside the same alternation arm ordering.
+    A bracketed placeholder appears as-is. A bare code (`A`) or a bare dashed
+    group (`公司1-2`) comes from an older mapping file, which published it
+    wrapped in U+2060; it is matched in that wrapped form so a natural letter in
+    the text is never touched. Longest form first, so `[公司1-10]` wins over
+    `[公司1-1]`.
     """
     forms: list[str] = []
     for placeholder in table:
@@ -89,6 +97,13 @@ def build_patterns(table: dict[str, str]) -> re.Pattern[str]:
             forms.append(placeholder)
         else:
             forms.append(f"{JOINER}{placeholder}{JOINER}")
+            # An old build also wrote the bracket-less group form; keep it so an
+            # old mapping still restores what that build produced.
+            if LEGACY_GROUP.fullmatch(placeholder) or LEGACY_BARE.fullmatch(placeholder):
+                forms.append(f"[{placeholder}]")
+                # An old build's own text carried the bracket-less form, and a
+                # model quoting it back may drop the brackets; both restore.
+                forms.append(placeholder)
     ordered = sorted(set(forms), key=len, reverse=True)
     if not ordered:
         return re.compile(r"(?!x)x")  # matches nothing
@@ -106,8 +121,15 @@ def restore_file(path: Path, pattern: re.Pattern[str], table: dict[str, str], dr
     def swap(match: re.Match[str]) -> str:
         nonlocal replaced
         form = match.group(0)
-        bare = form[len(JOINER):len(form) - len(JOINER)] if form.startswith(JOINER) else form
+        if form.startswith(JOINER):
+            bare = form[len(JOINER):len(form) - len(JOINER)]
+        else:
+            bare = form
         original = table.get(bare)
+        if original is None:
+            # The bracketed form of an old bracket-less group entry.
+            bare = form[1:-1] if form.startswith("[") and not table.get(form) else bare
+            original = table.get(bare)
         if original is None:
             return form
         replaced += 1

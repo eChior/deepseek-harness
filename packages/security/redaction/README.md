@@ -73,6 +73,8 @@ Each `terms.yaml` entry is either a term — matched literally, escaped before i
 
 Placeholder identity lives in `RedactionMap`, not in the matching code. The first sighting of a value allocates the next sequence number for its category, and later sightings of the same value reuse that placeholder — so a model reading a tool result or a later turn can follow `[编号-3]` as one thing without ever seeing what it stands for. The map is deliberately not persisted: a placeholder survives in a session file forever, while the mapping that could reverse it does not survive the process.
 
+The placeholder is only safe while the model leaves it alone, and a bracketed word reads like ordinary text to a model asked to summarise or translate. So the plugin also registers a prompt section of its own, `redaction:placeholders`, which states that a bracketed placeholder is normal text to be copied verbatim in both the reply and any summary, that two spellings of one family may be merged when summarising, and that the verbatim rule wins if the two ever conflict. The instruction rides in the system prompt rather than in the settings page because the reader who needs it is the model, and it is registered unconditionally because this provider has no off switch: a session that carries a placeholder always needs the rule that keeps it intact.
+
 The reader for the list is a small scanner rather than a general YAML dependency. The format is a flat subset — top-level scalars, one list of categories, two string lists each — and the scanner is the whole of it.
 
 <a id="model-experience"></a>
