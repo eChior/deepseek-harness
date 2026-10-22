@@ -1889,10 +1889,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'What the attempt did with the queue.',
       },
       {
-        signature: 'async mappingsFor(sessionId: string): Promise<readonly RedactionEntry[]>',
-        description: 'The table one session was written with, read from that session\'s own file.',
-        parameters: [{ name: 'sessionId', description: 'Session whose conversation is being rendered.' }],
-        returns: 'The entries that file records, in the order they were written.',
+        signature: 'async mappingsFor(): Promise<readonly RedactionEntry[]>',
+        description: 'Every pairing the machine can restore right now, read back before answering.',
+        parameters: [],
+        returns: 'The entries the mapping file records, in the order they were written.',
       },
       {
         signature: 'entries(): readonly RedactionEntry[]',
@@ -1901,9 +1901,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Every restorable entry, this process\'s own first.',
       },
       {
-        signature: 'restore(text: string, sessionId?: string): string',
-        description: 'Turn the placeholders this session emitted back into the values they stand for.',
-        parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }, { name: 'sessionId', description: 'Session the text belongs to. When given, only that conversation\'s mapping file and this process\'s live work are consulted.' }],
+        signature: 'restore(text: string): string',
+        description: 'Turn the placeholders a text carries back into the values they stand for.',
+        parameters: [{ name: 'text', description: 'Text that may carry placeholders.' }],
         returns: 'The text with every placeholder it carries restored.',
       },
       {

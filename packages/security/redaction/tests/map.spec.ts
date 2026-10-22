@@ -57,32 +57,40 @@ describe('RedactionMap', () => {
     expect(map.entries()).toEqual([{ placeholder: '[偏差-1]', category: 'deviation', original: 'DEV-2026-014' }])
   })
 
-  it('files what an earlier process recorded under the session that wrote it', () => {
+  it('files what an earlier process recorded into the machine-wide table', () => {
     // A placeholder outlives the process that issued it: the session file keeps
     // it forever, so the map has to hand a reader the file's own table.
     const map = new RedactionMap()
-    map.adopt('session-a', [{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
-    expect(map.entriesFor('session-a')).toEqual([{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
-    // One task, one mapping: nothing of it leaks into another conversation.
-    expect(map.entriesFor('session-b')).toEqual([])
-    // Nor into this process's own log, which counts what it replaced itself.
-    expect(map.entries()).toEqual([])
+    map.adopt([{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
+    expect(map.entries()).toEqual([{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
+    expect(map.restore('[偏差-4] 已闭环')).toBe('DEV-2026-004 已闭环')
+    // The live log stays what this process wrote itself, so the writer never
+    // files the same pairing twice and the count a reader sees stays its own.
+    expect(map.liveEntries()).toEqual([])
+    expect(map.size).toBe(0)
   })
 
   it('never reuses a number an earlier process already gave out', () => {
     const map = new RedactionMap()
-    map.adopt('session-a', [{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
+    map.adopt([{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
     expect(map.placeholder('deviation', '偏差', 'DEV-2026-099')).toBe('[偏差-5]')
   })
 
-  it('offers the live table alongside the file of the session being read', () => {
+  it('keeps the number a mapping file pinned to a value', () => {
+    // Without this a value first seen after a restart takes a fresh number and
+    // yesterday's sessions stop restoring.
     const map = new RedactionMap()
-    map.adopt('session-a', [{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
+    map.adopt([{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
+    expect(map.placeholder('deviation', '偏差', 'DEV-2026-004')).toBe('[偏差-4]')
+    expect(map.size).toBe(0)
+  })
+
+  it('returns the filed table and the live work in one list', () => {
+    const map = new RedactionMap()
+    map.adopt([{ placeholder: '[偏差-4]', category: 'deviation', original: 'DEV-2026-004' }])
     map.placeholder('deviation', '偏差', 'DEV-2026-099')
-    expect(map.entriesFor('session-a').map(entry => entry.placeholder)).toEqual(['[偏差-4]', '[偏差-5]'])
-    // The live table belongs to the conversation being written, so it appears
-    // for the session on screen and nowhere else.
-    expect(map.entriesFor('session-b').map(entry => entry.placeholder)).toEqual(['[偏差-5]'])
+    expect(map.entries().map(entry => entry.placeholder)).toEqual(['[偏差-4]', '[偏差-5]'])
+    expect(map.liveEntries().map(entry => entry.placeholder)).toEqual(['[偏差-5]'])
   })
 
   it('forgets everything on clear', () => {

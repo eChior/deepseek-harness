@@ -102,30 +102,23 @@ export class RedactionController extends TypertRemoteService {
   }
 
   /**
-   * The placeholder table one conversation restores with, for the browser that
-   * renders it. Each entry is one value the model must not see but the signed-in
-   * user may; the client swaps these back into the text it renders and never
-   * stores or transmits them further.
+   * Every placeholder pairing this machine can restore, for the browser that
+   * renders its sessions. Each entry is one value the model must not see but the
+   * signed-in user may; the client swaps these back into the text it renders and
+   * never stores or transmits them further.
    *
-   * A mapping file is per task, so the table is asked for by session: two
-   * conversations may hand `[工艺-1]` to different values, and a table that
-   * mixed them would put the wrong original back. Without a session the live
-   * table of this process is reported, which is the one the running conversation
-   * is writing.
-   * @param request - Session whose conversation is being rendered, when known.
-   * @returns Every entry that conversation restores with, first-seen order.
+   * The table is machine-wide: a placeholder means the same value wherever it is
+   * read, so the browser never has to ask which task wrote a pairing, and a
+   * session that has not been opened for weeks still shows its originals.
+   * @returns Every restorable entry, first-seen order.
    */
   @Remote
-  async entries(request: { readonly sessionId?: string }): Promise<readonly RedactionEntryView[]> {
-    const sessionId = request.sessionId
-    const entries = sessionId === undefined || sessionId === ''
-      ? this.ctx.redaction.entries()
-      : await this.ctx.redaction.mappingsFor(sessionId)
-    return entries.map(entry => ({
+  entries(): Promise<readonly RedactionEntryView[]> {
+    return Promise.resolve(this.ctx.redaction.entries().map(entry => ({
       placeholder: entry.placeholder,
       category: entry.category,
       original: entry.original,
-    }))
+    })))
   }
 
   /**

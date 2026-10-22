@@ -231,11 +231,20 @@ function restoreNumbered(pieces: ViewPiece[], placeholders: ReadonlyMap<string, 
  */
 function restoreUserView(text: string, placeholders: ReadonlyMap<string, string>): RestoredView {
   const pieces: ViewPiece[] = [{ text, restored: false }]
-  restoreNumbered(pieces, placeholders)
-  for (const [key, original] of placeholders) {
+  // A logged placeholder can wear extra bracket pairs. An older build spliced a
+  // bare code out of its brackets and left them behind, and pasting such a line
+  // back in made the next pass wrap it again, so the text carries `[H]` or even
+  // `[[H]]`. Peel every depth, longest first, and let the shape pass take
+  // whatever is left once the table has done its work.
+  const ordered = [...placeholders].sort(([left], [right]) => right.length - left.length)
+  for (const [key, original] of ordered) {
     if (key === original) continue
-    replaceInPieces(pieces, key, original)
+    const inner = key.startsWith('[') && key.endsWith(']') ? key.slice(1, -1) : key
+    for (let depth = 3; depth >= 1; depth -= 1) {
+      replaceInPieces(pieces, `${'['.repeat(depth)}${inner}${']'.repeat(depth)}`, original)
+    }
   }
+  restoreNumbered(pieces, placeholders)
   let restored = ''
   const spans: (readonly [number, number])[] = []
   for (const piece of pieces) {

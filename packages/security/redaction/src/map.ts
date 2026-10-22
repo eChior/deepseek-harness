@@ -61,13 +61,22 @@ export class RedactionMap {
   readonly #spellings = new Map<string, number>()
   readonly #entries: RedactionEntry[] = []
   /**
-   * Entries read back from earlier processes, filed under the session whose
-   * mapping file recorded them. Kept apart from {@link #entries} — that one is
-   * this process's own work, the count a reader sees — and filed per session,
-   * because one task owns one mapping: two sessions may hand `[工艺-1]` to
-   * different values, and a single merged table would restore the wrong original.
+   * Entries read back from the mapping file this machine kept. The table is
+   * machine-wide on purpose: a placeholder means the same value in every
+   * conversation, so `[产品-3]` written yesterday still restores today and in a
+   * session that has not touched it. Kept apart from {@link #entries} — that one
+   * is this process's own work, the count a reader sees and the part still to be
+   * written — so a reload never files the same pairing twice.
    */
-  readonly #history = new Map<string, RedactionEntry[]>()
+  readonly #filed: RedactionEntry[] = []
+  /**
+   * Original to the placeholder the machine's file already gave it. Kept beside
+   * {@link #byOriginal} rather than in it so {@link size} keeps counting only what
+   * this process replaced, while a value seen again still takes the number the
+   * file pinned it to — a placeholder that changed on every restart would make
+   * yesterday's sessions unreadable.
+   */
+  readonly #filedOriginal = new Map<string, string>()
 
   /**
    * Placeholder for `original` in `category`, allocating the next sequence number
@@ -79,7 +88,7 @@ export class RedactionMap {
    * @returns The placeholder, reused when this value was seen before.
    */
   placeholder(category: string, label: string, original: string): string {
-    const existing = this.#byOriginal.get(original)
+    const existing = this.#byOriginal.get(original) ?? this.#filedOriginal.get(original)
     if (existing !== undefined) return existing
     // The counter is keyed by the visible label, not the category id: two
     // categories that share one label (`craft` and `craft-metric` both read
@@ -106,15 +115,16 @@ export class RedactionMap {
    * @returns The code, reused when this value was seen before.
    */
   code(category: string, code: string, original: string): string {
-    const existing = this.#byOriginal.get(original)
+    const existing = this.#byOriginal.get(original) ?? this.#filedOriginal.get(original)
     if (existing !== undefined) return existing
     const shaped = codeShape(code)
     this.#byOriginal.set(original, shaped)
     this.#byPlaceholder.set(shaped, original)
-    // The entry log carries the bare code; the wrapped form is a transport
-    // detail of this process, and downstream readers (the mapping file, the
-    // client view) re-wrap it with `codeShape` themselves.
-    this.#entries.push({ placeholder: code, category, original })
+    // The entry log carries the wrapped form — the text the session actually
+    // wrote — so a reader that splices by exact text takes the brackets with it.
+    // A mapping file an older build wrote still holds the bare code, and
+    // `codeShape` on read is what keeps those restorable.
+    this.#entries.push({ placeholder: shaped, category, original })
     return shaped
   }
 
@@ -157,26 +167,23 @@ export class RedactionMap {
   }
 
   /**
-   * File the entries one session's mapping file recorded, so that session's text
-   * still restores after a restart.
+   * File the entries the machine's mapping file recorded, so text written before
+   * a restart still restores.
    *
-   * The entries do NOT enter this process's own tables. A session's table is
-   * returned by {@link entriesFor} when that session is rendered, and only then:
-   * merging every file on the machine into one lookup would let a placeholder
-   * from another task resolve to the wrong value. What the files do contribute
-   * here is the counter position — {@link #seed} keeps every fresh value from
-   * taking a number one of them already used.
-   * @param sessionId Session the file belongs to.
-   * @param entries Entries the file records, in the order they were written.
+   * The entries do NOT enter this process's own tables: {@link #entries} stays
+   * what this process issued, which is what {@link liveEntries} hands to the
+   * writer. What they do contribute here is the counter position — {@link #seed}
+   * keeps every fresh value from taking a number one of them already used.
+   * @param entries Entries read from disk, in the order they were written.
    */
-  adopt(sessionId: string, entries: readonly RedactionEntry[]): void {
-    const filed = this.#history.get(sessionId) ?? []
+  adopt(entries: readonly RedactionEntry[]): void {
     for (const entry of entries) {
       this.#seed(entry.category, entry.placeholder)
-      if (filed.some(known => known.placeholder === entry.placeholder)) continue
-      filed.push({ placeholder: entry.placeholder, category: entry.category, original: entry.original })
+      if (this.#filed.some(known => known.placeholder === entry.placeholder)) continue
+      this.#filed.push({ placeholder: entry.placeholder, category: entry.category, original: entry.original })
+      const shaped = codeShape(entry.placeholder)
+      if (!this.#filedOriginal.has(entry.original)) this.#filedOriginal.set(entry.original, shaped)
     }
-    this.#history.set(sessionId, filed)
   }
 
   /**
@@ -219,15 +226,10 @@ export class RedactionMap {
    * Swap every placeholder back for its original. Used where a human reads the
    * text (rendering a reply); never on the way into a session.
    * @param text Text that may carry placeholders.
-   * @param sessionId Session the text belongs to. When given, only its own
-   *   mapping file and this process's live work are consulted, so `[工艺-1]` in
-   *   one conversation never resolves to another conversation's value. Without
-   *   it every table on this machine is consulted, which is what a caller that
-   *   holds no session identity can do.
    * @returns The text with the placeholders it carries restored.
    */
-  restore(text: string, sessionId?: string): string {
-    const table = this.#tableFor(sessionId)
+  restore(text: string): string {
+    const table = this.#tableFor()
     if (table.size === 0) return text
     // Every placeholder is bracketed, so one pattern covers both the numbered
     // form (`[工艺-1]`) and the group form (`[公司1-1]`). A code without a
@@ -241,47 +243,20 @@ export class RedactionMap {
   }
 
   /**
-   * The lookup one restore runs against.
-   * @param sessionId Session in view, or undefined for every table on the machine.
+   * The lookup one restore runs against: every pairing the machine's file
+   * recorded, plus everything this process issued.
    * @returns Placeholder (in the shape it wears in text) to original.
    */
-  #tableFor(sessionId: string | undefined): ReadonlyMap<string, string> {
-    if (sessionId === undefined) {
-      if (this.#history.size === 0) return this.#byPlaceholder
-      const merged = new Map(this.#byPlaceholder)
-      for (const filed of this.#history.values()) {
-        for (const entry of filed) {
-          const shaped = codeShape(entry.placeholder)
-          // A live entry for the same shape wins: this process issued it and
-          // knows what it stands for right now.
-          if (!merged.has(shaped)) merged.set(shaped, entry.original)
-        }
-      }
-      return merged
-    }
-    const table = new Map<string, string>()
-    const filed = this.#history.get(sessionId)
-    if (filed !== undefined) {
-      for (const entry of filed) table.set(codeShape(entry.placeholder), entry.original)
-    }
-    for (const entry of this.#entries) {
+  #tableFor(): ReadonlyMap<string, string> {
+    if (this.#filed.length === 0) return this.#byPlaceholder
+    const merged = new Map(this.#byPlaceholder)
+    for (const entry of this.#filed) {
       const shaped = codeShape(entry.placeholder)
-      if (!table.has(shaped)) table.set(shaped, entry.original)
+      // A live entry for the same shape wins: this process issued it and knows
+      // what it stands for right now.
+      if (!merged.has(shaped)) merged.set(shaped, entry.original)
     }
-    return table
-  }
-
-  /**
-   * The pairings one session restores with: what its own mapping file recorded,
-   * then what this process issued for the conversation still being lived in.
-   * @param sessionId Session whose conversation is being rendered.
-   * @returns That session's entries; empty when no file and no live work exist.
-   */
-  entriesFor(sessionId: string): readonly RedactionEntry[] {
-    const filed = this.#history.get(sessionId) ?? []
-    if (this.#entries.length === 0) return filed
-    const seen = new Set(filed.map(entry => entry.placeholder))
-    return [...filed, ...this.#entries.filter(entry => !seen.has(entry.placeholder))]
+    return merged
   }
 
   /** Distinct values this process has replaced. */
@@ -290,10 +265,22 @@ export class RedactionMap {
   }
 
   /**
-   * Everything this process replaced, in the order it was first seen.
+   * Every pairing a reader can use: what the machine's file recorded, then what
+   * this process issued.
    * @returns The recorded entries; empty before the first replacement.
    */
   entries(): readonly RedactionEntry[] {
+    if (this.#filed.length === 0) return this.#entries
+    const seen = new Set(this.#filed.map(entry => entry.placeholder))
+    return [...this.#filed, ...this.#entries.filter(entry => !seen.has(entry.placeholder))]
+  }
+
+  /**
+   * Everything this process replaced, in the order it was first seen — the part
+   * the writer still has to append.
+   * @returns The recorded entries; empty before the first replacement.
+   */
+  liveEntries(): readonly RedactionEntry[] {
     return this.#entries
   }
 
@@ -316,6 +303,7 @@ export class RedactionMap {
     this.#groups.clear()
     this.#spellings.clear()
     this.#entries.length = 0
-    this.#history.clear()
+    this.#filed.length = 0
+    this.#filedOriginal.clear()
   }
 }

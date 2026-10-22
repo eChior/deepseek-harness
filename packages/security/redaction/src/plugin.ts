@@ -24,7 +24,6 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
 import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Session } from '@deepseek-ai/dsh-session'
 import { fileURLToPath } from 'node:url'
 import {
   listLocalTermFiles,
@@ -61,6 +60,9 @@ const LOCAL_EXAMPLE_PATH = fileURLToPath(new URL('../assets/terms-local.example.
 
 /** Repository a deployment publishes the list in, read at start and every few minutes. */
 const PUBLISHED_TERMS = 'http://10.151.5.175:3000/ITPublic/dsh-redaction-terms'
+
+/** The one mapping file this machine appends to, under the mappings directory. */
+const MAPPING_FILE = 'mappings.jsonl'
 
 /** Revisions that compare as dates; anything else is left to the cache. */
 const DATED_REVISION = /^\d{4}-\d{2}-\d{2}$/
@@ -334,10 +336,12 @@ export class RedactionService extends Service {
     })
     // A session's placeholders only stay restorable while the mapping exists, so
     // the mapping goes to the local mappings directory the moment the session
-    // leaves the store. The restore tool reads it there, puts the originals back
-    // into exported files, and deletes the file afterwards.
-    ctx.on('session/disposed', (session: Session) => {
-      void this.writeMappings(session)
+    // leaves the store. The file is machine-wide: a placeholder means the same
+    // value in every conversation, so leaving it behind for one task would lose
+    // the pairings another task still shows. The restore tool reads it there,
+    // puts the originals back into exported files, and leaves the file in place.
+    ctx.on('session/disposed', () => {
+      void this.writeMappings()
     })
     // Images go through the local reader, so the model never needs a tool that
     // would hand a picture to the provider. Deny the tool for every agent this
@@ -730,27 +734,26 @@ export class RedactionService extends Service {
   }
 
   /**
-   * Append the placeholders this process issued to the mapping file of the
-   * session that just ended.
+   * Append the placeholders this process issued to the machine's mapping file.
    *
-   * One task, one file: the file is named after the session, so a reader coming
-   * back to a conversation reads exactly the table that conversation was written
-   * with and no other. Repeated turns append to the same file.
+   * One file for the machine, not one per session: a placeholder means the same
+   * value wherever it is read, so `[产品-3]` minted in one task has to restore in
+   * the next one too. A reader therefore never has to know which task wrote the
+   * pairing it is looking at. Repeated turns append to the same file.
    *
    * The map is NOT emptied. An entry that leaves memory stops restoring while the
    * reader is still looking at the session, and the counters would restart from
    * one and hand a fresh value a number this file already gave to another.
-   * @param session The session that just left the store.
    */
-  private async writeMappings(session: Session): Promise<void> {
+  private async writeMappings(): Promise<void> {
     // Checked before anything is read: with write-back off nothing leaves this
     // process at all.
     if (!this.mappingsOn) return
     await this.ready
-    const all = this.map.entries()
+    const all = this.map.liveEntries()
     // Only what this process added since the last file. The entries read back at
-    // startup are not in the log at all, and the ones already appended must not
-    // be appended twice.
+    // startup are not in the live log at all, and the ones already appended must
+    // not be appended twice.
     const fresh = all.slice(this.written)
     if (fresh.length === 0) return
     this.written = all.length
@@ -758,7 +761,7 @@ export class RedactionService extends Service {
     try {
       await mkdir(directory, { recursive: true })
       const body = fresh.map(entry => JSON.stringify({ placeholder: entry.placeholder, category: entry.category, original: entry.original })).join('\n') + '\n'
-      await appendFile(join(directory, `${session.id}.jsonl`), body, 'utf8')
+      await appendFile(join(directory, MAPPING_FILE), body, 'utf8')
     } catch {
       // A mapping that cannot be written only costs the restore step; the
       // placeholders in the session stay in force and this process keeps
@@ -776,28 +779,23 @@ export class RedactionService extends Service {
    */
   private async loadMappings(): Promise<void> {
     const directory = join(this.config.cacheDirectory, 'mappings')
-    // One task, one file: each file is filed under the session its name carries,
-    // never folded into a machine-wide table.
+    // Every file is folded into the one table, including the per-session files an
+    // earlier release wrote: their pairings are just as valid today.
     for (const name of await mappingFiles(directory)) {
       const entries = await readMappingFile(directory, name)
       if (entries.length === 0) continue
-      this.map.adopt(name.replace(/\.jsonl$/u, ''), entries)
+      this.map.adopt(entries)
     }
-    this.written = this.map.entries().length
+    this.written = this.map.liveEntries().length
   }
 
   /**
-   * The table one session was written with, read from that session's own file.
-   * @param sessionId Session whose conversation is being rendered.
-   * @returns The entries that file records, in the order they were written.
+   * Every pairing the machine can restore right now, read back before answering.
+   * @returns The entries the mapping file records, in the order they were written.
    */
-  async mappingsFor(sessionId: string): Promise<readonly RedactionEntry[]> {
+  async mappingsFor(): Promise<readonly RedactionEntry[]> {
     await this.ready
-    const recorded = this.map.entriesFor(sessionId)
-    if (recorded.length > 0) return recorded
-    // Nothing filed for this session yet: it may predate the load, or its file
-    // may have been written by a process that never read this one.
-    return readMappingFile(join(this.config.cacheDirectory, 'mappings'), `${sessionId}.jsonl`)
+    return this.map.entries()
   }
 
   /**
@@ -816,14 +814,12 @@ export class RedactionService extends Service {
   }
 
   /**
-   * Turn the placeholders this session emitted back into the values they stand for.
+   * Turn the placeholders a text carries back into the values they stand for.
    * @param text Text that may carry placeholders.
-   * @param sessionId Session the text belongs to. When given, only that
-   *   conversation's mapping file and this process's live work are consulted.
    * @returns The text with every placeholder it carries restored.
    */
-  restore(text: string, sessionId?: string): string {
-    return this.map.restore(text, sessionId)
+  restore(text: string): string {
+    return this.map.restore(text)
   }
 
   /**

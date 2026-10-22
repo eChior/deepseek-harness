@@ -191,24 +191,19 @@ export function apply(ctx: Context): void {
     userView.set(chatSettings.getSnapshot().value?.redactionUserView ?? DEFAULT_REDACTION_USER_VIEW)
     redactionHighlight.set(chatSettings.getSnapshot().value?.redactionHighlightColor ?? DEFAULT_REDACTION_HIGHLIGHT)
   }))
-  // Which conversation is on screen. A mapping file is per task, so the table
-  // has to be asked for by session: two conversations may hand the same
-  // placeholder to different values, and one merged table would restore the
-  // wrong original into whichever conversation the reader opened.
+  // Which conversation is on screen. The mapping table itself is machine-wide, so
+  // this only decides when to read it again: switching tasks is the moment a
+  // pairing minted since the last read may have appeared.
   const viewingSession = createSnapshotStore<string | null>(null)
   const readUserPlaceholders = async (): Promise<void> => {
     const redaction = ctx.get('remote.redaction') as
-      { entries?: (request?: { sessionId?: string }) => Promise<unknown> } | undefined
+      { entries?: () => Promise<unknown> } | undefined
     if (redaction?.entries === undefined) return
-    const sessionId = viewingSession.getSnapshot()
     try {
-      const result = await redaction.entries(sessionId === null ? {} : { sessionId }) as { ok: boolean; value?: unknown }
+      const result = await redaction.entries() as { ok: boolean; value?: unknown }
       const rows = result.ok && Array.isArray(result.value)
         ? result.value as readonly { placeholder: string; original: string }[]
         : []
-      // The view may have moved on while the call was in flight; an answer for
-      // the conversation the reader just left must not be published.
-      if (sessionId !== viewingSession.getSnapshot()) return
       const previous = userPlaceholders.getSnapshot()
       // Publish a new map only when the table changed, so a steady session does
       // not invalidate every renderer on every tick.
@@ -225,8 +220,8 @@ export function apply(ctx: Context): void {
       const next = current.getSnapshot().key ?? null
       if (next === viewingSession.getSnapshot()) return
       viewingSession.set(next)
-      // The previous conversation's table would restore the wrong originals.
-      userPlaceholders.set(null)
+      // Read again rather than keep the old map: a task opened for the first time
+      // in this process may have pairings the last read did not see.
       void readUserPlaceholders()
     }
     const unsubscribe = current.subscribe(sync)

@@ -115,17 +115,17 @@ describe('redactText', () => {
 })
 
 describe('fixed codes', () => {
-  it('replaces every hit with the wrapped code and records the bare pairing', () => {
+  it('replaces every hit with the wrapped code and records the wrapped pairing', () => {
     const map = new RedactionMap()
     const rule = { ...term('product', '产品', '红霉素肠溶胶囊'), code: 'A' }
     const text = '红霉素肠溶胶囊与红霉素肠溶胶囊的差异'
     const result = redactText(text, [rule], map)
-    // The code carries invisible separators, so the letter `A` in prose never
-    // collides with it.
+    // Every code is bracketed, so the letter `A` in prose never collides with
+    // one, and a reader that splices by exact text takes the brackets with it.
     expect(result.text).toBe(`${codeShape('A')}与${codeShape('A')}的差异`)
     expect(result.placeholders).toEqual([codeShape('A'), codeShape('A')])
     const [entry] = map.entries()
-    expect(entry).toEqual({ placeholder: 'A', category: 'product', original: '红霉素肠溶胶囊' })
+    expect(entry).toEqual({ placeholder: codeShape('A'), category: 'product', original: '红霉素肠溶胶囊' })
     expect(map.restore(result.text)).toBe(text)
   })
 

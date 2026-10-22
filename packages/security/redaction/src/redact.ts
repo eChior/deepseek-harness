@@ -210,9 +210,19 @@ export function redactText(
       : hit.code === undefined
         ? map.placeholder(hit.category, hit.label, hit.text)
         : map.code(hit.category, hit.code, hit.text)
+    // A hit that already sits inside brackets is wearing the very shape a
+    // placeholder has, so the brackets go with it. Replacing only the value
+    // would leave `[` behind on the first pass and nest another pair on the
+    // next one.
+    let start = hit.start
+    let end = hit.end
+    while (start > cursor && text[start - 1] === '[' && text[end] === ']') {
+      start -= 1
+      end += 1
+    }
     placeholders.push(placeholder)
-    output += text.slice(cursor, hit.start) + placeholder
-    cursor = hit.end
+    output += text.slice(cursor, start) + placeholder
+    cursor = end
   }
   output += text.slice(cursor)
   return { text: output, hits, placeholders }

@@ -886,11 +886,10 @@ async pendingRequests(): Promise<TermRequest[]>
 async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
 
 /**
- * The table one session was written with, read from that session's own file.
- * @param sessionId Session whose conversation is being rendered.
- * @returns The entries that file records, in the order they were written.
+ * Every pairing the machine can restore right now, read back before answering.
+ * @returns The entries the mapping file records, in the order they were written.
  */
-async mappingsFor(sessionId: string): Promise<readonly RedactionEntry[]>
+async mappingsFor(): Promise<readonly RedactionEntry[]>
 
 /**
  * Every pairing this machine can currently restore, for a reader that renders
@@ -906,13 +905,11 @@ async mappingsFor(sessionId: string): Promise<readonly RedactionEntry[]>
 entries(): readonly RedactionEntry[]
 
 /**
- * Turn the placeholders this session emitted back into the values they stand for.
+ * Turn the placeholders a text carries back into the values they stand for.
  * @param text Text that may carry placeholders.
- * @param sessionId Session the text belongs to. When given, only that
- *   conversation's mapping file and this process's live work are consulted.
  * @returns The text with every placeholder it carries restored.
  */
-restore(text: string, sessionId?: string): string
+restore(text: string): string
 
 /**
  * Look one colleague up by the name the account service reports.

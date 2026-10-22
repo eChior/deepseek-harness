@@ -115,8 +115,8 @@ export function apply(ctx: ClientContext): void {
 
   // The table is asked for by session: a mapping file belongs to one task, and
   // two conversations may hand the same placeholder to different values.
-  const badgeInjected = (sessionId: string): RedactionBadgeInjected => ({
-    entries: async () => unwrap('entries', await remote.entries({ sessionId })),
+  const badgeInjected = (): RedactionBadgeInjected => ({
+    entries: async () => unwrap('entries', await remote.entries()),
     status: async () => unwrap('status', await remote.status()),
     highlightColor: chatHighlight(),
     setHighlightColor: (color) => {
@@ -162,7 +162,7 @@ export function apply(ctx: ClientContext): void {
     id: 'redaction-badge',
     order: -10,
     locale: NS,
-    inject: (sessionId): RedactionBadgeInjected => badgeInjected(sessionId),
+    inject: (): RedactionBadgeInjected => badgeInjected(),
   }, RedactionBadge))
 }
 
