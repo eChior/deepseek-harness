@@ -165,14 +165,23 @@ export function tarballFiles(tarball: string): string[] {
 }
 
 /**
+ * Read what a packed tarball says about itself.
+ * @param tarball - absolute tarball path.
+ * @returns The parsed `package/package.json` the archive carries.
+ */
+export function tarballManifest(tarball: string): unknown {
+  const member = readMembers(tarball).find(candidate => candidate.path === 'package/package.json')
+  if (member === undefined) throw new Error(`${tarball} has no manifest`)
+  return JSON.parse(member.body.toString('utf8'))
+}
+
+/**
  * Read a packed tarball's own manifest.
  * @param tarball - absolute tarball path.
  * @returns The name and version the tarball declares.
  */
 export function packedIdentity(tarball: string): PackedIdentity {
-  const member = readMembers(tarball).find(candidate => candidate.path === 'package/package.json')
-  if (member === undefined) throw new Error(`${tarball} has no manifest`)
-  const manifest: unknown = JSON.parse(member.body.toString('utf8'))
+  const manifest = tarballManifest(tarball)
   if (manifest === null || typeof manifest !== 'object') throw new Error(`${tarball} has no manifest`)
   const { name, version } = manifest as Record<string, unknown>
   if (typeof name !== 'string' || typeof version !== 'string') throw new Error(`${tarball} manifest lacks name/version`)
