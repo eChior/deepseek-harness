@@ -151,7 +151,10 @@ export class RedactionMap {
     original: string,
     fixed?: { readonly group: number; readonly spelling: number },
   ): string {
-    const existing = this.#byOriginal.get(original)
+    // The file pins a spelling too: without this a restart hands `众益` a second
+    // family (`公司2-1`) while the older sessions still carry `公司1-1`, and the
+    // same name reads as two different companies.
+    const existing = this.#byOriginal.get(original) ?? this.#filedOriginal.get(original)
     if (existing !== undefined) return existing
     const allKey = `${category}\u0000all`
     const nextGroup = fixed?.group ?? this.#groups.get(group) ?? (this.#groups.get(allKey) ?? 0) + 1
