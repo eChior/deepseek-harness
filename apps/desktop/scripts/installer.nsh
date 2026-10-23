@@ -44,6 +44,16 @@ ManifestDPIAware true
   !insertmacro setInstallModePerUser
   StrCpy $hasPerMachineInstallation 0
   StrCpy $hasPerUserInstallation 1
+  ; The product is named 益办公, but the folder keeps the upstream name: an
+  ; update then lands in the tree the previous version registered instead of
+  ; forking a second one beside it.
+  StrCpy $INSTDIR "$LOCALAPPDATA\Programs\DeepSeek Harness"
+  ReadRegStr $0 HKCU "${INSTALL_REGISTRY_KEY}" "InstallLocation"
+  ${If} $0 != ""
+    ${If} ${FileExists} "$0\*.*"
+      StrCpy $INSTDIR $0
+    ${EndIf}
+  ${EndIf}
   StrCpy $InstallerPath $INSTDIR
   StrCpy $InstallerTheme "auto"
   ${GetParameters} $0

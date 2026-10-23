@@ -283,13 +283,23 @@ export function createElectronBuilderConfig(
       target: ['AppImage', 'deb', 'tar.gz'],
     },
     deb: {
-      // The stock list stops at the GUI toolkits. Chromium publishes its Linux tray icon as a
-      // StatusNotifierItem through libappindicator, so a machine without that library shows no
-      // tray icon at all even though the process creates one. Kylin and UOS ship either the
-      // ayatana fork or the original, hence the alternatives syntax. Git backs the plugin
-      // manager's GitHub installs: pnpm resolves `github:` dependencies through the system git,
-      // and desktop Kylin ships without it, so declare it here and let apt bring it in.
-      depends: [...DEFAULT_DEB_DEPENDS, 'libayatana-appindicator3-1 | libappindicator3-1', 'git'],
+      // The stock list stops at the GUI toolkits, and those are the only hard requirements: a
+      // dependency apt cannot resolve makes the whole package refuse to install, which is a far
+      // worse outcome than a missing optional feature.
+      depends: [...DEFAULT_DEB_DEPENDS],
+      // Chromium publishes its Linux tray icon through libappindicator, so a machine without that
+      // library shows no tray icon at all; Kylin and UOS ship either the ayatana fork or the
+      // original, hence the alternatives syntax. Git backs the plugin manager's `github:`
+      // dependencies, which pnpm resolves through the system git. Both are recommended rather
+      // than required, so apt still fetches them when it can and the install proceeds when it
+      // cannot.
+      recommends: ['libayatana-appindicator3-1 | libappindicator3-1', 'git'],
+      // dpkg decompresses `data.tar` before the post-install script runs, and the xz payload
+      // fpm emits by default costs minutes on the machines this build targets. gzip reads
+      // several times faster for a payload roughly a third larger, which is the better trade
+      // for an installer people wait on. zstd would be faster still but needs dpkg 1.21+, and
+      // Kylin ships 1.19.
+      compression: 'gz',
       // Domestic Linux (Kylin/UOS) needs the sandbox helper marked SUID and the hicolor cache
       // refreshed before the menu entry shows its icon; the stock template does neither.
       afterInstall: fileURLToPath(new URL('./linux-after-install.sh', import.meta.url)),

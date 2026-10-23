@@ -78,15 +78,29 @@ describe('installer preparation preserves application dependencies', () => {
     expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-unsigned.${ext}')
   })
 
-  it('declares the deb dependencies the plugin manager needs on Linux', async () => {
+  it('recommends, rather than requires, the Linux packages an install may not find', async () => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     const config = createElectronBuilderConfig({
       DSH_DESKTOP_APP_ID: 'com.example.installer',
       DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
     }, 'linux', 'arm64')
-    // Git resolves `github:` plugin dependencies: desktop Kylin ships without it, so apt must bring it in.
-    expect(config.deb.depends).toContain('git')
-    expect(config.deb.depends).toContain('libayatana-appindicator3-1 | libappindicator3-1')
+    // Git resolves `github:` plugin dependencies and libappindicator draws the tray icon. Neither is
+    // worth refusing the whole package over: a hard dependency apt cannot resolve fails the install
+    // before the app ever runs, which is exactly what desktop Kylin did.
+    expect(config.deb.recommends).toContain('git')
+    expect(config.deb.recommends).toContain('libayatana-appindicator3-1 | libappindicator3-1')
+    expect(config.deb.depends).not.toContain('git')
+    expect(config.deb.depends).not.toContain('libayatana-appindicator3-1 | libappindicator3-1')
+  })
+
+  it('compresses the deb payload for a fast dpkg unpack', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const config = createElectronBuilderConfig({
+      DSH_DESKTOP_APP_ID: 'com.example.installer',
+      DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
+    }, 'linux', 'x64')
+    // xz costs minutes of unpacking on the machines this build targets; zstd needs dpkg 1.21+.
+    expect(config.deb.compression).toBe('gz')
   })
 
   it('carries release notes into the update metadata only when the build provides them', async () => {

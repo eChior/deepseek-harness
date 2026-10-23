@@ -54,6 +54,8 @@ export interface DesktopElectronBuilderConfig {
   }
   readonly deb: {
     readonly depends: readonly string[]
+    readonly recommends: readonly string[]
+    readonly compression: 'gz'
     readonly afterInstall: string
   }
   readonly releaseInfo: { readonly releaseNotes: string } | undefined

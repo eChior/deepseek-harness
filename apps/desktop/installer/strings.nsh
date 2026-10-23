@@ -31,8 +31,6 @@ LangString INSTALLER_RUNNING ${LANG_ENGLISH} "益办公 is running. Quit it from
 LangString INSTALLER_RUNNING ${LANG_SIMPCHINESE} "益办公 正在运行，请先在系统托盘中退出应用后重试。"
 LangString INSTALLER_PATH_INVALID ${LANG_ENGLISH} "Choose a full local folder path. Drive roots, system folders, links and special characters are not supported."
 LangString INSTALLER_PATH_INVALID ${LANG_SIMPCHINESE} "请选择本地磁盘上的完整文件夹路径，不能使用磁盘根目录、系统目录、链接目录或包含特殊字符的路径。"
-LangString INSTALLER_PATH_OWNERSHIP ${LANG_ENGLISH} "Choose an empty folder or the registered 益办公 installation folder."
-LangString INSTALLER_PATH_OWNERSHIP ${LANG_SIMPCHINESE} "请选择空文件夹，或 益办公 原来的安装目录。"
 LangString INSTALLER_PATH_WRITABLE ${LANG_ENGLISH} "This location is not writable. Choose a folder available to the current user."
 LangString INSTALLER_PATH_WRITABLE ${LANG_SIMPCHINESE} "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。"
 LangString INSTALLER_DISK_SPACE ${LANG_ENGLISH} "There is not enough free disk space. Choose another location."

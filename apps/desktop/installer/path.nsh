@@ -116,28 +116,15 @@ FunctionEnd
 !macroend
 !insertmacro InstallerValidatePathFunction ""
 
-; A new installation requires an empty directory; updates require the registered executable.
+; Only the shape of the path is policed here. An existing folder may hold an
+; earlier installation of this app, which is exactly where an update wants to
+; land, so a non-empty directory is accepted and its files are overwritten.
 Function InstallerPreflight
     Call InstallerValidatePath
     ${If} $InstallerError != ""
         Return
     ${EndIf}
     StrCpy $INSTDIR $InstallerPath
-    ReadRegStr $0 HKCU "${INSTALL_REGISTRY_KEY}" "InstallLocation"
-    ${If} $0 != $INSTDIR
-    ${OrIfNot} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
-        FindFirst $0 $1 "$INSTDIR\*.*"
-        ${DoWhile} $1 != ""
-            ${If} $1 != "."
-            ${AndIf} $1 != ".."
-                FindClose $0
-                StrCpy $InstallerError "$(INSTALLER_PATH_OWNERSHIP)"
-                Return
-            ${EndIf}
-            FindNext $0 $1
-        ${Loop}
-        FindClose $0
-    ${EndIf}
     StrCpy $2 $INSTDIR
     ${Do}
         System::Call 'kernel32::GetFileAttributesW(w r2) i.r0'
