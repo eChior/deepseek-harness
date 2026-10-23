@@ -165,6 +165,17 @@
                   low: low
                   medium: medium
                   xhigh: xhigh
+              - id: deepseek-v4.1-flash-1017
+                name: DeepSeek-V4.1-Flash-1017
+                contextWindow: 1000000
+                maxTokens: 393000
+                # DeepSeek speaks its own ladder: low, high and max, none of
+                # which is the gateway's medium/xhigh pair.
+                reasoningEfforts:
+                  off: null
+                  low: low
+                  high: high
+                  max: max
 
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'

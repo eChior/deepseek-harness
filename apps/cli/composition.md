@@ -60,6 +60,8 @@ flowchart LR
   cfg --> plugin_dsh_base_llm_pi_ai
   plugin_dsh_base_qwen3_8_flash["qwen3.8-flash<br/>Qwen3.8-Flash"]
   cfg --> plugin_dsh_base_qwen3_8_flash
+  plugin_dsh_base_deepseek_v4_1_flash_1017["deepseek-v4.1-flash-1017<br/>DeepSeek-V4.1-Flash-1017"]
+  cfg --> plugin_dsh_base_deepseek_v4_1_flash_1017
   plugin_dsh_base_session_persistence_jsonl["session-persistence-jsonl<br/>@deepseek-ai/dsh-session-persistence-jsonl"]
   cfg --> plugin_dsh_base_session_persistence_jsonl
   plugin_dsh_base_attachment_local["attachment-local<br/>@deepseek-ai/dsh-attachment-local"]
@@ -232,6 +234,7 @@ flowchart LR
 | `credentials` | `@deepseek-ai/dsh-credentials-local` |
 | `llm-pi-ai` | `@deepseek-ai/dsh-llm-pi-ai` |
 | `qwen3.8-flash` | `Qwen3.8-Flash` |
+| `deepseek-v4.1-flash-1017` | `DeepSeek-V4.1-Flash-1017` |
 | `session-persistence-jsonl` | `@deepseek-ai/dsh-session-persistence-jsonl` |
 | `attachment-local` | `@deepseek-ai/dsh-attachment-local` |
 | `session-query-sqlite` | `@deepseek-ai/dsh-session-query-sqlite` |

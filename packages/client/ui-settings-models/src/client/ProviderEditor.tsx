@@ -28,12 +28,13 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
-  DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
+  DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels, type DeepSeekModelsValidationFailure,
 } from './DeepSeekModelsEditor.tsx'
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
-import { deriveKeyRef, protocolChoices } from './store.ts'
+import { validateReasoningEfforts, type ReasoningEffortsFailure } from './ModelReasoningEfforts.tsx'
+import { deriveKeyRef, protocolChoices, reasoningLevelChoices } from './store.ts'
 import { protocolLabel } from './protocol-label.ts'
 import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
@@ -227,7 +228,17 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
 
   // The model list is validated by the same per-row checker for both families,
   // so a bad row is named by its position rather than by a blanket message.
-  const modelFailure = validateDeepSeekModels(schema.getPath(draft, ['models']))
+  // Every pi-ai route's rows edit reasoning levels: a route the deployment
+  // declares in its composition patches the model list exactly like a
+  // hand-declared one, and neither has an installed catalog to fall back on.
+  const reasoningLevels = useMemo(
+    () => layout === 'pi-ai' ? reasoningLevelChoices(namespace, schema) : [],
+    [layout, namespace, schema],
+  )
+  const editsReasoning = reasoningLevels.length > 0
+  const validateModels = (value: unknown): DeepSeekModelsValidationFailure | ReasoningEffortsFailure | undefined =>
+    validateDeepSeekModels(value) ?? (editsReasoning ? validateReasoningEfforts(value) : undefined)
+  const modelFailure = validateModels(schema.getPath(draft, ['models']))
   const keyFailure = apiKeyFailure(keyDraft)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
@@ -485,6 +496,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 <ModelListEditor
                   {...catalogProps}
                   catalogProvider={props.declared === true ? undefined : props.provider}
+                  reasoningLevels={reasoningLevels}
                   defaultInput={Array.isArray(defaultInput) ? defaultInput : undefined}
                   probe={probe}
                   probeBlocked={keyFailure}
