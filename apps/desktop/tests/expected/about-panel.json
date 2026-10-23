@@ -14,11 +14,11 @@
   },
   "darwin:zh-CN": {
     "menu": [
-      { "label": "关于 DeepSeek Harness", "role": "about" },
+      { "label": "关于 益办公", "role": "about" },
       { "type": "separator" }
     ],
     "options": {
-      "applicationName": "DeepSeek Harness",
+      "applicationName": "益办公",
       "applicationVersion": "1.0.0",
       "version": "",
       "copyright": "",
@@ -27,11 +27,11 @@
   },
   "win32:zh-CN": {
     "menu": [
-      { "label": "关于 DeepSeek Harness" },
+      { "label": "关于 益办公" },
       { "type": "separator" }
     ],
     "options": {
-      "applicationName": "DeepSeek Harness",
+      "applicationName": "益办公",
       "applicationVersion": "1.0.0",
       "version": "",
       "copyright": "",

@@ -122,7 +122,7 @@ export function createElectronBuilderConfig(
       ...buildVersion === productVersion ? {} : { version: buildVersion },
       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
     },
-    productName: 'DeepSeek Harness',
+    productName: '益办公',
     // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.
     artifactName: `deepseek-harness-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
     // Lands in the generated update metadata, so the desktop update confirmation can show the
@@ -248,6 +248,10 @@ export function createElectronBuilderConfig(
     },
     win: {
       icon: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)),
+      // The product name is the Chinese brand the shortcut and the uninstall entry show; the
+      // executable keeps the upstream file name so a task-manager reader can still tell which
+      // Chromium it is looking at, and so existing installs keep the same process identity.
+      executableName: 'deepseek-harness',
       forceCodeSigning: !unsigned,
       signtoolOptions: {
         sign: windowsSigner,
