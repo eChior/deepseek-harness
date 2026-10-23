@@ -90,7 +90,7 @@
 .fish {
   display: block;
   overflow: visible;
-  transform-origin: 50% 60%;
+  transform-origin: 50% 50%;
   color: var(--dsw-alias-label-primary);
 }
 

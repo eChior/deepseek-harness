@@ -2,7 +2,7 @@
 export const onboardingCopy = {
   onboardingArtworkLocale: 'zh',
   onboardingWelcome: '欢迎使用',
-  onboardingBrand: 'DeepSeek Harness',
+  onboardingBrand: '益办公',
   onboardingIntroduction: 'DeepSeek Harness 会以本地文件夹作为工作区，通过调用各种工具，读写本机文件，完成搜索整理资料、制作文档表格、编写代码、排查问题等各种任务。',
   onboardingStart: '开始设置',
   onboardingCredit: '准备可用额度',
