@@ -51,6 +51,28 @@ extern "C" __declspec(dllexport) DWORD __cdecl UninstallRemoveEmptyParents(LPCWS
     return uninstall_data::RemoveEmptyParents(path, stop);
 }
 
+// A top-level window, hidden or not, is what tells an application's own process apart from the
+// helper processes Electron leaves behind under the same image name and path.
+struct WindowOwner {
+    DWORD pid;
+    bool found;
+};
+
+static BOOL CALLBACK FindWindowOwner(HWND window, LPARAM parameter) {
+    auto* owner = reinterpret_cast<WindowOwner*>(parameter);
+    DWORD process = 0;
+    GetWindowThreadProcessId(window, &process);
+    if (process != owner->pid) return TRUE;
+    owner->found = true;
+    return FALSE;
+}
+
+static bool OwnsTopLevelWindow(DWORD pid) {
+    WindowOwner owner{pid, false};
+    EnumWindows(FindWindowOwner, reinterpret_cast<LPARAM>(&owner));
+    return owner.found;
+}
+
 // Match the affected executable, not another user's or directory's same-named application.
 // Returns 0 while running, 1 when absent, and -1 if the process list cannot be read.
 extern "C" __declspec(dllexport) int __cdecl InstallerFindProcess(LPCWSTR executable) {
@@ -71,7 +93,10 @@ extern "C" __declspec(dllexport) int __cdecl InstallerFindProcess(LPCWSTR execut
             if (process) {
                 WCHAR path[32768];
                 DWORD count = ARRAYSIZE(path);
-                if (QueryFullProcessImageNameW(process, 0, path, &count) && _wcsicmp(path, expected) == 0) result = 0;
+                if (QueryFullProcessImageNameW(process, 0, path, &count) && _wcsicmp(path, expected) == 0
+                    && OwnsTopLevelWindow(entry.th32ProcessID)) {
+                    result = 0;
+                }
                 CloseHandle(process);
                 if (result == 0) break;
             }

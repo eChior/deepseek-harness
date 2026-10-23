@@ -284,6 +284,10 @@ export function createElectronBuilderConfig(
       target: ['AppImage', 'deb', 'tar.gz'],
     },
     deb: {
+      // dpkg accepts only lower-case ASCII letters, digits and `+ - .` in a package name, so the
+      // field cannot carry the Chinese product name: the binary package keeps the release's own
+      // name while only the desktop entry and the window title show the brand.
+      packageName: 'deepseek-harness',
       // The stock list stops at the GUI toolkits, and those are the only hard requirements: a
       // dependency apt cannot resolve makes the whole package refuse to install, which is a far
       // worse outcome than a missing optional feature.

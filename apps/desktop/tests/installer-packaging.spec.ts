@@ -93,6 +93,19 @@ describe('installer preparation preserves application dependencies', () => {
     expect(config.deb.depends).not.toContain('libayatana-appindicator3-1 | libappindicator3-1')
   })
 
+  it('keeps the deb package name readable to dpkg', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const config = createElectronBuilderConfig({
+      DSH_DESKTOP_APP_ID: 'com.example.installer',
+      DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com', DOWNLOAD_TEST_RELEASE_ID: '0123456789abcdef0123456789abcdef',
+    }, 'linux', 'arm64')
+    // dpkg parses control with a package-name grammar that admits only lower-case ASCII letters,
+    // digits and `+ - .`, so the branded product name cannot reach the field: a Chinese one makes
+    // every install fail with "软件包操作异常" before a single file is unpacked.
+    expect(config.deb.packageName).toBe('deepseek-harness')
+    expect(config.deb.packageName).toMatch(/^[a-z0-9][a-z0-9+.-]+$/u)
+  })
+
   it('compresses the deb payload for a fast dpkg unpack', async () => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     const config = createElectronBuilderConfig({

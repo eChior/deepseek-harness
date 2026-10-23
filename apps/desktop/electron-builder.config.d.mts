@@ -53,6 +53,7 @@ export interface DesktopElectronBuilderConfig {
     readonly installerLanguages: readonly ['en_US', 'zh_CN']
   }
   readonly deb: {
+    readonly packageName: string
     readonly depends: readonly string[]
     readonly recommends: readonly string[]
     readonly compression: 'gz'
