@@ -249,9 +249,10 @@ export function createElectronBuilderConfig(
     win: {
       icon: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)),
       // The product name is the Chinese brand the shortcut and the uninstall entry show; the
-      // executable keeps the upstream file name so a task-manager reader can still tell which
-      // Chromium it is looking at, and so existing installs keep the same process identity.
-      executableName: 'deepseek-harness',
+      // executable alone keeps the file name earlier releases shipped, so an in-place upgrade
+      // replaces the binary instead of leaving a second one beside it, and so every shortcut,
+      // protocol handler and task-manager row that already points at that name keeps working.
+      executableName: 'DeepSeek Harness',
       forceCodeSigning: !unsigned,
       signtoolOptions: {
         sign: windowsSigner,

@@ -23,7 +23,7 @@ const application = windows ? join(artifacts, 'win-unpacked')
   : linux ? linuxDir
     : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', '益办公.app', 'Contents')
 const resources = join(application, windows || linux ? 'resources' : 'Resources')
-const executable = windows ? join(application, 'deepseek-harness.exe')
+const executable = windows ? join(application, 'DeepSeek Harness.exe')
   : linux ? join(application, 'deepseek-harness')
     : join(application, 'MacOS', '益办公')
 const descriptor = await verifyDesktopRuntime(paths.dsh, readDesktopRuntime(paths.dsh).release.version,
