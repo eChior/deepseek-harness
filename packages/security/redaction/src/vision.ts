@@ -47,7 +47,7 @@ export function normalizeRecognized(text: string): string {
 function run(command: string, args: readonly string[], input: string | Uint8Array, timeoutMs: number): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const child = spawn(command, [...args], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
-    const { stdout, stderr } = child
+    const { stdin, stdout, stderr } = child
     stdout.setEncoding('utf8')
     stderr.setEncoding('utf8')
     let output = ''
@@ -72,7 +72,21 @@ function run(command: string, args: readonly string[], input: string | Uint8Arra
       if (code === 0) resolve(output)
       else reject(new Error(`${command} exited with ${String(code)}: ${diagnostics.trim().slice(0, 400)}`))
     })
-    child.stdin.end(input)
+    // A recognizer that refuses its input exits before reading it, and the write
+    // then fails on a pipe nobody owns. That failure arrives as an `error` event
+    // on the stream, not as a rejected promise, so leaving it unhandled turns one
+    // unreadable image into a dead Host process; the `close` handler above
+    // already reports the failure the caller acts on.
+    stdin.on('error', () => {
+      // Reported through `close`, never through the stream.
+    })
+    stdout.on('error', () => {
+      // Same: a broken pipe says nothing the exit status does not.
+    })
+    stderr.on('error', () => {
+      // Same.
+    })
+    stdin.end(input)
   })
 }
 

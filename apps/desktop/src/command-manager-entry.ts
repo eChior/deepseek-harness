@@ -31,6 +31,13 @@ try {
       child.once('error', reject)
       child.once('close', accept)
     })
+    // The script can exit before it reads its argument — a policy block, a missing
+    // helper — and the write then lands on a closed pipe. That arrives as an
+    // `error` event, so an unhandled one would replace the exit status this
+    // process reports with an uncaught exception.
+    child.stdin.on('error', () => {
+      // The exit status below is the outcome that matters here.
+    })
     child.stdin.end(JSON.stringify({ operation, expected, directory: join(resources, 'runtime', 'cli', 'bin') }))
     process.exitCode = await exited ?? 1
   } else {
