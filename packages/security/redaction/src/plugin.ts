@@ -35,6 +35,7 @@ import {
   type LocalTermFile,
   type LocalTermList,
 } from './local.ts'
+import { documentPaths, restoreDocuments } from './documents.ts'
 import { RedactionMap, type RedactionEntry } from './map.ts'
 import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import { findPerson, ROSTER_PATH, readRoster, type Roster, type RosterPerson } from './roster.ts'
@@ -318,9 +319,13 @@ export class RedactionService extends Service {
     // returns is what the loop commits, so rewriting it here happens before the
     // text is appended anywhere. Registered after every other listener of this
     // event, so it rewrites the text they produced rather than the other way round.
-    ctx.on('tools/post-execute', async (_exec, result, next) => {
+    ctx.on('tools/post-execute', async (exec, result, next) => {
       const decision = await next()
       if (this.rules.length === 0) return decision
+      // A document the call wrote holds the placeholders the model saw, not the
+      // values they stand for, so the originals go back into the file itself.
+      // A model cannot do this: it never has the map.
+      await this.restoreWrittenDocuments(exec.arguments)
       if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
       if (decision.value !== undefined) return decision
       const content = this.redact(decision.content ?? result.content)
@@ -756,6 +761,26 @@ export class RedactionService extends Service {
    * lost. A short debounce collapses a burst of hits into one append and still
    * writes long before a user can quit the app.
    */
+  /**
+   * Put the originals back into every document one call mentioned.
+   *
+   * The rewrite happens inside the Python interpreter, never here: document
+   * encryption whitelists that interpreter, so this process may only name the
+   * files and hand over the pairs. Nothing runs while the write-back switch is
+   * off, because that switch is what says the originals may reach this
+   * machine's disk at all.
+   * @param seeded The call's parsed arguments.
+   */
+  private async restoreWrittenDocuments(seeded: unknown): Promise<void> {
+    if (!this.mappingsOn) return
+    const paths = documentPaths(seeded)
+    if (paths.length === 0) return
+    const mappings = this.map
+      .entries()
+      .map(entry => ({ placeholder: entry.placeholder, original: entry.original }))
+    await restoreDocuments(paths, mappings).catch(() => 0)
+  }
+
   private scheduleMappings(): void {
     if (!this.mappingsOn || this.flushTimer !== undefined) return
     this.flushTimer = setTimeout(() => {
