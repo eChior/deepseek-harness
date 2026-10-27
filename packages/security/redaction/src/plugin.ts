@@ -18,7 +18,7 @@
  */
 import { Buffer } from 'node:buffer'
 import { Context, Service } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-tools'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
@@ -35,7 +35,12 @@ import {
   type LocalTermFile,
   type LocalTermList,
 } from './local.ts'
-import { documentPaths, restoreDocuments } from './documents.ts'
+import {
+  DOCUMENT_EXTENSIONS,
+  documentPaths,
+  restoreDocuments,
+  type DocumentMapping,
+} from './documents.ts'
 import { RedactionMap, type RedactionEntry } from './map.ts'
 import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import { findPerson, ROSTER_PATH, readRoster, type Roster, type RosterPerson } from './roster.ts'
@@ -358,6 +363,57 @@ export class RedactionService extends Service {
       agent.ctx.tools.guard(execution => execution.name === 'read_image'
         ? 'read_image is not available: this deployment reads images through local OCR'
         : undefined)
+    })
+    // The wiring repairs the file a call wrote, but a file edited by hand, or
+    // one an earlier turn touched, needs an explicit pass. This tool is that
+    // handle: it replaces placeholders with their originals inside the file on
+    // disk and leaves the conversation alone, where a placeholder stays the
+    // normal text unless the reader turns on the original-text view.
+    const mappingsOf = (): readonly DocumentMapping[] => this.documentMappings()
+    ctx.on('agent/created', ({ agent }: { agent: Agent }) => {
+      agent.ctx.tools.register(defineTool({
+        name: 'restore_redacted_files',
+        description: 'Write the original values back into files on disk that this deployment redacted. '
+          + 'A model only ever sees placeholders, so a document it authored or edited holds placeholders '
+          + 'instead of the real names; this tool replaces them inside the file. It never changes the '
+          + 'conversation, where the placeholders remain the text the reader sees. '
+          + `Supported files: ${[...DOCUMENT_EXTENSIONS].join(' ')}. `
+          + 'The rewrite runs in the whitelisted Python interpreter, because document encryption admits only that one. '
+          + 'Name every file the user wants repaired.',
+        parameters: {
+          paths: {
+            type: 'array', required: true,
+            description: 'Files to rewrite, one path each. Relative paths use the Session working directory.',
+            items: { type: 'string' },
+          },
+        },
+        output: {
+          schema: {
+            type: 'object', additionalProperties: false,
+            properties: {
+              restored: { type: 'integer', required: true },
+              files: {
+                type: 'array', required: true,
+                items: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    path: { type: 'string', required: true },
+                    hits: { type: 'integer', required: true },
+                  },
+                },
+              },
+            },
+          },
+          render: (_args, value) => [{ type: 'text', text: `Restored ${value.restored} placeholder(s) across ${value.files.length} file(s)` }],
+        },
+        async execute(args) {
+          const outcome = await restoreDocuments(args.paths, mappingsOf()).catch(() => undefined)
+          return {
+            restored: outcome?.restored ?? 0,
+            files: (outcome?.files ?? []).map(file => ({ path: file.path, hits: file.hits })),
+          }
+        },
+      }))
     })
   }
 
@@ -775,10 +831,12 @@ export class RedactionService extends Service {
     if (!this.mappingsOn) return
     const paths = documentPaths(seeded)
     if (paths.length === 0) return
-    const mappings = this.map
-      .entries()
-      .map(entry => ({ placeholder: entry.placeholder, original: entry.original }))
-    await restoreDocuments(paths, mappings).catch(() => 0)
+    await restoreDocuments(paths, this.documentMappings()).catch(() => undefined)
+  }
+
+  /** The placeholder/original pairs a document rewrite needs. */
+  private documentMappings(): readonly DocumentMapping[] {
+    return this.map.entries().map(entry => ({ placeholder: entry.placeholder, original: entry.original }))
   }
 
   private scheduleMappings(): void {

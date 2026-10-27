@@ -205,6 +205,7 @@ export function RedactionBadge({
               <span className={css.switchLabel}>{t('badgeMappings')}</span>
             </label>
             <p className={css.hint}>{t('badgeMappingsHint')}</p>
+            <p className={css.hint}>{t('badgeRestoreFormats')}</p>
 
             <div className={css.switchRow}>
               <span className={css.switchLabel}>{t('badgeView')}</span>

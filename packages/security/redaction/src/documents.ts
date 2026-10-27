@@ -32,6 +32,9 @@ const SCRIPT_PATH = fileURLToPath(new URL('../assets/restore_documents.py', impo
 /** How long one restore pass may take before it is abandoned. */
 const RESTORE_TIMEOUT_MS = 30_000
 
+/** The argument names that hold a path rather than prose about one. */
+const PATH_KEYS: ReadonlySet<string> = new Set(['path', 'file_path', 'filePath', 'filepath'])
+
 /** How deep a nested argument payload is walked before it is ignored. */
 const MAX_DEPTH = 6
 
@@ -50,7 +53,17 @@ export interface DocumentMapping {
 /** What the script reports back on stdout. */
 interface RestoreReport {
   readonly restored?: number
+  readonly files?: readonly { readonly path?: unknown; readonly hits?: unknown }[]
 }
+
+/** How one restore pass went: the total hits and the per-file breakdown. */
+export interface RestoreOutcome {
+  readonly restored: number
+  readonly files: readonly { readonly path: string; readonly hits: number }[]
+}
+
+/** A pass that changed nothing, used when the interpreter is unavailable. */
+const NOTHING_RESTORED: RestoreOutcome = { restored: 0, files: [] }
 
 /**
  * Whether a path names a document the restore pass handles.
@@ -77,9 +90,18 @@ export function documentPaths(value: unknown): string[] {
   return [...found]
 }
 
-function collect(value: unknown, into: Set<string>, depth: number): void {
+function collect(value: unknown, into: Set<string>, depth: number, key?: string): void {
   if (depth > MAX_DEPTH) return
   if (typeof value === 'string') {
+    // A path argument holds the path itself, spaces and all: splitting it into
+    // words would read `D:/a b/report.md` as the unrelated `b/report.md`. Only a
+    // value sitting in a known path field is taken whole; everything else (a
+    // shell command, a note) is searched as text.
+    const whole = value.trim()
+    if (key !== undefined && PATH_KEYS.has(key) && isDocumentPath(whole)) {
+      into.add(whole)
+      return
+    }
     collectFromText(value, into)
     return
   }
@@ -88,7 +110,7 @@ function collect(value: unknown, into: Set<string>, depth: number): void {
     return
   }
   if (typeof value === 'object' && value !== null) {
-    for (const item of Object.values(value)) collect(item, into, depth + 1)
+    for (const [childKey, item] of Object.entries(value)) collect(item, into, depth + 1, childKey)
   }
 }
 
@@ -117,18 +139,23 @@ function pythonCommand(): string {
   return process.platform === 'win32' ? 'python' : 'python3'
 }
 
-function restoredCount(output: string): number {
+function restoreOutcome(output: string): RestoreOutcome {
   for (const line of output.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('{')) continue
     try {
       const parsed = JSON.parse(trimmed) as RestoreReport
-      return typeof parsed.restored === 'number' ? parsed.restored : 0
+      const files: { path: string; hits: number }[] = []
+      for (const file of parsed.files ?? []) {
+        if (typeof file.path !== 'string' || typeof file.hits !== 'number') continue
+        files.push({ path: file.path, hits: file.hits })
+      }
+      return { restored: typeof parsed.restored === 'number' ? parsed.restored : 0, files }
     } catch {
       continue
     }
   }
-  return 0
+  return NOTHING_RESTORED
 }
 
 /**
@@ -143,12 +170,12 @@ function restoredCount(output: string): number {
 export async function restoreDocuments(
   paths: readonly string[],
   mappings: readonly DocumentMapping[],
-): Promise<number> {
-  if (paths.length === 0 || mappings.length === 0) return 0
+): Promise<RestoreOutcome> {
+  if (paths.length === 0 || mappings.length === 0) return NOTHING_RESTORED
   const request = JSON.stringify({ paths, entries: mappings })
-  return new Promise<number>((resolve) => {
+  return new Promise<RestoreOutcome>((resolve) => {
     let settled = false
-    const finish = (value: number): void => {
+    const finish = (value: RestoreOutcome): void => {
       if (settled) return
       settled = true
       resolve(value)
@@ -160,12 +187,12 @@ export async function restoreDocuments(
         windowsHide: true,
       })
     } catch {
-      finish(0)
+      finish(NOTHING_RESTORED)
       return
     }
     const timer = setTimeout(() => {
       child.kill()
-      finish(0)
+      finish(NOTHING_RESTORED)
     }, RESTORE_TIMEOUT_MS)
     timer.unref()
     const { stdin, stdout } = child
@@ -176,11 +203,11 @@ export async function restoreDocuments(
     })
     child.on('error', () => {
       clearTimeout(timer)
-      finish(0)
+      finish(NOTHING_RESTORED)
     })
     child.on('close', () => {
       clearTimeout(timer)
-      finish(restoredCount(output))
+      finish(restoreOutcome(output))
     })
     stdin.on('error', () => {
       // The interpreter may exit before reading its whole request; that is a

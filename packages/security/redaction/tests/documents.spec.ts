@@ -6,6 +6,11 @@ describe('documentPaths', () => {
     expect(documentPaths({ path: 'D:/work/report.docx' })).toEqual(['D:/work/report.docx'])
   })
 
+  it('reads a spaced path that arrives as one argument', () => {
+    expect(documentPaths({ file_path: 'D:/DSH Work/reports/占位符.docx' }))
+      .toEqual(['D:/DSH Work/reports/占位符.docx'])
+  })
+
   it('reads a path a shell command quotes because it holds spaces', () => {
     const command = 'python create.py "D:/DSH Work/office-test/占位符.docx"'
     expect(documentPaths({ command })).toEqual(['D:/DSH Work/office-test/占位符.docx'])
