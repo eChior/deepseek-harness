@@ -17,12 +17,25 @@ import type {} from '@deepseek-ai/dsh-deepseek-account'
 import type {} from '@deepseek-ai/dsh-redaction'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import z from 'zod'
-import type { RedactionEntryView, RedactionExampleView, RedactionRosterView, RedactionStatusView, RedactionUploadView } from './types.ts'
+import type {
+  RedactionDepartmentView,
+  RedactionEntryView,
+  RedactionExampleView,
+  RedactionRosterView,
+  RedactionStatusView,
+  RedactionUploadView,
+} from './types.ts'
 
 /** One upload as the page submits it. */
 const UploadRequest = z.object({
   name: z.string().min(1).max(128),
   text: z.string().min(1).max(256 * 1024),
+})
+
+/** One department switch as the page submits it. */
+const DepartmentRequest = z.object({
+  name: z.string().min(1).max(64),
+  enabled: z.boolean(),
 })
 
 /** One stored upload, addressed by name. */
@@ -66,7 +79,8 @@ export class RedactionController extends TypertRemoteService {
    *   many term requests are still queued locally.
    */
   @Remote
-  status(): Promise<RedactionStatusView> {
+  async status(): Promise<RedactionStatusView> {
+    await this.ctx.redaction.noteAccount(await this.accountName())
     const view = this.ctx.redaction.status
     return Promise.resolve({
       enabled: view.enabled,
@@ -80,6 +94,7 @@ export class RedactionController extends TypertRemoteService {
       detail: view.detail,
       pending: view.pending,
       localFiles: view.localFiles,
+      departments: view.departments,
       roster: view.roster,
       mappings: view.mappings,
       imageTool: view.imageTool,
@@ -130,6 +145,7 @@ export class RedactionController extends TypertRemoteService {
   async roster(): Promise<RedactionRosterView> {
     const summary = this.ctx.redaction.rosterSummary()
     const account = await this.accountName()
+    await this.ctx.redaction.noteAccount(account)
     const person = account === null ? undefined : this.ctx.redaction.identify(account)
     return {
       ...summary,
@@ -137,6 +153,40 @@ export class RedactionController extends TypertRemoteService {
       department: person?.department ?? null,
       employeeId: person?.employeeId ?? null,
     }
+  }
+
+  /**
+   * List every department list this machine holds.
+   *
+   * The department the signed-in colleague belongs to is on by default, so the
+   * page shows which list that is and lets the reader tick the other departments
+   * whose wording their own conversations use.
+   * @returns one record per department, ordered by name.
+   */
+  @Remote
+  async departments(): Promise<RedactionDepartmentView[]> {
+    await this.ctx.redaction.noteAccount(await this.accountName())
+    return this.ctx.redaction.departmentLists()
+  }
+
+  /**
+   * Switch one department list on or off for this reader.
+   * @param request - which department, and whether its list should apply.
+   * @returns the department's state after the change.
+   * @throws RemoteError when no list is stored for that department.
+   */
+  @Remote
+  async setDepartment(request: { readonly name: string; readonly enabled: boolean }): Promise<RedactionDepartmentView> {
+    const parsed = DepartmentRequest.safeParse(request)
+    if (!parsed.success) throw badRequest('setDepartment', parsed.error)
+    try {
+      await this.ctx.redaction.setDepartmentEnabled(parsed.data.name, parsed.data.enabled)
+    } catch (error) {
+      throw rejected('setDepartment', error)
+    }
+    const updated = this.ctx.redaction.departmentLists().find(entry => entry.name === parsed.data.name)
+    if (updated === undefined) throw rejected('setDepartment', new Error(`no department list named ${parsed.data.name}`))
+    return updated
   }
 
   /**

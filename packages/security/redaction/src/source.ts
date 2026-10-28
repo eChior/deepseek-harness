@@ -18,6 +18,9 @@ import { join } from 'node:path'
 /** Pointer file naming the cached revision. Lives beside the revisions it names. */
 export const CURRENT_POINTER = 'current'
 
+/** Directory inside the repository holding one term list per department. */
+export const DEPARTMENT_DIRECTORY = 'departments'
+
 /** Cached revisions keep this name, so a prune cannot mistake an unrelated file for one. */
 const CACHED_TERM_FILE = /^terms-[^/\\]+\.yaml$/u
 
@@ -145,4 +148,77 @@ export async function writeCachedTermList(config: TermSourceConfig, text: string
   await writeFile(join(config.directory, CURRENT_POINTER), `${name}\n`, 'utf8')
   await pruneCache(config.directory, name)
   return target
+}
+
+/**
+ * URL that lists the department directory.
+ * @param config Where the lists come from.
+ * @returns The contents endpoint of the repository, or an empty string when the remote is not a repository URL.
+ */
+function departmentIndexUrl(config: TermSourceConfig): string {
+  const found = coordinates(config.remote)
+  if (found === undefined) return ''
+  const branch = encodeURIComponent(config.branch)
+  const path = encodeURIComponent(DEPARTMENT_DIRECTORY)
+  if (found.github) {
+    return `https://api.github.com/repos/${found.owner}/${found.repository}/contents/${path}?ref=${branch}`
+  }
+  return `${found.origin}/api/v1/repos/${found.owner}/${found.repository}/contents/${path}?ref=${branch}`
+}
+
+/**
+ * URL of one department's term list.
+ * @param config Where the lists come from.
+ * @param name Department the list belongs to.
+ * @returns The URL that serves the file.
+ */
+export function departmentListUrl(config: TermSourceConfig, name: string): string {
+  return termListUrl({ ...config, file: `${DEPARTMENT_DIRECTORY}/${encodeURIComponent(name)}.yaml` })
+}
+
+/**
+ * Ask the repository which department lists it publishes.
+ *
+ * A repository that keeps no department directory answers 404, and so does one
+ * whose directory an operator removed: both mean "no department lists", which is
+ * a normal state rather than a failure to report.
+ * @param config Where the lists come from.
+ * @returns File names found in the department directory, ordered; empty when there are none.
+ * @throws If the host answers with anything other than success or absence.
+ */
+export async function fetchDepartmentNames(config: TermSourceConfig): Promise<string[]> {
+  const url = departmentIndexUrl(config)
+  if (url === '') return []
+  const response = await fetch(url, {
+    redirect: 'follow',
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(config.timeoutMs),
+  })
+  if (response.status === 404) return []
+  if (!response.ok) throw new Error(`redaction: department list request failed with ${String(response.status)}`)
+  const body: unknown = await response.json()
+  if (!Array.isArray(body)) return []
+  const entries = body as { type?: unknown; name?: unknown }[]
+  return entries
+    .filter(entry => entry.type === 'file' && typeof entry.name === 'string')
+    .map(entry => entry.name as string)
+    .toSorted()
+}
+
+/**
+ * Download one department's term list.
+ * @param config Where the lists come from.
+ * @param name Department the list belongs to.
+ * @returns The file's text.
+ * @throws If the host refuses the request, does not answer in time, or serves an empty body.
+ */
+export async function fetchDepartmentText(config: TermSourceConfig, name: string): Promise<string> {
+  const response = await fetch(departmentListUrl(config, name), {
+    redirect: 'follow',
+    signal: AbortSignal.timeout(config.timeoutMs),
+  })
+  if (!response.ok) throw new Error(`redaction: department ${name} request failed with ${String(response.status)}`)
+  const text = await response.text()
+  if (text.trim() === '') throw new Error(`redaction: department ${name} is empty`)
+  return text
 }

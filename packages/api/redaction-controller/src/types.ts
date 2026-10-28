@@ -37,12 +37,30 @@ export interface RedactionStatusView {
   readonly pending: number
   /** Uploaded lists that compiled into the rules in force. */
   readonly localFiles: number
+  /** Department lists that applied to this reader. */
+  readonly departments: number
   /** Names the staff directory contributed to the rules. */
   readonly roster: number
   /** Whether an ended session writes its placeholder table to the local mappings directory. */
   readonly mappings: boolean
   /** Whether the read-image tool is denied for every agent of this deployment. */
   readonly imageTool: boolean
+}
+
+/** One department list as the settings page lists it. */
+export interface RedactionDepartmentView {
+  /** Department the list belongs to. */
+  readonly name: string
+  /** Whether the list takes part in redaction for this reader. */
+  readonly enabled: boolean
+  /** Whether this is the department the signed-in colleague belongs to. */
+  readonly own: boolean
+  /** Term entries the list declares. */
+  readonly terms: number
+  /** Regular expressions the list declares. */
+  readonly patterns: number
+  /** Revision the list declares. */
+  readonly revision: string
 }
 
 /** One term list a department uploaded to this machine. */

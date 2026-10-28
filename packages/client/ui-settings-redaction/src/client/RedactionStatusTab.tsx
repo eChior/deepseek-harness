@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
+  RedactionDepartmentView,
   RedactionRosterView,
   RedactionStatusView,
   RedactionUploadView,
@@ -33,6 +34,10 @@ export interface RedactionStatusTabInjected {
   drop: (request: { readonly name: string }) => Promise<boolean>
   /** Turn one uploaded list on or off. */
   setEnabled: (request: { readonly name: string; readonly enabled: boolean }) => Promise<RedactionUploadView>
+  /** List every department list this machine holds. */
+  departments: () => Promise<RedactionDepartmentView[]>
+  /** Turn one department list on or off. */
+  setDepartment: (request: { readonly name: string; readonly enabled: boolean }) => Promise<RedactionDepartmentView>
   /** Read the example a department starts from. */
   example: () => Promise<{ readonly name: string; readonly text: string }>
 }
@@ -145,17 +150,20 @@ type UploadsPanelProps = RedactionStatusTabProps & { readonly onChanged: () => v
 function UploadsPanel(props: UploadsPanelProps) {
   const { t } = props
   const [uploads, setUploads] = useState<readonly RedactionUploadView[] | null>(null)
+  const [departments, setDepartments] = useState<readonly RedactionDepartmentView[] | null>(null)
   const [roster, setRoster] = useState<RedactionRosterView | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const picker = useRef<HTMLInputElement | null>(null)
   const readUploads = props.uploads
   const readRoster = props.roster
+  const readDepartments = props.departments
 
   const reload = useCallback((): void => {
     void readUploads().then(setUploads, () => { setUploads([]) })
     void readRoster().then(setRoster, () => { setRoster(null) })
-  }, [readUploads, readRoster])
+    void readDepartments().then(setDepartments, () => { setDepartments([]) })
+  }, [readUploads, readRoster, readDepartments])
 
   useEffect(reload, [reload])
 
@@ -207,6 +215,19 @@ function UploadsPanel(props: UploadsPanelProps) {
     )
   }, [props])
 
+  // The reader's own department arrives switched on, so the first tick a new
+  // colleague makes is usually another department's wording, not their own.
+  const toggleDepartment = useCallback((entry: RedactionDepartmentView): void => {
+    void props.setDepartment({ name: entry.name, enabled: !entry.enabled }).then(
+      async () => {
+        setDepartments(await props.departments())
+        setUploads(await props.uploads())
+        props.onChanged()
+      },
+      (error: unknown) => { setFailure(error instanceof Error ? error.message : String(error)) },
+    )
+  }, [props])
+
   const drop = useCallback((entry: RedactionUploadView): void => {
     void props.drop({ name: entry.name }).then(
       async () => { setUploads(await props.uploads()); props.onChanged() },
@@ -216,6 +237,32 @@ function UploadsPanel(props: UploadsPanelProps) {
 
   return (
     <div className={css.panel}>
+      <h3 className={css.heading}>{t('departmentsTitle')}</h3>
+      <p className={css.hint}>{t('departmentsHint')}</p>
+      {departments === null && <p className={css.status}>{t('loading')}</p>}
+      {departments !== null && departments.length === 0 && <p className={css.hint}>{t('departmentsEmpty')}</p>}
+      {departments !== null && departments.length > 0 && (
+        <ul className={css.uploads}>
+          {departments.map(entry => (
+            <li key={entry.name} className={css.upload}>
+              <div className={css.uploadHead}>
+                <label className={css.uploadName}>
+                  <input
+                    type="checkbox"
+                    checked={entry.enabled}
+                    onChange={() => { toggleDepartment(entry) }}
+                  />
+                  {entry.name}
+                </label>
+                <span className={css.uploadState}>
+                  {entry.own ? t('departmentsOwn') : t('departmentsElsewhere')}
+                </span>
+              </div>
+              <p className={css.hint}>{t('uploadsCounts', { terms: entry.terms, patterns: entry.patterns })}</p>
+            </li>
+          ))}
+        </ul>
+      )}
       <h3 className={css.heading}>{t('uploadsTitle')}</h3>
       <p className={css.hint}>{t('uploadsHint')}</p>
       {roster !== null && roster.enabled && roster.account === null && (

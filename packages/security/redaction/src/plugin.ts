@@ -32,6 +32,7 @@ import {
   setLocalTermEnabled,
   stampAttribution,
   writeLocalTermFile,
+  LocalTermError,
   type LocalTermFile,
   type LocalTermList,
 } from './local.ts'
@@ -41,11 +42,30 @@ import {
   restoreDocuments,
   type DocumentMapping,
 } from './documents.ts'
+import {
+  departmentNamesOf,
+  departmentNameOf,
+  departmentApplies,
+  describeDepartments,
+  readDepartmentLists,
+  readDepartmentSelection,
+  writeDepartmentList,
+  writeDepartmentSelection,
+  type DepartmentSelection,
+} from './departments.ts'
 import { RedactionMap, type RedactionEntry } from './map.ts'
 import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import { findPerson, ROSTER_PATH, readRoster, type Roster, type RosterPerson } from './roster.ts'
 import { queueTermRequest, readTermRequests, settleTermRequest, type TermRequest } from './queue.ts'
-import { fetchTermList, readCachedTermList, writeCachedTermList, type TermSourceConfig, type TermSourceKind } from './source.ts'
+import {
+  fetchDepartmentNames,
+  fetchDepartmentText,
+  fetchTermList,
+  readCachedTermList,
+  writeCachedTermList,
+  type TermSourceConfig,
+  type TermSourceKind,
+} from './source.ts'
 import { compileRules, isUsable, parseTermList, type ParsedTermList, type RedactionCategory, type RedactionRule } from './terms.ts'
 import { redactText as applyRules } from './redact.ts'
 import { DEFAULT_VISION_TIMEOUT_MS, recognizeImageText } from './vision.ts'
@@ -197,6 +217,8 @@ export interface RedactionStatus {
   readonly pending: number
   /** Uploaded lists that compiled into the rules in force. */
   readonly localFiles: number
+  /** Department lists that applied to this reader. */
+  readonly departments: number
   /** Names the shipped staff directory contributed to the rules, or 0 when it is off. */
   readonly roster: number
   /** Whether an ended session writes its placeholder table to the local mappings directory. */
@@ -250,6 +272,21 @@ export class RedactionService extends Service {
   private main: { readonly parsed: ParsedTermList; readonly origin: string; readonly source: TermSourceKind } | undefined = undefined
   /** Uploaded lists as last read, whether or not every one of them compiled. */
   private local: LocalTermList[] = []
+
+  /**
+   * One list per department, downloaded from the same repository as the published
+   * list. Only the ones that apply to this reader take part in {@link recompile}.
+   */
+  private departments: LocalTermList[] = []
+
+  /** Which department lists the reader ticked, and which they unticked. */
+  private selection: DepartmentSelection = { enabled: [], disabled: [] }
+
+  /** Department of the signed-in colleague, or null while nobody is signed in. */
+  private own: string | null = null
+
+  /** Set while a department synchronisation runs, so two refreshes cannot overlap. */
+  private syncing: Promise<void> | undefined = undefined
   /** Staff directory as last read, absent when it is off or could not be opened. */
   private roster: Roster | undefined = undefined
   private current: RedactionStatus
@@ -301,6 +338,7 @@ export class RedactionService extends Service {
       detail: null,
       pending: 0,
       localFiles: 0,
+      departments: 0,
       roster: 0,
       mappings: this.config.mappings,
       imageTool: this.config.readImage,
@@ -484,6 +522,7 @@ export class RedactionService extends Service {
       this.recompile()
     }
     if (adopted && this.config.refreshMinutes > 0 && this.config.remote !== '') void this.refresh()
+    void this.syncDepartments()
     return this.current
   }
 
@@ -511,6 +550,7 @@ export class RedactionService extends Service {
       this.adopt(text, this.source.remote, 'remote')
       this.current = { ...this.current, lastChecked: checked, lastError: null }
       await writeCachedTermList(this.source, text, parsed.revision)
+      void this.syncDepartments()
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       this.current = { ...this.current, lastChecked: checked, lastError: detail }
@@ -572,8 +612,10 @@ export class RedactionService extends Service {
   }
 
   /** Read the uploaded lists and the staff directory, so a synchronous recompile can use both. */
-  private async reloadLocal(): Promise<void> {
+  async reloadLocal(): Promise<void> {
     this.local = await readLocalTermLists(this.config.cacheDirectory)
+    this.departments = await readDepartmentLists(this.config.cacheDirectory)
+    this.selection = await readDepartmentSelection(this.config.cacheDirectory)
     await this.reloadRoster()
   }
 
@@ -609,15 +651,18 @@ export class RedactionService extends Service {
    */
   private recompile(): void {
     const uploaded = this.local.filter(entry => entry.file.enabled && isUsable(entry.list))
+    const departments = this.departments.filter(entry =>
+      isUsable(entry.list) && departmentApplies(this.selection, departmentNameOf(entry.file), this.own))
     const roster = this.rosterCategories()
     const main = this.main
-    const rules = main === undefined && uploaded.length === 0 && roster.length === 0
+    const rules = main === undefined && uploaded.length === 0 && departments.length === 0 && roster.length === 0
       ? []
       : compileRules({
         version: main?.parsed.version ?? '1',
         revision: main?.parsed.revision ?? 'local',
         categories: [
           ...uploaded.flatMap(entry => entry.list.categories),
+          ...departments.flatMap(entry => entry.list.categories),
           ...roster,
           ...main?.parsed.categories ?? [],
         ],
@@ -630,6 +675,7 @@ export class RedactionService extends Service {
       patterns: rules.filter(rule => rule.kind === 'pattern').length,
       ...main === undefined ? {} : { source: main.source },
       localFiles: uploaded.length,
+      departments: departments.length,
       roster: roster.reduce((count, category) => count + category.terms.length, 0),
       mappings: this.mappingsOn,
       imageTool: this.readImageOn,
@@ -856,6 +902,86 @@ export class RedactionService extends Service {
       this.flushTimer = undefined
     }
     this.flushing = this.flushing.then(() => this.writeMappings()).catch(() => {})
+  }
+
+  /**
+   * Download the department lists the repository publishes.
+   *
+   * A refresh replaces every published file it can read; a failure keeps whatever
+   * is already on this machine, because a department list is extra coverage over
+   * the published list rather than the reason the published list works.
+   */
+  private syncDepartments(): Promise<void> {
+    if (this.syncing !== undefined) return this.syncing
+    this.syncing = this.downloadDepartments().finally(() => {
+      this.syncing = undefined
+    })
+    return this.syncing
+  }
+
+  private async downloadDepartments(): Promise<void> {
+    if (this.config.remote === '') return
+    try {
+      const published = departmentNamesOf(await fetchDepartmentNames(this.source))
+      let changed = false
+      for (const name of published) {
+        await writeDepartmentList(this.config.cacheDirectory, name, await fetchDepartmentText(this.source, name))
+        changed = true
+      }
+      if (!changed) return
+      this.departments = await readDepartmentLists(this.config.cacheDirectory)
+      this.recompile()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`redaction: department lists not refreshed: ${detail}`)
+    }
+  }
+
+  /**
+   * Tell the provider which department the signed-in colleague belongs to.
+   *
+   * Called whenever the account is read, so a list that belongs to this reader's
+   * department takes part without them ticking anything; a no-op when the answer
+   * has not changed, because recompiling on every status read would be wasteful.
+   * @param account Account name the roster knows, or null while signed out.
+   */
+  async noteAccount(account: string | null): Promise<void> {
+    const own = account === null ? null : this.identify(account)?.department ?? null
+    if (own === this.own) return
+    this.own = own
+    this.recompile()
+  }
+
+  /**
+   * Every department list this machine knows, with the state that explains it.
+   * @returns One entry per list, ordered by department name.
+   */
+  departmentLists(): { name: string; enabled: boolean; own: boolean; terms: number; patterns: number; revision: string }[] {
+    return describeDepartments(this.departments, this.selection, this.own)
+  }
+
+  /**
+   * Switch one department list on or off for this reader.
+   * @param name Department the list belongs to.
+   * @param enabled Whether the list should take part.
+   * @throws {LocalTermError} When no list is stored for that department.
+   */
+  async setDepartmentEnabled(name: string, enabled: boolean): Promise<void> {
+    if (!this.departments.some(entry => departmentNameOf(entry.file) === name)) {
+      throw new LocalTermError(`redaction: no department list named ${name}`)
+    }
+    const ticked = new Set(this.selection.enabled)
+    const refused = new Set(this.selection.disabled)
+    if (enabled) {
+      ticked.add(name)
+      refused.delete(name)
+    } else {
+      ticked.delete(name)
+      refused.add(name)
+    }
+    this.selection = { enabled: [...ticked], disabled: [...refused] }
+    await writeDepartmentSelection(this.config.cacheDirectory, this.selection)
+    this.recompile()
   }
 
   private async writeMappings(): Promise<void> {

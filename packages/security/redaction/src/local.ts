@@ -170,7 +170,7 @@ export function checkLocalText(text: string): TermListProblem[] {
  * @param text Its contents.
  * @returns The description, including any problem the file carries.
  */
-function describe(name: string, text: string): LocalTermFile {
+export function describe(name: string, text: string): LocalTermFile {
   const parsed = parseTermList(text)
   let terms = 0
   let patterns = 0
@@ -200,7 +200,19 @@ function describe(name: string, text: string): LocalTermFile {
  * @returns One entry per stored file, ordered by name; empty when nothing was uploaded.
  */
 export async function readLocalTermLists(directory: string): Promise<LocalTermList[]> {
-  const home = localDirectory(directory)
+  return readTermListsIn(localDirectory(directory))
+}
+
+/**
+ * Read every term list stored in one directory.
+ *
+ * The uploads and the department lists are the same shape — a directory of YAML
+ * files, one list per file — so they share this reader instead of a second
+ * parser drifting away from the first.
+ * @param home Directory holding `*.yaml` lists.
+ * @returns One entry per readable file, ordered by name.
+ */
+export async function readTermListsIn(home: string): Promise<LocalTermList[]> {
   let names: string[]
   try {
     names = (await readdir(home)).filter(name => name.endsWith(LOCAL_FILE_EXTENSION))

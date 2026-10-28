@@ -76,6 +76,8 @@ export function apply(ctx: ClientContext): void {
     upload: async request => unwrap('upload', await remote.upload(request)),
     drop: async request => unwrap('drop', await remote.drop(request)),
     setEnabled: async request => unwrap('setEnabled', await remote.setEnabled(request)),
+    departments: async () => unwrap('departments', await remote.departments()),
+    setDepartment: async request => unwrap('setDepartment', await remote.setDepartment(request)),
     example: async () => unwrap('example', await remote.example()),
   }
 

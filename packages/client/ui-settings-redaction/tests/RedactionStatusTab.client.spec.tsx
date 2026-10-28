@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
+  RedactionDepartmentView,
   RedactionRosterView,
   RedactionStatusView,
   RedactionUploadView,
@@ -39,6 +40,16 @@ const ROSTER: RedactionRosterView = {
   employeeId: '21614226',
 }
 
+/** One department list, as the page would render it. */
+const DEPARTMENT: RedactionDepartmentView = {
+  name: '研发部',
+  enabled: true,
+  own: true,
+  terms: 2,
+  patterns: 0,
+  revision: '2026-10-28',
+}
+
 const UPLOAD: RedactionUploadView = {
   name: 'qc.yaml',
   bytes: 420,
@@ -67,6 +78,8 @@ function face(overrides: Partial<RedactionStatusTabInjected> = {}): RedactionSta
     upload: async () => UPLOAD,
     drop: async () => true,
     setEnabled: async () => UPLOAD,
+    departments: async () => [],
+    setDepartment: async () => DEPARTMENT,
     example: async () => ({ name: 'terms-local.example.yaml', text: 'version: 1\n' }),
     ...overrides,
   }

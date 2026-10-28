@@ -156,4 +156,16 @@ describe('installer preparation preserves application dependencies', () => {
     const packaged = new Set(config.files.filter((entry): entry is string => typeof entry === 'string'))
     for (const name of referenced) expect(packaged.has(`lib/${name}`)).toBe(true)
   })
+
+  it('looks for a running instance only where the product is already installed', async () => {
+    // A first install has nothing to be running, yet the check used to fire: a process keeps
+    // reporting the image path it started from even after the file moved away, so a leftover
+    // instance blocked an install into a directory that never held us. The guard ties the
+    // lookup to the presence of our own binary.
+    const script = readFileSync(new URL('../scripts/installer.nsh', import.meta.url), 'utf8')
+    const macro = script.slice(script.indexOf('!macro customCheckAppRunning'))
+    const guard = macro.indexOf('${If} ${FileExists} "$INSTDIR\\${APP_EXECUTABLE_FILENAME}"')
+    expect(guard).toBeGreaterThan(0)
+    expect(macro.indexOf('InstallerFindProcess')).toBeGreaterThan(guard)
+  })
 })
