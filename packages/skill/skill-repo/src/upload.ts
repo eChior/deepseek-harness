@@ -340,8 +340,9 @@ export interface RemoteSkill {
  * Group the department tree into skills, reading each `SKILL.md` for its
  * version and its `.uploader.json` for who published it.
  *
- * Only `<department>/<skill>/` paths count: the shared catalogue under
- * `sharedRoot` is what the mirror already publishes, so showing it here would
+ * Only `<sharedRoot>/<department>/<skill>/` paths count. A first-level folder
+ * under `sharedRoot` that carries its own `SKILL.md` is a shared skill, so it
+ * is skipped here: the mirror already publishes it and showing it again would
  * duplicate every row.
  * @param options - Target, token, branch and the whole tree.
  * @returns One entry per department skill, sorted by department then name.
@@ -354,12 +355,19 @@ export async function readDepartmentSkills(options: {
   readonly sharedRoot: string
 }): Promise<readonly RemoteSkill[]> {
   const { target, token, branch, tree, sharedRoot } = options
+  const sharedSkills = new Set<string>()
+  for (const file of tree) {
+    const parts = file.path.split('/')
+    if (parts.length === 3 && parts[0] === sharedRoot && parts[2] === 'SKILL.md') {
+      sharedSkills.add(parts[1] as string)
+    }
+  }
   const grouped = new Map<string, RemoteFile[]>()
   for (const file of tree) {
     const parts = file.path.split('/')
-    if (parts.length < 3) continue
-    if (parts[0] === sharedRoot) continue
-    const key = `${parts[0]}/${parts[1]}`
+    if (parts.length < 4 || parts[0] !== sharedRoot) continue
+    if (sharedSkills.has(parts[1] as string)) continue
+    const key = `${parts[1]}/${parts[2]}`
     const bucket = grouped.get(key)
     if (bucket === undefined) grouped.set(key, [file])
     else bucket.push(file)
@@ -367,7 +375,7 @@ export async function readDepartmentSkills(options: {
   const skills: RemoteSkill[] = []
   for (const [key, files] of grouped) {
     const [department, name] = key.split('/') as [string, string]
-    const directory = key
+    const directory = `${sharedRoot}/${key}`
     const manifestPath = `${directory}/SKILL.md`
     const manifest = files.find(file => file.path === manifestPath)
     if (manifest === undefined) continue

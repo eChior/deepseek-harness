@@ -173,10 +173,12 @@ export function skillsDirectoryPath(config: Pick<Config, 'directory' | 'skillsDi
 }
 
 /**
- * A department-scoped skill lives at `<department>/<skill>/`, beside the shared
- * `skills/` tree instead of under a wrapper of its own, so one subscription that
- * scans the whole repository lists both kinds. The mirror only publishes
- * `skillsDirectory`, so a colleague installs a department's skill deliberately.
+ * A department-scoped skill lives at `<skillsDirectory>/<department>/<skill>/`, one
+ * level below the shared skills. The skills manager subscribes to `skills` and
+ * lists any folder that carries a `SKILL.md`, so this layout reaches colleagues
+ * without a second subscription, while the mirror publishes only direct
+ * children of `skillsDirectory`: a department's skill stays a deliberate
+ * install, not something every launch drops in.
  */
 
 /** Department recorded when the roster cannot place the uploader. */
@@ -299,7 +301,7 @@ export class SkillRepository extends Service {
       target,
       token,
       branch: this.config.branch,
-      directory: `${department}/${name}`,
+      directory: `${this.config.skillsDirectory}/${department}/${name}`,
       contents: { files, skipped: contents.skipped },
       message: `skill: ${name}${uploader.name === null ? '' : ` by ${uploader.name}`}${uploader.department === null ? '' : ` (${uploader.department})`}${mode === 'update' ? ' (replace)' : ''}`,
       overwrite: mode === 'update',

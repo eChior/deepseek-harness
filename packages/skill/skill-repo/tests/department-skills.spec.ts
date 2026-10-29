@@ -48,13 +48,13 @@ describe('readRepositoryTree', () => {
       tree: [
         { path: 'skills', type: 'tree', sha: 'a' },
         { path: 'skills/demo/SKILL.md', type: 'blob', sha: 'b' },
-        { path: '研发部/demo/SKILL.md', type: 'blob', sha: 'c' },
+        { path: 'skills/研发部/demo/SKILL.md', type: 'blob', sha: 'c' },
       ],
     }), { status: 200 }))
     const tree = await readRepositoryTree({ target: TARGET!, token: 't', branch: 'main' })
     expect(tree).toEqual([
       { path: 'skills/demo/SKILL.md', sha: 'b' },
-      { path: '研发部/demo/SKILL.md', sha: 'c' },
+      { path: 'skills/研发部/demo/SKILL.md', sha: 'c' },
     ])
     expect(calls[0]?.url).toContain('/git/trees/main?recursive=true')
   })
@@ -68,9 +68,9 @@ describe('readRepositoryTree', () => {
 describe('readDepartmentSkills', () => {
   const tree = [
     { path: 'skills/tsd-reader/SKILL.md', sha: 's1' },
-    { path: '研发部/demo/SKILL.md', sha: 'd1' },
-    { path: '研发部/demo/.uploader.json', sha: 'd2' },
-    { path: '研发部/demo/references/sheet.md', sha: 'd3' },
+    { path: 'skills/研发部/demo/SKILL.md', sha: 'd1' },
+    { path: 'skills/研发部/demo/.uploader.json', sha: 'd2' },
+    { path: 'skills/研发部/demo/references/sheet.md', sha: 'd3' },
   ]
 
   it('groups one department directory into one skill, with who published it', async () => {
@@ -106,13 +106,13 @@ describe('deleteSkillFiles', () => {
       target: TARGET!,
       token: 't',
       branch: 'main',
-      directory: '研发部/demo',
+      directory: 'skills/研发部/demo',
       files: [{ path: 'SKILL.md', sha: 'd1' }, { path: '.uploader.json', sha: 'd2' }],
       message: 'remove demo',
     })
     expect(removed).toBe(2)
     expect(calls.map(call => call.init?.method)).toEqual(['DELETE', 'DELETE'])
-    expect(calls[0]?.url).toContain('/contents/%E7%A0%94%E5%8F%91%E9%83%A8/demo/SKILL.md')
+    expect(calls[0]?.url).toContain('/contents/skills/%E7%A0%94%E5%8F%91%E9%83%A8/demo/SKILL.md')
     const body = calls[0]?.init?.body
     expect(body).toBeTypeOf('string')
     expect(JSON.parse(body as string)).toMatchObject({ sha: 'd1', branch: 'main' })
@@ -124,7 +124,7 @@ describe('deleteSkillFiles', () => {
       target: TARGET!,
       token: 't',
       branch: 'main',
-      directory: '研发部/demo',
+      directory: 'skills/研发部/demo',
       files: [{ path: 'SKILL.md', sha: 'd1' }],
       message: 'remove demo',
     })

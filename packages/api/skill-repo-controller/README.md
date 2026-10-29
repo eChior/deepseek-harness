@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The **skill repository controller** republishes the skill provider's publishing seam over Typert Remote. It answers two calls: list the skills this machine could send, and send one. The provider decides where the files land — under `<department>/<skill>/`, named after the department the signed-in colleague belongs to — and records who uploaded them beside the files. The controller carries no state: it maps those records onto wire types, so the settings page never has to know a repository path or a token.
+The **skill repository controller** republishes the skill provider's publishing seam over Typert Remote. It answers two calls: list the skills this machine could send, and send one. The provider decides where the files land — under `skills/<department>/<skill>/`, named after the department the signed-in colleague belongs to — and records who uploaded them beside the files. The controller carries no state: it maps those records onto wire types, so the settings page never has to know a repository path or a token.
 
 ## Table of Contents
 
