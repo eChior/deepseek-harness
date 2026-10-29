@@ -88,7 +88,7 @@ function mount(options: { account?: 'unloaded' | 'signed-out' | 'credential-stor
   }
 }
 
-it.each([en, zh])('requests the shared top-up page for the claimed account notice', async (copy) => {
+it.each([en, zh])('requests the shared usage page for the claimed account notice', async (copy) => {
   const spies = pageSpies()
   const { dismiss, keepOpen, releaseHold } = mount({ pages: spies.pages, copy })
   expect(screen.getByRole('dialog', { name: copy.quotaTitle }).textContent).toContain(copy.quotaDescription)
@@ -99,8 +99,8 @@ it.each([en, zh])('requests the shared top-up page for the claimed account notic
   // replaced the notice would otherwise remount this entry and drop the page.
   expect(keepOpen).toHaveBeenCalledOnce()
   expect(callOrder(keepOpen)).toBeLessThan(callOrder(spies.open))
-  expect(spies.open).toHaveBeenCalledWith('top-up', expect.any(Function))
-  expect(spies.pages.getSnapshot()).toEqual({ page: 'top-up' })
+  expect(spies.open).toHaveBeenCalledWith('usage', expect.any(Function))
+  expect(spies.pages.getSnapshot()).toEqual({ page: 'usage' })
   expect(dismiss).not.toHaveBeenCalled()
   expect(releaseHold).not.toHaveBeenCalled()
   // The page hides this entry's surface; the shared host owns the container.
@@ -202,7 +202,7 @@ it('releases the shared page and its hold when the account signs out mid-page', 
   const spies = pageSpies()
   const { dismiss, releaseHold, setStatus } = mount({ pages: spies.pages })
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.quotaTopUp })) })
-  expect(spies.pages.getSnapshot()).toEqual({ page: 'top-up' })
+  expect(spies.pages.getSnapshot()).toEqual({ page: 'usage' })
   act(() => { setStatus('signed-out') })
   expect(dismiss).toHaveBeenCalledOnce()
   expect(spies.pages.getSnapshot()).toBeNull()

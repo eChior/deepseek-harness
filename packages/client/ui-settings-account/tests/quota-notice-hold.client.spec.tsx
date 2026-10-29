@@ -220,8 +220,8 @@ describe('shared Platform page ownership', () => {
 
     // Top up then takes the shared page over, once.
     await act(async () => { screen.getByRole('button', { name: en.quotaTopUp }).click() })
-    expect(b.platform.open.mock.calls.map(([page]) => page)).toEqual(['usage', 'top-up'])
-    expect(b.pages.getSnapshot()).toEqual({ page: 'top-up' })
+    expect(b.platform.open.mock.calls.map(([page]) => page)).toEqual(['usage', 'usage'])
+    expect(b.pages.getSnapshot()).toEqual({ page: 'usage' })
   })
 
   it('hands focus to the revealed notice Modal when Back closes the settings page', async () => {
@@ -296,7 +296,7 @@ describe('shared Platform page ownership', () => {
     await act(async () => { screen.getByRole('button', { name: en.backToHarness }).click() })
     expect(screen.getByRole('dialog', { name: en.quotaTitle })).toBeTruthy()
     await act(async () => { screen.getByRole('button', { name: en.quotaTopUp }).click() })
-    expect(b.platform.open.mock.calls.map(([page]) => page)).toEqual(['top-up', 'top-up'])
+    expect(b.platform.open.mock.calls.map(([page]) => page)).toEqual(['top-up', 'usage'])
   })
 
   it('replaces a deferred account notice with the newest failure behind a settings page', async () => {

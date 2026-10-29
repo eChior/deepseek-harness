@@ -47,15 +47,15 @@ function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', bal
   }
 }
 
-it('keeps welcome mandatory and enters credit only through Start', async () => {
+it('keeps welcome mandatory and enters the purpose question only through Start', async () => {
   const operations = mount()
   expect(screen.queryByRole('button', { name: zh.onboardingSkip })).toBeNull()
   expect(screen.queryByRole('button', { name: zh.onboardingBack })).toBeNull()
   fireEvent.keyDown(document, { key: 'Escape' })
   expect(operations.complete).not.toHaveBeenCalled()
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: zh.onboardingStart })) })
-  expect(screen.getByRole('heading', { name: zh.onboardingCredit })).toBeTruthy()
-  expect(operations.update).toHaveBeenCalledWith({ step: 'credit' })
+  expect(document.querySelector('[data-desktop-onboarding="purpose"]')).not.toBeNull()
+  expect(operations.update).toHaveBeenCalledWith({ step: 'purpose' })
 })
 
 it('covers the application without showing an unfinished step while durable settings load', () => {
@@ -310,7 +310,7 @@ it.each(['complete', 'cancel', 'reduced'] as const)('settles the page transition
         else animation.resolve(undefined)
       })
     }
-    expect(document.querySelector(`[data-desktop-onboarding="${mode === 'cancel' ? 'welcome' : 'credit'}"]`)).not.toBeNull()
+    expect(document.querySelector(`[data-desktop-onboarding="${mode === 'cancel' ? 'welcome' : 'purpose'}"]`)).not.toBeNull()
     cleanup()
   } finally {
     if (previous) Object.defineProperty(HTMLElement.prototype, 'animate', previous)
@@ -328,10 +328,10 @@ it('does not restore focus to a disconnected confirmation trigger', () => {
   expect(screen.queryByRole('dialog')).toBeNull()
 })
 
-it('returns from purpose to credit without dropping the selected purpose', async () => {
+it('returns from purpose to welcome, which is the previous page now that credit is skipped', async () => {
   const h = mount('purpose')
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: zh.onboardingBack })) })
-  expect(h.update).toHaveBeenCalledWith({ step: 'credit' })
+  expect(h.update).toHaveBeenCalledWith({ step: 'welcome' })
 })
 
 

@@ -74,7 +74,7 @@ export function AccountQuotaNotice({ matched, openPlatformPage, useAccount, useP
         // Retain the notice before its page mounts; a later failure would
         // otherwise republish it and remount this entry.
         releaseHold.current = keepOpen()
-        releasePage.current = openPlatformPage('top-up', () => { releasePage.current = undefined; dismiss() })
+        releasePage.current = openPlatformPage('usage', () => { releasePage.current = undefined; dismiss() })
         setOpened(true)
       }}>{t('quotaTopUp')}</Button>
     </>} />
