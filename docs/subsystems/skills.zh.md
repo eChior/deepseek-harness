@@ -271,6 +271,24 @@ Mirror a git-hosted skill repository into the DSH home and publish its skills.
 
 ```ts cordis-catalog
 /**
+ * List the skills this machine can publish, read from the directory the mirror
+ * publishes into. A directory without `SKILL.md` is not a skill and is left out.
+ * @returns One entry per skill, sorted by name.
+ */
+async localSkills(): Promise<readonly LocalSkillView[]>
+
+/**
+ * Publish one local skill into the repository, recording who sent it and which
+ * department they belong to beside the files.
+ *
+ * Only new paths are written: a file that already exists with different bytes
+ * is reported as a conflict, so one colleague never overwrites another's work.
+ * @param name - Directory name of the skill under the publish directory.
+ * @returns How many files were written, how many matched, and what was refused.
+ */
+async uploadSkill(name: string): Promise<SkillUploadView>
+
+/**
  * Bring the mirror up to date. Never throws: an unreachable remote, a refused
  * archive or a timeout all land in `status.detail` and leave whatever copy is
  * already on disk in place.

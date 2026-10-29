@@ -3001,7 +3001,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-repo`
 
-- `source`: [`packages/skill/skill-repo/src/index.ts:47`](../packages/skill/skill-repo/src/index.ts)
+- `source`: [`packages/skill/skill-repo/src/index.ts:53`](../packages/skill/skill-repo/src/index.ts)
 
 ```ts config-catalog
 /** Fields a deployment can set for the skill mirror. */
@@ -3025,6 +3025,11 @@ export interface Config {
   bundledDirectory?: string
   /** Per-request timeout for the archive download and the branch lookup. */
   timeoutMs?: number
+  /**
+   * Token the publishing seam presents to the repository host. Empty falls back
+   * to `DSH_SKILLS_TOKEN`, so a deployment can keep it out of the config file.
+   */
+  token?: string
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-repo -->
@@ -4461,6 +4466,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-api-account-controller` | `deepseekAccount` · `agents` | [`packages/api/account-controller/src/index.ts`](../packages/api/account-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-redaction-controller` | `redaction` · `deepseekAccount` | [`packages/api/redaction-controller/src/index.ts`](../packages/api/redaction-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |
+| `@deepseek-ai/dsh-api-skill-repo-controller` | `skillRepo` | [`packages/api/skill-repo-controller/src/index.ts`](../packages/api/skill-repo-controller/src/index.ts) |
 | `@deepseek-ai/dsh-authorization` | `credentials` | [`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts) |
 | `@deepseek-ai/dsh-browser-use` | — | [`packages/browser-use/browser-use/src/index.ts`](../packages/browser-use/browser-use/src/index.ts) |
 | `@deepseek-ai/dsh-client-file-upload` | `agents` · `attachments` · `commands` · `connection` | [`packages/client/file-upload/src/index.ts`](../packages/client/file-upload/src/index.ts) |
@@ -4499,6 +4505,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-settings-redaction` | — | [`packages/client/ui-settings-redaction/src/index.ts`](../packages/client/ui-settings-redaction/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-session-log` | — | [`packages/client/ui-settings-session-log/src/index.ts`](../packages/client/ui-settings-session-log/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-shell` | — | [`packages/client/ui-settings-shell/src/index.ts`](../packages/client/ui-settings-shell/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-settings-skills` | — | [`packages/client/ui-settings-skills/src/index.ts`](../packages/client/ui-settings-skills/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-subagent` | — | [`packages/client/ui-settings-subagent/src/index.ts`](../packages/client/ui-settings-subagent/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-web-search` | — | [`packages/client/ui-settings-web-search/src/index.ts`](../packages/client/ui-settings-web-search/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-shortcuts` | — | [`packages/client/ui-shortcuts/src/index.ts`](../packages/client/ui-shortcuts/src/index.ts) |

@@ -1217,6 +1217,9 @@ importers:
       '@deepseek-ai/dsh-api-settings-controller':
         specifier: workspace:*
         version: link:../settings-controller
+      '@deepseek-ai/dsh-api-skill-repo-controller':
+        specifier: workspace:*
+        version: link:../skill-repo-controller
       '@deepseek-ai/dsh-api-terminal-controller':
         specifier: workspace:*
         version: link:../terminal-controller
@@ -1477,6 +1480,22 @@ importers:
       '@deepseek-ai/dsh-settings':
         specifier: workspace:*
         version: link:../../settings/settings
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../typert/protocol
+
+  packages/api/skill-repo-controller:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-skill-repo':
+        specifier: workspace:*
+        version: link:../../skill/skill-repo
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol
@@ -2426,6 +2445,9 @@ importers:
       '@deepseek-ai/dsh-api-settings-controller':
         specifier: workspace:*
         version: link:../../api/settings-controller
+      '@deepseek-ai/dsh-api-skill-repo-controller':
+        specifier: workspace:*
+        version: link:../../api/skill-repo-controller
       '@deepseek-ai/dsh-api-terminal-controller':
         specifier: workspace:*
         version: link:../../api/terminal-controller
@@ -2564,6 +2586,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings-shell':
         specifier: workspace:*
         version: link:../../client/ui-settings-shell
+      '@deepseek-ai/dsh-client-ui-settings-skills':
+        specifier: workspace:*
+        version: link:../../client/ui-settings-skills
       '@deepseek-ai/dsh-client-ui-settings-subagent':
         specifier: workspace:*
         version: link:../../client/ui-settings-subagent
@@ -2785,7 +2810,7 @@ importers:
         version: 1.2.9(patch_hash=307e6bd17cc7b306c4e3c50b44524439ffeb5981576d95ad31a48e5ae7071a2f)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-client-locale@packages+client+locale)(@deepseek-ai/dsh-client-ui-primitives@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-skill@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))))(@deepseek-ai/dsh-tools@0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87))(@deepseek-ai/dsh-web-app@0.2.0-rc.2(9cd3a188cc738e8fcb56856cd13c1b8c))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       billion-context:
         specifier: ^0.1.209
-        version: 0.1.209(@types/node@26.1.2)
+        version: 0.1.209(@types/node@26.1.2)(supports-color@9.4.0)
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -5237,6 +5262,51 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
+
+  packages/client/ui-settings-skills:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:*
+        version: link:../../api/remotes
+      '@deepseek-ai/dsh-api-skill-repo-controller':
+        specifier: workspace:*
+        version: link:../../api/skill-repo-controller
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../locale
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../store
+      '@deepseek-ai/dsh-client-test-runtime':
+        specifier: workspace:*
+        version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../ui-primitives
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:*
+        version: link:../ui-renderer
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:*
+        version: link:../ui-settings
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../ui-slots
+      '@testing-library/react':
+        specifier: ^16.1.0
+        version: 16.3.2(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
 
   packages/client/ui-settings-subagent:
     devDependencies:
@@ -32564,14 +32634,14 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
-  '@jimp/core@1.6.1':
+  '@jimp/core@1.6.1(supports-color@9.4.0)':
     dependencies:
       '@jimp/file-ops': 1.6.1
       '@jimp/types': 1.6.1
       '@jimp/utils': 1.6.1
       await-to-js: 3.0.0
       exif-parser: 0.1.12
-      file-type: 21.3.4
+      file-type: 21.3.4(supports-color@9.4.0)
       mime: 3.0.0
     transitivePeerDependencies:
       - supports-color
@@ -32592,7 +32662,7 @@ snapshots:
 
   '@jimp/js-bmp@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       '@jimp/utils': 1.6.1
       bmp-ts: 1.0.9
@@ -32602,7 +32672,7 @@ snapshots:
 
   '@jimp/js-gif@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       gifwrap: 0.10.1
       omggif: 1.0.10
@@ -32612,7 +32682,7 @@ snapshots:
 
   '@jimp/js-jpeg@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       jpeg-js: 0.4.4
     transitivePeerDependencies:
@@ -32621,7 +32691,7 @@ snapshots:
 
   '@jimp/js-png@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       pngjs: 7.0.0
     transitivePeerDependencies:
@@ -32630,7 +32700,7 @@ snapshots:
 
   '@jimp/js-tiff@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       utif2: 4.1.0
     transitivePeerDependencies:
@@ -32646,7 +32716,7 @@ snapshots:
 
   '@jimp/plugin-blur@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/utils': 1.6.1
     transitivePeerDependencies:
       - supports-color
@@ -32660,7 +32730,7 @@ snapshots:
 
   '@jimp/plugin-color@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       '@jimp/utils': 1.6.1
       tinycolor2: 1.6.0
@@ -32671,7 +32741,7 @@ snapshots:
 
   '@jimp/plugin-contain@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/plugin-blit': 1.6.1
       '@jimp/plugin-resize': 1.6.1
       '@jimp/types': 1.6.1
@@ -32683,7 +32753,7 @@ snapshots:
 
   '@jimp/plugin-cover@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/plugin-crop': 1.6.1
       '@jimp/plugin-resize': 1.6.1
       '@jimp/types': 1.6.1
@@ -32694,7 +32764,7 @@ snapshots:
 
   '@jimp/plugin-crop@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       '@jimp/utils': 1.6.1
       zod: 3.25.76
@@ -32729,7 +32799,7 @@ snapshots:
 
   '@jimp/plugin-hash@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/js-bmp': 1.6.1
       '@jimp/js-jpeg': 1.6.1
       '@jimp/js-png': 1.6.1
@@ -32751,7 +32821,7 @@ snapshots:
 
   '@jimp/plugin-print@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/js-jpeg': 1.6.1
       '@jimp/js-png': 1.6.1
       '@jimp/plugin-blit': 1.6.1
@@ -32773,7 +32843,7 @@ snapshots:
 
   '@jimp/plugin-resize@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/types': 1.6.1
       zod: 3.25.76
     transitivePeerDependencies:
@@ -32782,7 +32852,7 @@ snapshots:
 
   '@jimp/plugin-rotate@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/plugin-crop': 1.6.1
       '@jimp/plugin-resize': 1.6.1
       '@jimp/types': 1.6.1
@@ -32794,7 +32864,7 @@ snapshots:
 
   '@jimp/plugin-threshold@1.6.1':
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/plugin-color': 1.6.1
       '@jimp/plugin-hash': 1.6.1
       '@jimp/types': 1.6.1
@@ -33959,7 +34029,7 @@ snapshots:
       '@types/react': 18.3.31
       '@types/react-dom': 18.3.7(@types/react@18.3.31)
 
-  '@tokenizer/inflate@0.4.1':
+  '@tokenizer/inflate@0.4.1(supports-color@9.4.0)':
     dependencies:
       debug: 4.4.3(supports-color@9.4.0)
       token-types: 6.1.2
@@ -34965,12 +35035,12 @@ snapshots:
 
   bignumber.js@9.3.1: {}
 
-  billion-context@0.1.209(@types/node@26.1.2):
+  billion-context@0.1.209(@types/node@26.1.2)(supports-color@9.4.0):
     dependencies:
       mysql2: 3.24.6(@types/node@26.1.2)
       zod: 4.1.8
     optionalDependencies:
-      jimp: 1.6.1
+      jimp: 1.6.1(supports-color@9.4.0)
     transitivePeerDependencies:
       - '@types/node'
       - supports-color
@@ -36272,9 +36342,9 @@ snapshots:
     dependencies:
       flat-cache: 4.0.1
 
-  file-type@21.3.4:
+  file-type@21.3.4(supports-color@9.4.0):
     dependencies:
-      '@tokenizer/inflate': 0.4.1
+      '@tokenizer/inflate': 0.4.1(supports-color@9.4.0)
       strtok3: 10.6.2
       token-types: 6.1.2
       uint8array-extras: 1.6.0
@@ -36881,9 +36951,9 @@ snapshots:
       filelist: 1.0.6
       picocolors: 1.1.1
 
-  jimp@1.6.1:
+  jimp@1.6.1(supports-color@9.4.0):
     dependencies:
-      '@jimp/core': 1.6.1
+      '@jimp/core': 1.6.1(supports-color@9.4.0)
       '@jimp/diff': 1.6.1
       '@jimp/js-bmp': 1.6.1
       '@jimp/js-gif': 1.6.1

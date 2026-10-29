@@ -1,0 +1,92 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.intro {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.hint {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.65;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.muted {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: #c62828;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(127, 127, 127, 0.22);
+  border-radius: 10px;
+}
+
+.identity {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail {
+  overflow: hidden;
+  font-size: 12px;
+  opacity: 0.68;
+  text-overflow: ellipsis;
+}
+
+.report {
+  font-size: 12px;
+  color: #1b7f3b;
+}

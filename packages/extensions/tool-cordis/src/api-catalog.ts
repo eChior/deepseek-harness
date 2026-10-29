@@ -2788,6 +2788,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Mirror a git-hosted skill repository into the DSH home and publish its skills.',
     methods: [
       {
+        signature: 'async localSkills(): Promise<readonly LocalSkillView[]>',
+        description: 'List the skills this machine can publish, read from the directory the mirror publishes into. A directory without `SKILL.md` is not a skill and is left out.',
+        parameters: [],
+        returns: 'One entry per skill, sorted by name.',
+      },
+      {
+        signature: 'async uploadSkill(name: string): Promise<SkillUploadView>',
+        description: 'Publish one local skill into the repository, recording who sent it and which department they belong to beside the files.\n\nOnly new paths are written: a file that already exists with different bytes is reported as a conflict, so one colleague never overwrites another\'s work.',
+        parameters: [{ name: 'name', description: 'Directory name of the skill under the publish directory.' }],
+        returns: 'How many files were written, how many matched, and what was refused.',
+      },
+      {
         signature: 'async sync(): Promise<SkillRepositoryStatus>',
         description: 'Bring the mirror up to date. Never throws: an unreachable remote, a refused archive or a timeout all land in `status.detail` and leave whatever copy is already on disk in place.\n\nThe constructor already starts one sync, so a caller that arrives while that sync runs joins it rather than unpacking into the same directory twice.',
         parameters: [],
@@ -5831,6 +5843,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type LocalizedText = string | {\n    readonly en: string;\n    readonly [locale: string]: string;\n};',
   },
   {
+    name: 'LocalSkillView',
+    declaration: 'export interface LocalSkillView {\n    readonly name: string;\n    readonly description: string | null;\n    readonly files: number;\n    readonly bytes: number;\n}',
+  },
+  {
     name: 'LocalTermFile',
     declaration: 'export interface LocalTermFile {\n    readonly name: string;\n    readonly bytes: number;\n    readonly revision: string | null;\n    readonly department: string | null;\n    readonly author: string | null;\n    readonly enabled: boolean;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly problems: readonly TermListProblem[];\n}',
   },
@@ -7305,6 +7321,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SkillSummary',
     declaration: 'export interface SkillSummary {\n    readonly path?: string;\n    readonly name: string;\n    readonly description: string;\n    readonly whenToUse?: string;\n    readonly invocation: SkillInvocationPolicy;\n    readonly source: SkillSource;\n    readonly provider: string;\n    readonly resourceBase?: SkillResourceBase;\n}',
+  },
+  {
+    name: 'SkillUploadView',
+    declaration: 'export interface SkillUploadView {\n    readonly name: string;\n    readonly written: number;\n    readonly unchanged: number;\n    readonly conflicts: readonly string[];\n    readonly skipped: readonly string[];\n}',
   },
   {
     name: 'SkillViewOptions',

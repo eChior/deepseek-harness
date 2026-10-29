@@ -847,6 +847,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   ConnectionTrustRequest: 'transport authentication input is owned by packages/client/connection/src/rpc.ts',
   PeerAdmission: 'Peer admission outcome is owned by packages/client/connection/src/rpc.ts',
   PeerScope: 'Peer scope contract is owned by packages/typert/protocol/src/types.ts',
+  LocalSkillView: 'Skill publishing rows are owned by packages/skill/skill-repo/README.md and src/upload.ts',
+  SkillUploadView: 'Skill publishing results are owned by packages/skill/skill-repo/README.md and src/upload.ts',
   ConnectionIndexRequest: 'frontend authentication request is owned by packages/client/connection/src/rpc.ts',
   ConnectionIndexResponse: 'frontend authentication response is owned by packages/client/connection/src/rpc.ts',
   Profile: 'resolved profile layers are owned by packages/boot/app-boot/README.md',

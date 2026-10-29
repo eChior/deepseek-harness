@@ -236,6 +236,7 @@
 
     { "path": "./packages/api/account-controller" },
     { "path": "./packages/api/redaction-controller" },
+    { "path": "./packages/api/skill-repo-controller" },
     { "path": "./packages/credentials/deepseek-account-platform" },
     { "path": "./packages/credentials/hrzszy-account" },
     { "path": "./packages/credentials/deepseek-account" },

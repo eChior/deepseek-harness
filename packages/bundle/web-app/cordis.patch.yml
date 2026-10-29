@@ -151,6 +151,12 @@
     - id: redaction-controller
       name: '@deepseek-ai/dsh-api-redaction-controller'
 
+    # Publishing a local skill into the department skill repository. The provider
+    # is mounted by the base profile; this row republishes its file operations
+    # over Typert Remote so the settings page can offer them.
+    - id: skill-repo-controller
+      name: '@deepseek-ai/dsh-api-skill-repo-controller'
+
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
@@ -318,6 +324,11 @@
     # replacement counter.
     - id: ui-settings-redaction
       name: '@deepseek-ai/dsh-client-ui-settings-redaction'
+
+    # Skill publishing tab in the same section: one row per skill this machine
+    # holds, and the button that sends it to the department repository.
+    - id: ui-settings-skills
+      name: '@deepseek-ai/dsh-client-ui-settings-skills'
 
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'

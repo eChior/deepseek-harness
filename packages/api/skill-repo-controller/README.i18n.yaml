@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/api/skill-repo-controller/README.md
+/:
+  en: bc6f8181d49c908c
+  zh: 657fd0af0628343d
+/deepseek-ai-dsh-api-skill-repo-controller:
+  en: b3f8ef3275691739
+  zh: 46613ae05c09870e
+/deepseek-ai-dsh-api-skill-repo-controller/summary:
+  en: 6543cacf95ef42a8
+  zh: 0444b7350d0b682e
+/deepseek-ai-dsh-api-skill-repo-controller/use-this-package:
+  en: 6a6bd97520b4d4bd
+  zh: 4b905924ab421cda
+/deepseek-ai-dsh-api-skill-repo-controller/understand-the-implementation:
+  en: 5c5fa1a7e35ecdbb
+  zh: df1ee19fdf23a98c
+/deepseek-ai-dsh-api-skill-repo-controller/model-experience:
+  en: 1adf8fd446d9df57
+  zh: 422441adbbbd125b
+/deepseek-ai-dsh-api-skill-repo-controller/model-experience/kv-cache-effect:
+  en: 60677d97d2c7b372
+  zh: 1892b1a99a989c04
+/deepseek-ai-dsh-api-skill-repo-controller/known-limitations-and-deferred-work:
+  en: e24056e25e1b0f71
+  zh: a1af49e49161f5d4
