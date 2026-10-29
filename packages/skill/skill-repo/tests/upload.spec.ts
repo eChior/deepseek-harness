@@ -38,7 +38,7 @@ describe('giteaTarget', () => {
 
 describe('encodePath', () => {
   it('escapes each segment and keeps the separators', () => {
-    expect(encodePath('departments/研发部/a b.md')).toBe('departments/%E7%A0%94%E5%8F%91%E9%83%A8/a%20b.md')
+    expect(encodePath('研发部/a b.md')).toBe('%E7%A0%94%E5%8F%91%E9%83%A8/a%20b.md')
   })
 })
 
@@ -84,8 +84,8 @@ describe('uploadSkillFiles', () => {
   it('writes a new path, leaves an identical one and refuses a different one', async () => {
     const calls: string[] = []
     const published = new Map<string, string>([
-      ['departments/研发部/demo/SAME.md', Buffer.from('same').toString('base64')],
-      ['departments/研发部/demo/OTHER.md', Buffer.from('theirs').toString('base64')],
+      ['研发部/demo/SAME.md', Buffer.from('same').toString('base64')],
+      ['研发部/demo/OTHER.md', Buffer.from('theirs').toString('base64')],
     ])
     vi.stubGlobal('fetch', async (url: string, init?: { method?: string; body?: string }) => {
       calls.push(`${init?.method ?? 'GET'} ${url}`)
@@ -104,7 +104,7 @@ describe('uploadSkillFiles', () => {
       target,
       token: 'secret',
       branch: 'main',
-      directory: 'departments/研发部/demo',
+      directory: '研发部/demo',
       contents: {
         files: [
           { path: 'NEW.md', bytes: new TextEncoder().encode('new') },
@@ -118,7 +118,7 @@ describe('uploadSkillFiles', () => {
     expect(outcome).toEqual({
       written: 1,
       unchanged: 1,
-      conflicts: ['departments/研发部/demo/OTHER.md'],
+      conflicts: ['研发部/demo/OTHER.md'],
       skipped: ['huge.bin'],
     })
     expect(calls.filter(call => call.startsWith('POST'))).toHaveLength(1)

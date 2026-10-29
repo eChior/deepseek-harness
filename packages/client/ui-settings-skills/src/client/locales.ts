@@ -2,7 +2,7 @@
 export const zh = {
   tab: '技能上传',
   intro: '把本机的技能发布到部门技能仓库。仓库没有的技能上传，已上传的可以更新成这一版，也可以删除你自己上传的那份。',
-  departmentHint: '技能会落在 departments/<你的部门>/ 下，并记录上传者。其他同事在技能管理器里按需安装，不会被强制同步。',
+  departmentHint: '技能会落在 <你的部门>/<技能名>/ 下，并记录上传者。其他同事在技能管理器里按需安装，不会被强制同步。',
   unavailable: '这台机器没有安装技能仓库插件，无法上传。',
   loading: '读取中…',
   empty: '本机技能目录里没有可上传的技能。',
@@ -40,7 +40,7 @@ export const zh = {
 export const en = {
   tab: 'Skill upload',
   intro: 'Publish a skill from this machine into the department skill repository. Upload one the repository does not hold yet, update it to this version, or delete the copy you published.',
-  departmentHint: 'Skills land under departments/<your department>/ with the uploader recorded. Colleagues install them from the skills manager when they want them; nothing is synced by force.',
+  departmentHint: 'Skills land under <your department>/<skill name>/ with the uploader recorded. Colleagues install them from the skills manager when they want them; nothing is synced by force.',
   unavailable: 'The skill repository plugin is not installed on this machine, so nothing can be published.',
   loading: 'Reading…',
   empty: 'No skill in the local skills directory can be published.',

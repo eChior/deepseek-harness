@@ -340,9 +340,9 @@ export interface RemoteSkill {
  * Group the department tree into skills, reading each `SKILL.md` for its
  * version and its `.uploader.json` for who published it.
  *
- * Only `departments/<department>/<skill>/` paths count: the top-level `skills/`
- * tree is the shared catalogue, which the mirror already publishes, so showing
- * it here would duplicate every row.
+ * Only `<department>/<skill>/` paths count: the shared catalogue under
+ * `sharedRoot` is what the mirror already publishes, so showing it here would
+ * duplicate every row.
  * @param options - Target, token, branch and the whole tree.
  * @returns One entry per department skill, sorted by department then name.
  */
@@ -351,14 +351,15 @@ export async function readDepartmentSkills(options: {
   readonly token: string
   readonly branch: string
   readonly tree: readonly RemoteFile[]
+  readonly sharedRoot: string
 }): Promise<readonly RemoteSkill[]> {
-  const { target, token, branch, tree } = options
+  const { target, token, branch, tree, sharedRoot } = options
   const grouped = new Map<string, RemoteFile[]>()
   for (const file of tree) {
     const parts = file.path.split('/')
-    if (parts.length < 4) continue
-    if (parts[0] !== 'departments') continue
-    const key = `${parts[1]}/${parts[2]}`
+    if (parts.length < 3) continue
+    if (parts[0] === sharedRoot) continue
+    const key = `${parts[0]}/${parts[1]}`
     const bucket = grouped.get(key)
     if (bucket === undefined) grouped.set(key, [file])
     else bucket.push(file)
@@ -366,7 +367,7 @@ export async function readDepartmentSkills(options: {
   const skills: RemoteSkill[] = []
   for (const [key, files] of grouped) {
     const [department, name] = key.split('/') as [string, string]
-    const directory = `departments/${key}`
+    const directory = key
     const manifestPath = `${directory}/SKILL.md`
     const manifest = files.find(file => file.path === manifestPath)
     if (manifest === undefined) continue

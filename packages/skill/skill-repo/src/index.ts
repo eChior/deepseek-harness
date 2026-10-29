@@ -173,13 +173,11 @@ export function skillsDirectoryPath(config: Pick<Config, 'directory' | 'skillsDi
 }
 
 /**
- * Repository directory that holds the department-scoped skills.
- *
- * The mirror only publishes `skillsDirectory`, so everything under this root is
- * skipped on purpose: a colleague installs a department's skill from the same
- * repository through the skills manager, when they want it.
+ * A department-scoped skill lives at `<department>/<skill>/`, beside the shared
+ * `skills/` tree instead of under a wrapper of its own, so one subscription that
+ * scans the whole repository lists both kinds. The mirror only publishes
+ * `skillsDirectory`, so a colleague installs a department's skill deliberately.
  */
-const DEPARTMENT_ROOT = 'departments'
 
 /** Department recorded when the roster cannot place the uploader. */
 export const UNASSIGNED_DEPARTMENT = '未分配'
@@ -301,7 +299,7 @@ export class SkillRepository extends Service {
       target,
       token,
       branch: this.config.branch,
-      directory: `${DEPARTMENT_ROOT}/${department}/${name}`,
+      directory: `${department}/${name}`,
       contents: { files, skipped: contents.skipped },
       message: `skill: ${name}${uploader.name === null ? '' : ` by ${uploader.name}`}${uploader.department === null ? '' : ` (${uploader.department})`}${mode === 'update' ? ' (replace)' : ''}`,
       overwrite: mode === 'update',
@@ -326,7 +324,7 @@ export class SkillRepository extends Service {
     const uploader = await this.uploader()
     const department = uploader.department ?? UNASSIGNED_DEPARTMENT
     const tree = await readRepositoryTree({ target, token, branch: this.config.branch })
-    const published = await readDepartmentSkills({ target, token, branch: this.config.branch, tree })
+    const published = await readDepartmentSkills({ target, token, branch: this.config.branch, tree, sharedRoot: this.sharedRoot })
     const mine = published.find(skill => skill.department === department && skill.name === name)
     if (mine === undefined) throw new Error(`skill-repo: ${name} is not published under ${department}`)
     if (mine.uploader === null || mine.uploader !== uploader.name) {
@@ -384,6 +382,11 @@ export class SkillRepository extends Service {
     return 0
   }
 
+  /** Root the mirror publishes; every other top-level folder is a department. */
+  private get sharedRoot(): string {
+    return this.config.skillsDirectory
+  }
+
   /**
    * Every department skill the repository holds, read once from its tree.
    * @returns One entry per published department skill; empty when the token or
@@ -395,7 +398,7 @@ export class SkillRepository extends Service {
     if (target === undefined || token === '') return []
     try {
       const tree = await readRepositoryTree({ target, token, branch: this.config.branch })
-      const skills = await readDepartmentSkills({ target, token, branch: this.config.branch, tree })
+      const skills = await readDepartmentSkills({ target, token, branch: this.config.branch, tree, sharedRoot: this.sharedRoot })
       return skills.map(skill => ({
         name: skill.name,
         department: skill.department,
@@ -424,7 +427,7 @@ export class SkillRepository extends Service {
     let published: readonly RemoteSkill[] = []
     if (target !== undefined && token !== '') {
       published = await readRepositoryTree({ target, token, branch: this.config.branch })
-        .then(tree => readDepartmentSkills({ target, token, branch: this.config.branch, tree }))
+        .then(tree => readDepartmentSkills({ target, token, branch: this.config.branch, tree, sharedRoot: this.sharedRoot }))
         .catch(() => [])
     }
     return locals.map((local) => {
