@@ -200,6 +200,45 @@ export function credentialStoreFrom(ctx: Context): CredentialStore {
  * @param ctx - the plugin context carrying the optional `ctx.credentials`.
  * @returns the auth context to hand `createModels()`.
  */
+/** The credential reference the deployment's Qwen route authenticates with. */
+const DEPARTMENT_KEY_REF = 'QWEN_API_KEY'
+
+/**
+ * The Qwen key this build assigned to the signed-in colleague's department.
+ *
+ * The deployment hands every department its own key, and the account provider
+ * already knows which department the colleague belongs to: the roster answers
+ * that from the account name.  Both services are read as optional, so a
+ * composition that mounts neither keeps authenticating the way it did before.
+ * @param ctx - the plugin context carrying the optional account and roster services.
+ * @returns the key, or undefined when nobody is signed in or the build shipped no table.
+ */
+async function departmentKey(ctx: Context): Promise<string | undefined> {
+  const account = ctx.get('deepseekAccount') as unknown as {
+    getProfile?: (client: unknown) => Promise<{ status?: string; value?: { name?: string } } | null>
+    qwenKeyFor?: (department: string | null) => string | undefined
+  } | undefined
+  if (account?.getProfile === undefined || account.qwenKeyFor === undefined) return undefined
+  let profile: { status?: string; value?: { name?: string } } | null
+  try {
+    profile = await account.getProfile({
+      id: 'local',
+      version: '0.0.0',
+      locale: 'zh-CN',
+      timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
+    })
+  } catch {
+    return undefined
+  }
+  const name = profile?.value?.name
+  if (name === undefined || name === '') return undefined
+  const redaction = ctx.get('redaction') as unknown as {
+    identify?: (account: string) => { department?: string } | undefined
+  } | undefined
+  const department = redaction?.identify?.(name)?.department ?? null
+  return account.qwenKeyFor(department)
+}
+
 export function authContextFrom(ctx: Context): AuthContext {
   return {
     async env(name) {
@@ -210,6 +249,10 @@ export function authContextFrom(ctx: Context): AuthContext {
         const credentials = ctx.get('credentials')
         const hit = await credentials?.resolve(credentialRef(name))
         if (hit !== undefined) return hit.value
+      }
+      if (name === DEPARTMENT_KEY_REF) {
+        const issued = await departmentKey(ctx)
+        if (issued !== undefined) return issued
       }
       return launchEnvironmentOf(ctx).get(name)?.value
     },

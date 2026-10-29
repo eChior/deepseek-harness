@@ -14,6 +14,8 @@ on:
       - '.github/workflows/desktop-linux.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      # allowBuilds lives here: flipping one entry changes what the install runs.
+      - 'pnpm-workspace.yaml'
       # The packaging and release steps live here: `package-target.ts` runs
       # `release:pack`, and a reader under scripts/ decided whether a lane could
       # read the archives that step wrote.
@@ -123,6 +125,21 @@ jobs:
           printf '%s\n' "$DSH_ROSTER_KEY" | tr -d '[:space:]' > "$key_path"
           printf '\n' >> "$key_path"
           echo "Wrote the staff roster key to $key_path" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write the department Qwen keys
+        env:
+          DSH_QWEN_KEYS: ${{ secrets.DSH_QWEN_KEYS }}
+        # Each department authenticates against the Qwen gateway with its own key. The keys are
+        # secrets, so the lane materialises them into the account package before packaging. A build
+        # without the secret still packages: the route then only honours a key the colleague typed.
+        run: |
+          set -euo pipefail
+          node scripts/gen-qwen-keys.mjs
+          if [ -z "${DSH_QWEN_KEYS:-}" ]; then
+            echo 'No DSH_QWEN_KEYS secret is set; packaging without department keys.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Wrote the department Qwen keys.' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Write apps/desktop/.env.linux
         run: |

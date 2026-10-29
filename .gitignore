@@ -51,6 +51,9 @@ native/system/test/bin/
 # The WPS-backed Office converter is compiled from the source beside it during packaging.
 apps/desktop/resources/wps/wps2pdf
 
+# Per-department Qwen keys are deployment secrets: the packaging step writes this file from
+# the DSH_QWEN_KEYS secret, and a build without the secret ships an empty table.
+packages/credentials/hrzszy-account/assets/qwen-keys.json
 # The staff roster travels as ciphertext; the key it was sealed with is a CI secret.
 packages/security/redaction/assets/roster.key
 

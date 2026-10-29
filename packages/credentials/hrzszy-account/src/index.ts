@@ -41,6 +41,7 @@ import {
   RworkProtocolError,
 } from './protocol.ts'
 import { RWORK_PROVIDER, type ExternalAccountSession, type RworkUser } from './types.ts'
+import { NO_KEYS, pickDepartmentKey, readDepartmentKeys, type DepartmentKeys } from './keys.ts'
 
 const KEY = credentialKey('hrzszy-account', 'default')
 
@@ -101,6 +102,7 @@ export default class RworkAccount extends DeepSeekAccount {
   private readonly attemptTimeout: number
   private attempt: Attempt | undefined
   private readonly listeners = new Set<(state: AccountView) => void>()
+  private keys: DepartmentKeys = NO_KEYS
 
   /**
    * @param ctx - context owning this provider.
@@ -113,11 +115,29 @@ export default class RworkAccount extends DeepSeekAccount {
     this.appId = config.appId ?? RWORK_DEFAULT_APP_ID
     this.requestTimeout = config.requestTimeoutMs ?? 15_000
     this.attemptTimeout = config.attemptTimeoutMs ?? 600_000
+    ctx.effect(() => {
+      void readDepartmentKeys().then((keys) => {
+        this.keys = keys
+      })
+      return () => undefined
+    })
   }
 
   override async getState(): Promise<AccountView> {
     const record = await this.ctx.credentials.readRecord(KEY)
     return this.view(record === undefined ? 'signed-out' : 'credential-stored')
+  }
+
+  /**
+   * The Qwen API key this build assigned to a department.
+   *
+   * The route asks through this instead of reading a file, so a build that
+   * shipped no table answers undefined and nothing else changes.
+   * @param department - the department of the signed-in colleague, if known.
+   * @returns the key, or undefined when the table covers neither the department nor the catch-all entry.
+   */
+  qwenKeyFor(department: string | null): string | undefined {
+    return pickDepartmentKey(this.keys, department)
   }
 
   override async getProfile(client: AccountClientMetadata): Promise<AccountDetails['profile'] | null> {
