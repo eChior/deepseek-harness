@@ -14,21 +14,27 @@ kind: "package-reference"
 ## 目录
 
 - [使用本包](#use-this-package)
-- [理解实现](#understand-the-implementation)
+- [实现说明](#understand-the-implementation)
 - [进一步探索](#further-exploration)
 - [开发备注](#dev-note)
 - [模型体验](#model-experience)
-- [已知限制与延后工作](#known-limitations-and-deferred-work)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
+
+<a id="use-this-package"></a>
 
 ## 使用本包
 
 打开设置里的插件分区，选择**技能上传**标签页。标签页在插件激活时不读取任何 Remote：选中它才会挂载组件，组件随后调用 `ctx.remote.skillRepo.skills()`。**刷新**重跑同一次读取，**上传**发布该行对应的技能。
 
+<a id="understand-the-implementation"></a>
+
 ## 实现说明
 
 插件只注册一个插槽和一份词表。`SkillUploadTab` 持有清单与每个技能各自的上传状态，因此某一行失败不会影响其它行。`ctx.remote.skillRepo.upload({ name })` 只传目录名；部门与上传者记录都由提供方决定。
+
+<a id="further-exploration"></a>
 
 ## 进一步探索
 
@@ -39,11 +45,15 @@ kind: "package-reference"
 
 -----
 
+<a id="dev-note"></a>
+
 ## 开发备注
 
 本页与脱敏页同构：同一个槽位、同样的 Locale 注册、同样的 Remote 解包。给某行加一列，意味着加一个 Locale 键，而不是搭一张表。
 
 -----
+
+<a id="model-experience"></a>
 
 ## 模型体验
 
@@ -52,6 +62,8 @@ kind: "package-reference"
 #### KV Cache 影响
 
 无；该包不组装任何提供方请求。
+
+<a id="known-limitations-and-deferred-work"></a>
 
 ## 已知限制与延期工作
 

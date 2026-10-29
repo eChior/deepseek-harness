@@ -14,21 +14,27 @@ kind: "package-reference"
 ## 目录
 
 - [使用本包](#use-this-package)
-- [理解实现](#understand-the-implementation)
+- [实现说明](#understand-the-implementation)
 - [进一步探索](#further-exploration)
 - [开发备注](#dev-note)
 - [模型体验](#model-experience)
-- [已知限制与延后工作](#known-limitations-and-deferred-work)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
+
+<a id="use-this-package"></a>
 
 ## 使用本包
 
 挂在提供方旁边即可。它依赖 `skillRepo` 服务，并注册 `skillRepo` Remote 命名空间，浏览器通过 `ctx.remote.skillRepo` 访问。
 
+<a id="understand-the-implementation"></a>
+
 ## 实现说明
 
 `skills()` 把提供方的本机清单映射成 `SkillRepoLocalView`。`upload({ name })` 校验目录名，并返回写入了多少文件、多少个已经一致，以及哪些仓库路径里已经是不同的内容——这些只做报告、绝不覆盖，因此一个同事不会替换掉另一个同事的技能。
+
+<a id="further-exploration"></a>
 
 ## 进一步探索
 
@@ -39,11 +45,15 @@ kind: "package-reference"
 
 -----
 
+<a id="dev-note"></a>
+
 ## 开发备注
 
 两个 `@Remote` 方法，没有状态：`skills()` 读 provider，`upload()` 请它发布一个目录。文件落在哪里完全由 provider 决定，因此改布局只动一个包。
 
 -----
+
+<a id="model-experience"></a>
 
 ## 模型体验
 
@@ -52,6 +62,8 @@ kind: "package-reference"
 #### KV Cache 影响
 
 无；该包不组装任何提供方请求。
+
+<a id="known-limitations-and-deferred-work"></a>
 
 ## 已知限制与延期工作
 
