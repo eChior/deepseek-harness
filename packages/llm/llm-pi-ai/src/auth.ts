@@ -213,12 +213,18 @@ const DEPARTMENT_KEY_REF = 'QWEN_API_KEY'
  * @param ctx - the plugin context carrying the optional account and roster services.
  * @returns the key, or undefined when nobody is signed in or the build shipped no table.
  */
-async function departmentKey(ctx: Context): Promise<string | undefined> {
+/**
+ * The name the signed-in colleague's profile carries. It travels to the
+ * gateway as the `x-dsh-user` attribution header, which is how the upstream
+ * counts usage per person instead of per department key.
+ * @param ctx - context whose account service answers the profile.
+ * @returns the profile name, or undefined while nobody is signed in.
+ */
+export async function colleagueName(ctx: Context): Promise<string | undefined> {
   const account = ctx.get('deepseekAccount') as unknown as {
     getProfile?: (client: unknown) => Promise<{ status?: string; value?: { name?: string } } | null>
-    qwenKeyFor?: (department: string | null) => string | undefined
   } | undefined
-  if (account?.getProfile === undefined || account.qwenKeyFor === undefined) return undefined
+  if (account?.getProfile === undefined) return undefined
   let profile: { status?: string; value?: { name?: string } } | null
   try {
     profile = await account.getProfile({
@@ -231,7 +237,16 @@ async function departmentKey(ctx: Context): Promise<string | undefined> {
     return undefined
   }
   const name = profile?.value?.name
-  if (name === undefined || name === '') return undefined
+  return name === undefined || name === '' ? undefined : name
+}
+
+async function departmentKey(ctx: Context): Promise<string | undefined> {
+  const account = ctx.get('deepseekAccount') as unknown as {
+    qwenKeyFor?: (department: string | null) => string | undefined
+  } | undefined
+  if (account?.qwenKeyFor === undefined) return undefined
+  const name = await colleagueName(ctx)
+  if (name === undefined) return undefined
   const redaction = ctx.get('redaction') as unknown as {
     identify?: (account: string) => { department?: string } | undefined
   } | undefined

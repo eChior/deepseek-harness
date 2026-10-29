@@ -58,11 +58,13 @@ async function harness(baseURL: string, overrides: Record<string, unknown> = {})
 function adapterOf(
   providers: Record<string, LlmPiAi.PiAiProviderProfile>,
   apiKey: string | undefined = 'test-key',
+  user?: string,
 ): PiAiAdapter {
   return new PiAiAdapter({
     profiles: () => resolveProfiles(providers),
     resolveApiKey: () => Promise.resolve(apiKey),
     auth: memoryAuth(),
+    ...user === undefined ? {} : { resolveUser: () => Promise.resolve(user) },
   })
 }
 
@@ -120,6 +122,32 @@ describe('PiAiAdapter provider routing', () => {
     })
     await assemble(ctx, { model: 'deepseek-flash', messages: [] })
     expect(server.headers[0]?.['x-company']).toBe('private')
+    expect(server.headers[0]?.['user-agent']).toBe(userAgent())
+  })
+
+  it('names the signed-in colleague on the request so the gateway can count per person', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['deepseek'], adapterOf(
+      { deepseek: { apiKeyEnv: 'PI_TEST_KEY', baseURL: server.url } },
+      'test-key',
+      '毛子艺',
+    ))
+    const prepared = await ctx.llm.prepareCall({ provider: 'deepseek', model: 'deepseek-flash' })
+    for await (const chunk of prepared.stream({ ...prepared.config, messages: [] })) void chunk
+    // A header value is ASCII, so the name travels percent-encoded.
+    expect(server.headers[0]?.['x-dsh-user']).toBe('%E6%AF%9B%E5%AD%90%E8%89%BA')
+  })
+
+  it('sends no user header while nobody is signed in', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['deepseek'], adapterOf({ deepseek: { apiKeyEnv: 'PI_TEST_KEY', baseURL: server.url } }))
+    const prepared = await ctx.llm.prepareCall({ provider: 'deepseek', model: 'deepseek-flash' })
+    for await (const chunk of prepared.stream({ ...prepared.config, messages: [] })) void chunk
+    expect(server.headers[0]?.['x-dsh-user']).toBeUndefined()
     expect(server.headers[0]?.['user-agent']).toBe(userAgent())
   })
 

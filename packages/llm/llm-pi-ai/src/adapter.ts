@@ -94,6 +94,8 @@ export interface PiAiAdapterOptions {
   auth: PiAiAuthInjection
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
+  /** The signed-in colleague, named on every request so the gateway can count per person. */
+  resolveUser?: () => Promise<string | undefined>
   /** Bridge one attachment reference into the current model-tool execution world. */
   resolveImageAccess?: (attachments: AttachmentStore, ref: ImageAttachmentRef) => ImageAttachmentAccess | undefined
   /**
@@ -201,14 +203,26 @@ function reasoningInfo(
   }
 }
 
-/** Merge deployment headers while removing case-insensitive attribution collisions. */
-function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
+/**
+ * Merge deployment headers while removing case-insensitive attribution collisions.
+ * @param headers - headers the provider profile declares.
+ * @param user - the signed-in colleague, sent percent-encoded because a header
+ * value is ASCII while the name is not.
+ * @returns the headers to send on this request.
+ */
+function requestHeaders(
+  headers: Readonly<Record<string, string>> | undefined,
+  user: string | undefined,
+): Record<string, string> {
   const attribution = attributionHeaders()
   const reserved = new Set(Object.keys(attribution).map(name => name.toLowerCase()))
-  return {
+  const merged = {
     ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
     ...attribution,
   }
+  // `x-dsh-user` is how the gateway counts usage per person; the department
+  // arrives on its own as the credential the request is billed to.
+  return user === undefined || user === '' ? merged : { ...merged, 'x-dsh-user': encodeURIComponent(user) }
 }
 
 /**
@@ -377,6 +391,7 @@ export class PiAiAdapter extends LlmAdapter {
             maxBytes: profile.requestImageMaxBytes,
           },
         }, onReplayDegrade)
+      const user = await this.config.resolveUser?.()
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
@@ -385,7 +400,7 @@ export class PiAiAdapter extends LlmAdapter {
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions.
-        headers: requestHeaders(profile.headers),
+        headers: requestHeaders(profile.headers, user),
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false
