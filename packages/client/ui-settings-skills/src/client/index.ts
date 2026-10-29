@@ -20,17 +20,10 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the settings SlotMap and the Plugins page section this tab joins.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { SkillUploadTab, type SkillUploadTabInjected } from './SkillUploadTab.tsx'
-import { en, zh, type SkillUploadLocaleKey } from './locales.ts'
+import { en, zh } from './locales.ts'
 
 export type { SkillUploadTabInjected, SkillUploadTabProps } from './SkillUploadTab.tsx'
 export type { SkillUploadLocaleKey } from './locales.ts'
-
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    /** Skill publishing page copy. */
-    'settings.skills': SkillUploadLocaleKey
-  }
-}
 
 /** Locale namespace this page owns. */
 const NS = 'settings.skills'

@@ -1,3 +1,12 @@
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** Skill publishing page copy. */
+    'settings.skills': SkillUploadLocaleKey
+  }
+}
+
 /** Copy for the skill publishing tab. */
 export const zh = {
   tab: '技能上传',
@@ -34,6 +43,15 @@ export const zh = {
   uploader: '由 {name} 上传',
   uploaderUnknown: '上传者未记录',
   notOwned: '不是你上传的，不能删除',
+}
+
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** Skill publishing page copy. */
+    'settings.skills': SkillUploadLocaleKey
+  }
 }
 
 /** Copy for the skill publishing tab. */

@@ -71,14 +71,12 @@ const UPLOAD: SkillRepoUploadView = {
   skipped: [],
 }
 
-/* oxlint-disable typescript/no-unsafe-assignment -- the locale table is a plain record. */
 /** Translate a key the way the Settings slot renderer's locale binding does. */
 const t = ((key: SkillUploadLocaleKey, params?: Record<string, string | number>): string =>
   Object.entries(params ?? {}).reduce(
     (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
     zh[key],
   )) as SkillUploadTabProps['t']
-/* oxlint-enable typescript/no-unsafe-assignment */
 
 /** Build the injected face, overriding only the methods a case exercises. */
 function face(overrides: Partial<SkillUploadTabInjected> = {}): SkillUploadTabInjected {
@@ -93,7 +91,6 @@ function face(overrides: Partial<SkillUploadTabInjected> = {}): SkillUploadTabIn
 
 /** Build the props the Settings slot renderer would assemble. */
 function props(overrides: Partial<SkillUploadTabInjected> = {}): SkillUploadTabProps {
-  // oxlint-disable-next-line typescript/no-unsafe-assignment -- the slot renderer fills the runtime half.
   return { t, ...face(overrides) } as SkillUploadTabProps
 }
 
