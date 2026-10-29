@@ -79,11 +79,14 @@
 
     # The transport-independent default for Agents created by entry points.
     # Settings may supply a saved selection; consumers read it at creation time.
+    # This distribution starts on the intranet Qwen gateway, so a fresh install
+    # never opens on the official route, which has no credential here and would
+    # greet the colleague with "no model configured".
     - id: agent-default-model
       name: '@deepseek-ai/dsh-agent-default-model'
       config:
-        provider: deepseek-official
-        model: deepseek-flash
+        provider: qwen
+        model: qwen3.8-flash
 
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
