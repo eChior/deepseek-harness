@@ -61,6 +61,8 @@ The provider never throws. An unreachable host, a refused archive, or a timeout 
 
 Publishing is three operations over the department tree. `skillEntries()` reads one tree listing and pairs each local skill with the copy its department already published, so the page can say which side is newer; `uploadSkill(name, mode)` sends a skill, replacing an existing copy only when the caller asked for an update; `removeSkill(name)` deletes the files of a copy whose `.uploader.json` names the signed-in colleague, and refuses any other. `departmentSkills()` answers what every department has published, which is how a colleague finds a skill without opening the repository by hand.
 
+Publishing stamps the department into the manifest: the skills manager names a skill after the `name` in its frontmatter and refuses a duplicate, so two departments publishing `proposal-scoring` would collide. The copy written under `<skillsDirectory>/<department>/<name>/` therefore carries `name: <department>-<name>`, while the local copy keeps what its author wrote.
+
 When the remote never answers and the machine has no readable mirror — a fresh install that has never seen the intranet, or a mirror left empty or half-written by an interrupted sync — `seed()` copies the skills this package carries out of `bundledDirectory` through the same staging step, publishes them, and reports `source: 'bundled'` with a null revision. A machine whose mirror still holds a readable skill keeps the remote copy instead, because that one is newer than the one this build shipped.
 
 ## Model Experience
@@ -70,6 +72,7 @@ Indirectly, through the skill catalog: the mirror only decides which skill files
 #### KV Cache effect
 
 No model request prefix changes.
+
 
 ## Known Limitations and Deferred Work
 

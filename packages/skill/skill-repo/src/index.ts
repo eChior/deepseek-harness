@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 import {
   UPLOADER_FILE,
   deleteSkillFiles,
+  departmentManifest,
   giteaTarget,
   parseSkillManifest,
   readDepartmentSkills,
@@ -294,9 +295,13 @@ export class SkillRepository extends Service {
     const uploader = await this.uploader()
     const stamp = new Date().toISOString()
     const record = JSON.stringify({ name, uploader: uploader.name, department: uploader.department, uploadedAt: stamp }, null, 2)
-    const files = contents.files.filter(file => file.path !== UPLOADER_FILE)
-    files.push({ path: UPLOADER_FILE, bytes: new TextEncoder().encode(`${record}\n`) })
     const department = uploader.department ?? UNASSIGNED_DEPARTMENT
+    const files = contents.files
+      .filter(file => file.path !== UPLOADER_FILE)
+      .map(file => (file.path === 'SKILL.md'
+        ? { path: file.path, bytes: departmentManifest(file.bytes, department, name) }
+        : file))
+    files.push({ path: UPLOADER_FILE, bytes: new TextEncoder().encode(`${record}\n`) })
     const outcome = await uploadSkillFiles({
       target,
       token,

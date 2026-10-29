@@ -61,6 +61,8 @@ kind: "package-reference"
 
 发布是三件针对部门目录树的操作。`skillEntries()` 只读一次目录树，把每个本机技能与它部门已发布的那一份配对，页面据此判断哪一侧更新；`uploadSkill(name, mode)` 发送一个技能，只有调用方要求更新时才替换已有副本；`removeSkill(name)` 删除 `.uploader.json` 里署着当前登录者的那份副本的文件，其它人的一律拒绝。`departmentSkills()` 回答各部门发布过什么，同事不必手工打开仓库就能找到技能。
 
+发布时会把部门写进 manifest：技能管理器按 frontmatter 的 `name` 给技能命名，且拒绝重名，两个部门都发布 `proposal-scoring` 就会撞名。因此写到 `<skillsDirectory>/<部门>/<技能名>/` 的那一份带 `name: <部门>-<技能名>`，本机那一份仍保留作者原本写的内容。
+
 当远端始终无应答、而这台机器没有可读的镜像时 —— 从未连过内网的首次安装，或被中断的同步留下的空目录、半成品目录 —— `seed()` 会通过同样的暂存步骤把本包携带的技能从 `bundledDirectory` 复制出来并发布，同时以 `source: 'bundled'` 与空的版本号上报。镜像里仍读得到技能的机器保留远端那一份，因为它比本次构建携带的更新。
 
 <a id="model-experience"></a>
@@ -72,6 +74,7 @@ kind: "package-reference"
 #### KV 缓存影响
 
 模型请求前缀不变。
+
 
 ## 已知限制与待办
 

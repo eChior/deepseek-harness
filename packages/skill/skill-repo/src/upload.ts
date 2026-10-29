@@ -347,6 +347,43 @@ export interface RemoteSkill {
  * @param options - Target, token, branch and the whole tree.
  * @returns One entry per department skill, sorted by department then name.
  */
+/**
+ * Stamp a department into the published manifest so two departments can publish
+ * a skill with the same name.
+ *
+ * The skills manager names a skill after the `name` in its frontmatter, and it
+ * refuses a second one with the same name. Publishing `proposal-scoring` for
+ * two departments would therefore collide; the department is written into the
+ * name instead, and the local copy keeps whatever its author wrote.
+ * @param bytes - The manifest as the author wrote it.
+ * @param department - Department recorded for the uploader.
+ * @param name - Skill name, the folder it was read from.
+ * @returns The manifest with `name: <department>-<name>`.
+ */
+export function departmentManifest(bytes: Uint8Array, department: string, name: string): Uint8Array {
+  const text = new TextDecoder().decode(bytes)
+  const label = `${department}-${name}`
+  const opening = /^---\r?\n/u.exec(text)
+  if (opening === null) return bytes
+  const end = text.indexOf('\n---', opening[0].length)
+  if (end < 0) return bytes
+  const head = text.slice(opening[0].length, end + 1)
+  const next = /^name:[ \t]*(.+)$/mu.test(head)
+    ? head.replace(/^name:[ \t]*(.+)$/mu, (line, value: string) => (value.trim() === label ? line : `name: ${label}`))
+    : `name: ${label}\n${head}`
+  return new TextEncoder().encode(`${opening[0]}${next}${text.slice(end + 1)}`)
+}
+
+/**
+ * Read what every department has published under the shared skills tree.
+ *
+ * A directory one level below `sharedRoot` that holds a `SKILL.md` is a shared
+ * skill; one two levels below it is a department skill, because the mirror only
+ * publishes the first level and never hands these to colleagues automatically.
+ *
+ * @param options target, token, branch, the tree listing, and the shared root.
+ * @returns one entry per department skill, ordered by department and then name.
+ */
 export async function readDepartmentSkills(options: {
   readonly target: GiteaTarget
   readonly token: string
