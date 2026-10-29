@@ -221,7 +221,7 @@ const DEPARTMENT_KEY_REF = 'QWEN_API_KEY'
  * @returns the profile name, or undefined while nobody is signed in.
  */
 export async function colleagueName(ctx: Context): Promise<string | undefined> {
-  const account = ctx.get('deepseekAccount') as unknown as {
+  const account = ctx.get('deepseekAccount') as {
     getProfile?: (client: unknown) => Promise<{ status?: string; value?: { name?: string } } | null>
   } | undefined
   if (account?.getProfile === undefined) return undefined
@@ -241,19 +241,26 @@ export async function colleagueName(ctx: Context): Promise<string | undefined> {
 }
 
 async function departmentKey(ctx: Context): Promise<string | undefined> {
-  const account = ctx.get('deepseekAccount') as unknown as {
+  const account = ctx.get('deepseekAccount') as {
     qwenKeyFor?: (department: string | null) => string | undefined
   } | undefined
   if (account?.qwenKeyFor === undefined) return undefined
   const name = await colleagueName(ctx)
   if (name === undefined) return undefined
-  const redaction = ctx.get('redaction') as unknown as {
+  const redaction = ctx.get('redaction') as {
     identify?: (account: string) => { department?: string } | undefined
   } | undefined
   const department = redaction?.identify?.(name)?.department ?? null
   return account.qwenKeyFor(department)
 }
 
+/**
+ * Build the pi-ai auth context over this plugin's seams: stored credentials
+ * first, the department-issued key for the reserved reference, then the launch
+ * environment as the fallback plane.
+ * @param ctx - context whose services answer credentials and the environment.
+ * @returns the auth context every collection this plugin builds resolves through.
+ */
 export function authContextFrom(ctx: Context): AuthContext {
   return {
     async env(name) {

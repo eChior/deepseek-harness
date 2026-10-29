@@ -1519,7 +1519,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-hrzszy-account`
 
 - `inject`: `credentials`
-- `source`: [`packages/credentials/hrzszy-account/src/index.ts:48`](../packages/credentials/hrzszy-account/src/index.ts)
+- `source`: [`packages/credentials/hrzszy-account/src/index.ts:49`](../packages/credentials/hrzszy-account/src/index.ts)
 
 ```ts config-catalog
 /** Deployment endpoints and request deadlines. */
@@ -2418,7 +2418,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:117`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:137`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**

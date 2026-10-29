@@ -1553,6 +1553,9 @@
     "ae0162b189937f84fb9a162eabbc7496f7e196c00e960aef4fe8e5b3e4b87d8d": 4,
     "d54d74835af1518a4723a7cc803efc0d4e8e337ebb80b813b6ef76bdb813be17": 1
   },
+  "packages/security/redaction/tests/departments.spec.ts": {
+    "6c2a307cb213c5c659d9e9f14b51df73388573d8a7f25cc18d0eecc1bafc538d": 1
+  },
   "packages/session-query/session-log-export/tests/archive.host.spec.ts": {
     "1d9879c5cd7b3171db3efae89c8fd81db13524d63e6816581453edca88e4abda": 1,
     "201a3f8dd0749071dff38ecd91d998c3bc8da2170b80dabd5f84eed8d1584a22": 1,

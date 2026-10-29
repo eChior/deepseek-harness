@@ -946,6 +946,9 @@ export class RedactionService extends Service {
    * @param account Account name the roster knows, or null while signed out.
    */
   async noteAccount(account: string | null): Promise<void> {
+    // The department directory arrives with the same load, so a reader who reads
+    // the status before it finishes must not be reported as having no department.
+    await this.ready.catch(() => undefined)
     const own = account === null ? null : this.identify(account)?.department ?? null
     if (own === this.own) return
     this.own = own

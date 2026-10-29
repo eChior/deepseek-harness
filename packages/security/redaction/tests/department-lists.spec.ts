@@ -82,7 +82,7 @@ describe('department lists', () => {
     const { cache, termsPath } = await scratch()
     const first = await mount(cache, termsPath)
     await first.redaction.setDepartmentEnabled('研发部', true)
-    first.fiber.dispose()
+    await first.fiber.dispose()
 
     const second = await mount(cache, termsPath)
     expect(second.redaction.departmentLists()[0]?.enabled).toBe(true)

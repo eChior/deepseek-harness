@@ -1846,6 +1846,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'The status after the attempt; `lastError` carries a failure reason.',
       },
       {
+        signature: 'async reloadLocal(): Promise<void>',
+        description: 'Read the uploaded lists and the staff directory, so a synchronous recompile can use both.',
+        parameters: [],
+      },
+      {
         signature: 'redact<T extends RedactablePart>(parts: readonly T[]): T[]',
         description: 'Rewrite the text parts. Parts that carry no text — images, file references, anything this build does not understand — come back untouched, so a caller can hand the result to the next stage exactly as it would have handed the input.',
         parameters: [{ name: 'parts', description: 'Parts a caller is about to turn into a message.' }],
@@ -1887,6 +1892,23 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Offer every pending request to a sink and record how each one ended.\n\nA sink is optional because the default deployment delivers nothing: the queue exists so a machine can hold a request until someone wires a destination, and this method is the seam that destination plugs into. A request the sink refuses stays on disk as rejected with its reason, so the next reader sees what happened instead of watching the entry disappear.',
         parameters: [{ name: 'sink', description: 'destination to offer the requests to; omitted means none is configured.' }],
         returns: 'What the attempt did with the queue.',
+      },
+      {
+        signature: 'async noteAccount(account: string | null): Promise<void>',
+        description: 'Tell the provider which department the signed-in colleague belongs to.\n\nCalled whenever the account is read, so a list that belongs to this reader\'s department takes part without them ticking anything; a no-op when the answer has not changed, because recompiling on every status read would be wasteful.',
+        parameters: [{ name: 'account', description: 'Account name the roster knows, or null while signed out.' }],
+      },
+      {
+        signature: 'departmentLists(): { name: string; enabled: boolean; own: boolean; terms: number; patterns: number; revision: string }[]',
+        description: 'Every department list this machine knows, with the state that explains it.',
+        parameters: [],
+        returns: 'One entry per list, ordered by department name.',
+      },
+      {
+        signature: 'async setDepartmentEnabled(name: string, enabled: boolean): Promise<void>',
+        description: 'Switch one department list on or off for this reader.',
+        parameters: [{ name: 'name', description: 'Department the list belongs to.' }, { name: 'enabled', description: 'Whether the list should take part.' }],
+        throws: ['{LocalTermError} When no list is stored for that department.'],
       },
       {
         signature: 'async mappingsFor(): Promise<readonly RedactionEntry[]>',
@@ -6342,7 +6364,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n}',
   },
   {
     name: 'Registry',

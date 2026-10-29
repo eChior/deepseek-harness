@@ -814,6 +814,9 @@ async load(): Promise<RedactionStatus>
  */
 async refresh(): Promise<RedactionStatus>
 
+/** Read the uploaded lists and the staff directory, so a synchronous recompile can use both. */
+async reloadLocal(): Promise<void>
+
 /**
  * Rewrite the text parts. Parts that carry no text — images, file references,
  * anything this build does not understand — come back untouched, so a caller
@@ -888,6 +891,30 @@ async pendingRequests(): Promise<TermRequest[]>
  * @returns What the attempt did with the queue.
  */
 async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
+
+/**
+ * Tell the provider which department the signed-in colleague belongs to.
+ *
+ * Called whenever the account is read, so a list that belongs to this reader's
+ * department takes part without them ticking anything; a no-op when the answer
+ * has not changed, because recompiling on every status read would be wasteful.
+ * @param account Account name the roster knows, or null while signed out.
+ */
+async noteAccount(account: string | null): Promise<void>
+
+/**
+ * Every department list this machine knows, with the state that explains it.
+ * @returns One entry per list, ordered by department name.
+ */
+departmentLists(): { name: string; enabled: boolean; own: boolean; terms: number; patterns: number; revision: string }[]
+
+/**
+ * Switch one department list on or off for this reader.
+ * @param name Department the list belongs to.
+ * @param enabled Whether the list should take part.
+ * @throws {LocalTermError} When no list is stored for that department.
+ */
+async setDepartmentEnabled(name: string, enabled: boolean): Promise<void>
 
 /**
  * Every pairing the machine can restore right now, read back before answering.
