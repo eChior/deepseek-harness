@@ -157,17 +157,22 @@ async function writePublishedFile(options: {
   readonly path: string
   readonly bytes: Uint8Array
   readonly message: string
+  readonly sha?: string | undefined
 }): Promise<void> {
-  const { target, token, branch, path, bytes, message } = options
+  const { target, token, branch, path, bytes, message, sha } = options
   const url = `${target.api}/repos/${target.owner}/${target.repo}/contents/${encodePath(path)}`
+  // The contents API distinguishes creation (no sha) from replacement (the sha
+  // it handed back for the existing blob): a replacement without it is refused.
+  const payload: Record<string, string> = {
+    content: Buffer.from(bytes).toString('base64'),
+    message,
+    branch,
+  }
+  if (sha !== undefined) payload['sha'] = sha
   const response = await fetch(url, {
-    method: 'POST',
+    method: sha === undefined ? 'POST' : 'PUT',
     headers: { authorization: `token ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      content: Buffer.from(bytes).toString('base64'),
-      message,
-      branch,
-    }),
+    body: JSON.stringify(payload),
   })
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
@@ -199,6 +204,7 @@ export async function uploadSkillFiles(options: {
   readonly directory: string
   readonly contents: SkillContents
   readonly message: string
+  readonly overwrite?: boolean | undefined
 }): Promise<UploadOutcome> {
   const { target, token, branch, directory, contents, message } = options
   let written = 0
@@ -216,7 +222,225 @@ export async function uploadSkillFiles(options: {
       unchanged += 1
       continue
     }
+    if (options.overwrite === true) {
+      // A replacement needs the sha of the blob it replaces, which the tree
+      // listing already handed out; one extra read keeps the call self-contained.
+      const sha = await readPublishedSha({ target, token, branch, path })
+      if (sha === undefined) {
+        await writePublishedFile({ target, token, branch, path, bytes: file.bytes, message })
+      } else {
+        await writePublishedFile({ target, token, branch, path, bytes: file.bytes, message, sha })
+      }
+      written += 1
+      continue
+    }
     conflicts.push(path)
   }
   return { written, unchanged, conflicts, skipped: contents.skipped }
+}
+
+/** One blob the repository tree reports, with the sha an overwrite needs. */
+export interface RemoteFile {
+  readonly path: string
+  readonly sha: string
+}
+
+/**
+ * Read one blob's sha, which the contents API requires to replace it.
+ * @param options - Target, token, branch and repository-relative path.
+ * @returns The sha, or undefined when the path does not exist.
+ */
+async function readPublishedSha(options: {
+  readonly target: GiteaTarget
+  readonly token: string
+  readonly branch: string
+  readonly path: string
+}): Promise<string | undefined> {
+  const { target, token, branch, path } = options
+  const url = `${target.api}/repos/${target.owner}/${target.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`
+  const response = await fetch(url, { headers: { authorization: `token ${token}` } })
+  if (response.status === 404) return undefined
+  if (!response.ok) throw new Error(`gitea: reading ${path} failed with ${String(response.status)}`)
+  const entry = await response.json() as ContentsEntry
+  return typeof entry.sha === 'string' && entry.sha.length > 0 ? entry.sha : undefined
+}
+
+/**
+ * Read every blob in the branch, so a page can answer "is this skill already
+ * there, and is my copy newer" without one request per file.
+ * @param options - Target, token and branch.
+ * @returns One entry per blob, keyed by repository-relative path order.
+ */
+export async function readRepositoryTree(options: {
+  readonly target: GiteaTarget
+  readonly token: string
+  readonly branch: string
+}): Promise<readonly RemoteFile[]> {
+  const { target, token, branch } = options
+  const url = `${target.api}/repos/${target.owner}/${target.repo}/git/trees/${encodeURIComponent(branch)}?recursive=true&per_page=1000`
+  const response = await fetch(url, { headers: { authorization: `token ${token}` } })
+  if (response.status === 404) return []
+  if (!response.ok) throw new Error(`gitea: reading the tree failed with ${String(response.status)}`)
+  const payload = await response.json() as { tree?: readonly { path?: unknown; sha?: unknown; type?: unknown }[] }
+  const blobs: RemoteFile[] = []
+  for (const entry of payload.tree ?? []) {
+    if (entry.type !== 'blob') continue
+    if (typeof entry.path !== 'string' || typeof entry.sha !== 'string') continue
+    blobs.push({ path: entry.path, sha: entry.sha })
+  }
+  return blobs
+}
+
+/** What a `SKILL.md` frontmatter says about one skill. */
+export interface SkillManifest {
+  readonly version: string | null
+  readonly description: string | null
+}
+
+/**
+ * Read the version and description out of a `SKILL.md` body.
+ *
+ * The file starts with a `---` block of `key: value` lines; the version is the
+ * publisher's own label and is compared as text, because skill versions are
+ * written by people rather than derived from a build.
+ * @param text - The whole `SKILL.md`.
+ * @returns The two fields the settings page needs, each null when absent.
+ */
+export function parseSkillManifest(text: string): SkillManifest {
+  const lines = text.split('\n')
+  const start = lines.findIndex(line => line.trim() === '---')
+  if (start === -1) return { version: null, description: null }
+  let version: string | null = null
+  let description: string | null = null
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim() === '---') break
+    const match = /^(version|description)\s*:\s*(?<value>.+)$/u.exec(line)
+    if (match === null) continue
+    const value = (match.groups?.['value'] ?? '').trim().replace(/^["']|["']$/gu, '')
+    if (value === '') continue
+    if (match[1] === 'version') version = value
+    else description = value
+  }
+  return { version, description }
+}
+
+/** One skill as the repository holds it. */
+export interface RemoteSkill {
+  readonly name: string
+  readonly department: string
+  readonly directory: string
+  readonly uploader: string | null
+  readonly uploadedAt: string | null
+  readonly version: string | null
+  readonly description: string | null
+  readonly files: readonly RemoteFile[]
+}
+
+/**
+ * Group the department tree into skills, reading each `SKILL.md` for its
+ * version and its `.uploader.json` for who published it.
+ *
+ * Only `departments/<department>/<skill>/` paths count: the top-level `skills/`
+ * tree is the shared catalogue, which the mirror already publishes, so showing
+ * it here would duplicate every row.
+ * @param options - Target, token, branch and the whole tree.
+ * @returns One entry per department skill, sorted by department then name.
+ */
+export async function readDepartmentSkills(options: {
+  readonly target: GiteaTarget
+  readonly token: string
+  readonly branch: string
+  readonly tree: readonly RemoteFile[]
+}): Promise<readonly RemoteSkill[]> {
+  const { target, token, branch, tree } = options
+  const grouped = new Map<string, RemoteFile[]>()
+  for (const file of tree) {
+    const parts = file.path.split('/')
+    if (parts.length < 4) continue
+    if (parts[0] !== 'departments') continue
+    const key = `${parts[1]}/${parts[2]}`
+    const bucket = grouped.get(key)
+    if (bucket === undefined) grouped.set(key, [file])
+    else bucket.push(file)
+  }
+  const skills: RemoteSkill[] = []
+  for (const [key, files] of grouped) {
+    const [department, name] = key.split('/') as [string, string]
+    const directory = `departments/${key}`
+    const manifestPath = `${directory}/SKILL.md`
+    const manifest = files.find(file => file.path === manifestPath)
+    if (manifest === undefined) continue
+    const manifestText = await readPublishedFile({ target, token, branch, path: manifestPath })
+    const uploaderPath = `${directory}/${UPLOADER_FILE}`
+    const uploaderText = files.some(file => file.path === uploaderPath)
+      ? await readPublishedFile({ target, token, branch, path: uploaderPath })
+      : undefined
+    const parsed = manifestText === undefined
+      ? { version: null, description: null }
+      : parseSkillManifest(new TextDecoder().decode(manifestText))
+    const record = uploaderText === undefined ? {} : readUploaderRecord(new TextDecoder().decode(uploaderText))
+    skills.push({
+      name,
+      department,
+      directory,
+      uploader: record.uploader ?? null,
+      uploadedAt: record.uploadedAt ?? null,
+      version: parsed.version,
+      description: parsed.description,
+      files: files.map(file => ({ path: file.path.slice(directory.length + 1), sha: file.sha })),
+    })
+  }
+  skills.sort((left, right) => left.department === right.department
+    ? left.name.localeCompare(right.name)
+    : left.department.localeCompare(right.department))
+  return skills
+}
+
+/** The uploader stamp a published skill carries beside its files. */
+function readUploaderRecord(text: string): { uploader?: string; uploadedAt?: string } {
+  try {
+    const parsed = JSON.parse(text) as { uploader?: unknown; uploadedAt?: unknown }
+    return {
+      ...typeof parsed.uploader === 'string' ? { uploader: parsed.uploader } : {},
+      ...typeof parsed.uploadedAt === 'string' ? { uploadedAt: parsed.uploadedAt } : {},
+    }
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Delete every file of one published skill.
+ *
+ * The contents API deletes one blob per call and wants its sha, which the tree
+ * listing already carries; the directory disappears with its last file.
+ * @param options - Target, token, branch, directory and the skill's files.
+ * @returns How many files were removed.
+ */
+export async function deleteSkillFiles(options: {
+  readonly target: GiteaTarget
+  readonly token: string
+  readonly branch: string
+  readonly directory: string
+  readonly files: readonly RemoteFile[]
+  readonly message: string
+}): Promise<number> {
+  const { target, token, branch, directory, files, message } = options
+  let removed = 0
+  for (const file of files) {
+    const path = `${directory}/${file.path}`
+    const url = `${target.api}/repos/${target.owner}/${target.repo}/contents/${encodePath(path)}`
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: { authorization: `token ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ sha: file.sha, message, branch }),
+    })
+    if (response.status === 404) continue
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`gitea: deleting ${path} failed with ${String(response.status)}: ${detail.slice(0, 200)}`)
+    }
+    removed += 1
+  }
+  return removed
 }

@@ -284,9 +284,35 @@ async localSkills(): Promise<readonly LocalSkillView[]>
  * Only new paths are written: a file that already exists with different bytes
  * is reported as a conflict, so one colleague never overwrites another's work.
  * @param name - Directory name of the skill under the publish directory.
+ * @param mode - The word "new" refuses to replace an existing copy, "update" replaces it.
  * @returns How many files were written, how many matched, and what was refused.
  */
-async uploadSkill(name: string): Promise<SkillUploadView>
+async uploadSkill(name: string, mode: 'new' | 'update' = 'new'): Promise<SkillUploadView>
+
+/**
+ * Delete this colleague's published copy of one skill.
+ *
+ * Only the publisher can do it: the `.uploader.json` beside the files is the
+ * record of who sent them, and a copy without one is left alone rather than
+ * guessed at.
+ * @param name - Skill directory name under the caller's department.
+ * @returns How many files were removed.
+ */
+async removeSkill(name: string): Promise<number>
+
+/**
+ * Every department skill the repository holds, read once from its tree.
+ * @returns One entry per published department skill; empty when the token or
+ * the repository is unreachable, because the page still has to render.
+ */
+async departmentSkills(): Promise<readonly DepartmentSkillView[]>
+
+/**
+ * This machine's skills beside what the repository already holds, which is
+ * what the page needs to decide between publishing, replacing and deleting.
+ * @returns One row per local skill, sorted by name.
+ */
+async skillEntries(): Promise<readonly SkillEntryView[]>
 
 /**
  * Bring the mirror up to date. Never throws: an unreachable remote, a refused

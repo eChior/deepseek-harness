@@ -28,7 +28,7 @@ Open the Plugins section in Settings and select the **Skill upload** tab. The ta
 
 ## Understand the implementation
 
-The plugin registers one slot and one dictionary. `SkillUploadTab` holds the list and a per-skill upload state, so a failure on one row leaves the others usable. `ctx.remote.skillRepo.upload({ name })` carries the directory name only; the provider decides the department and the uploader record.
+The plugin registers one slot and one dictionary. `SkillUploadTab` holds the list and a per-row action state, so a failure on one row leaves the others usable. Each row shows the skill’s own version label, the repository’s label beside it, and the buttons that follow from that comparison: upload when the repository holds nothing, update when it does, delete only for the copy the signed-in colleague published. Below the rows, a second list shows every department’s published skills with the department and the uploader. `ctx.remote.skillRepo` carries directory names only; the provider decides the department and the uploader record.
 
 ## Further Exploration
 

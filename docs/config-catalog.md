@@ -3001,7 +3001,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-repo`
 
-- `source`: [`packages/skill/skill-repo/src/index.ts:53`](../packages/skill/skill-repo/src/index.ts)
+- `source`: [`packages/skill/skill-repo/src/index.ts:58`](../packages/skill/skill-repo/src/index.ts)
 
 ```ts config-catalog
 /** Fields a deployment can set for the skill mirror. */

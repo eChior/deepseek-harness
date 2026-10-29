@@ -2794,10 +2794,28 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'One entry per skill, sorted by name.',
       },
       {
-        signature: 'async uploadSkill(name: string): Promise<SkillUploadView>',
+        signature: 'async uploadSkill(name: string, mode: \'new\' | \'update\' = \'new\'): Promise<SkillUploadView>',
         description: 'Publish one local skill into the repository, recording who sent it and which department they belong to beside the files.\n\nOnly new paths are written: a file that already exists with different bytes is reported as a conflict, so one colleague never overwrites another\'s work.',
-        parameters: [{ name: 'name', description: 'Directory name of the skill under the publish directory.' }],
+        parameters: [{ name: 'name', description: 'Directory name of the skill under the publish directory.' }, { name: 'mode', description: 'The word "new" refuses to replace an existing copy, "update" replaces it.' }],
         returns: 'How many files were written, how many matched, and what was refused.',
+      },
+      {
+        signature: 'async removeSkill(name: string): Promise<number>',
+        description: 'Delete this colleague\'s published copy of one skill.\n\nOnly the publisher can do it: the `.uploader.json` beside the files is the record of who sent them, and a copy without one is left alone rather than guessed at.',
+        parameters: [{ name: 'name', description: 'Skill directory name under the caller\'s department.' }],
+        returns: 'How many files were removed.',
+      },
+      {
+        signature: 'async departmentSkills(): Promise<readonly DepartmentSkillView[]>',
+        description: 'Every department skill the repository holds, read once from its tree.',
+        parameters: [],
+        returns: 'One entry per published department skill; empty when the token or the repository is unreachable, because the page still has to render.',
+      },
+      {
+        signature: 'async skillEntries(): Promise<readonly SkillEntryView[]>',
+        description: 'This machine\'s skills beside what the repository already holds, which is what the page needs to decide between publishing, replacing and deleting.',
+        parameters: [],
+        returns: 'One row per local skill, sorted by name.',
       },
       {
         signature: 'async sync(): Promise<SkillRepositoryStatus>',
@@ -5219,6 +5237,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface DeliveryRetentionBounds {\n    readonly days: number;\n    readonly records: number;\n}',
   },
   {
+    name: 'DepartmentSkillView',
+    declaration: 'export interface DepartmentSkillView {\n    readonly name: string;\n    readonly department: string;\n    readonly version: string | null;\n    readonly description: string | null;\n    readonly uploader: string | null;\n    readonly uploadedAt: string | null;\n    readonly files: number;\n}',
+  },
+  {
     name: 'DeveloperMessage',
     declaration: 'export interface DeveloperMessage extends MessageBase {\n    readonly role: \'developer\';\n}',
   },
@@ -5844,7 +5866,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocalSkillView',
-    declaration: 'export interface LocalSkillView {\n    readonly name: string;\n    readonly description: string | null;\n    readonly files: number;\n    readonly bytes: number;\n}',
+    declaration: 'export interface LocalSkillView {\n    readonly name: string;\n    readonly description: string | null;\n    readonly version: string | null;\n    readonly files: number;\n    readonly bytes: number;\n}',
   },
   {
     name: 'LocalTermFile',
@@ -7275,6 +7297,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SkillEntry {\n    readonly path?: string;\n    readonly name: string;\n    readonly description: string;\n    readonly whenToUse?: string;\n    readonly modelInvocable: boolean;\n}',
   },
   {
+    name: 'SkillEntryView',
+    declaration: 'export interface SkillEntryView {\n    readonly name: string;\n    readonly description: string | null;\n    readonly version: string | null;\n    readonly files: number;\n    readonly bytes: number;\n    readonly state: SkillPublishState;\n    readonly publishedVersion: string | null;\n    readonly department: string | null;\n    readonly uploader: string | null;\n    readonly uploadedAt: string | null;\n    readonly owned: boolean;\n}',
+  },
+  {
     name: 'SkillInvocationPolicy',
     declaration: 'export interface SkillInvocationPolicy {\n    readonly modelInvocable: boolean;\n    readonly userInvocable: boolean;\n}',
   },
@@ -7301,6 +7327,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SkillProviderObservation',
     declaration: 'export interface SkillProviderObservation {\n    readonly candidates: readonly SkillCandidate[];\n    readonly complete: boolean;\n}',
+  },
+  {
+    name: 'SkillPublishState',
+    declaration: 'export type SkillPublishState = \'new\' | \'published\' | \'ahead\' | \'behind\';',
   },
   {
     name: 'SkillRegistration',

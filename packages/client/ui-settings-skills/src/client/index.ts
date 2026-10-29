@@ -62,8 +62,10 @@ export function apply(ctx: ClientContext): void {
   const remote = ctx.remote.skillRepo
 
   const injected: SkillUploadTabInjected = {
-    skills: async () => unwrap('skills', await remote.skills()),
-    upload: async name => unwrap('upload', await remote.upload({ name })),
+    entries: async () => unwrap('entries', await remote.entries()),
+    departments: async () => unwrap('departments', await remote.departments()),
+    upload: async (name, mode) => unwrap('upload', await remote.upload({ name, mode })),
+    drop: async name => unwrap('drop', await remote.drop({ name })),
   }
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({

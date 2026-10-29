@@ -19,9 +19,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   UPLOADER_FILE,
+  deleteSkillFiles,
   giteaTarget,
+  parseSkillManifest,
+  readDepartmentSkills,
+  readRepositoryTree,
   readSkillDirectory,
   uploadSkillFiles,
+  type RemoteSkill,
 } from './upload.ts'
 import { archiveUrl, branchRevision, downloadArchive, readArchive, writeArchive } from './archive.ts'
 
@@ -82,8 +87,42 @@ export interface LocalSkillView {
   readonly name: string
   /** First sentence of the skill's own description, or its title. */
   readonly description: string | null
+  /** The publisher's own version label, read from the skill's `SKILL.md`. */
+  readonly version: string | null
   readonly files: number
   readonly bytes: number
+}
+
+/** Where a local skill stands against the repository its department publishes to. */
+export type SkillPublishState = 'new' | 'published' | 'ahead' | 'behind'
+
+/** One row of the publishing page: this machine's copy beside the repository's. */
+export interface SkillEntryView {
+  readonly name: string
+  readonly description: string | null
+  readonly version: string | null
+  readonly files: number
+  readonly bytes: number
+  readonly state: SkillPublishState
+  /** Version the repository holds for this skill, when it holds one. */
+  readonly publishedVersion: string | null
+  /** Department whose directory holds it, or null while it is unpublished. */
+  readonly department: string | null
+  readonly uploader: string | null
+  readonly uploadedAt: string | null
+  /** Whether the signed-in colleague published the copy in the repository. */
+  readonly owned: boolean
+}
+
+/** Every department skill the repository holds, as the page lists them. */
+export interface DepartmentSkillView {
+  readonly name: string
+  readonly department: string
+  readonly version: string | null
+  readonly description: string | null
+  readonly uploader: string | null
+  readonly uploadedAt: string | null
+  readonly files: number
 }
 
 /**
@@ -236,9 +275,10 @@ export class SkillRepository extends Service {
    * Only new paths are written: a file that already exists with different bytes
    * is reported as a conflict, so one colleague never overwrites another's work.
    * @param name - Directory name of the skill under the publish directory.
+   * @param mode - The word "new" refuses to replace an existing copy, "update" replaces it.
    * @returns How many files were written, how many matched, and what was refused.
    */
-  async uploadSkill(name: string): Promise<SkillUploadView> {
+  async uploadSkill(name: string, mode: 'new' | 'update' = 'new'): Promise<SkillUploadView> {
     if (!/^[\p{L}\p{N}._-]{1,64}$/u.test(name)) throw new Error(`skill-repo: ${name} is not a usable skill name`)
     const target = giteaTarget(this.config.url)
     if (target === undefined) {
@@ -263,9 +303,44 @@ export class SkillRepository extends Service {
       branch: this.config.branch,
       directory: `${DEPARTMENT_ROOT}/${department}/${name}`,
       contents: { files, skipped: contents.skipped },
-      message: `skill: ${name}${uploader.name === null ? '' : ` by ${uploader.name}`}${uploader.department === null ? '' : ` (${uploader.department})`}`,
+      message: `skill: ${name}${uploader.name === null ? '' : ` by ${uploader.name}`}${uploader.department === null ? '' : ` (${uploader.department})`}${mode === 'update' ? ' (replace)' : ''}`,
+      overwrite: mode === 'update',
     })
     return { name, ...outcome }
+  }
+
+  /**
+   * Delete this colleague's published copy of one skill.
+   *
+   * Only the publisher can do it: the `.uploader.json` beside the files is the
+   * record of who sent them, and a copy without one is left alone rather than
+   * guessed at.
+   * @param name - Skill directory name under the caller's department.
+   * @returns How many files were removed.
+   */
+  async removeSkill(name: string): Promise<number> {
+    const target = giteaTarget(this.config.url)
+    if (target === undefined) throw new Error(`skill-repo: ${this.config.url} is not an HTTP(S) repository URL`)
+    const token = this.publishingToken()
+    if (token === '') throw new Error('skill-repo: no publishing token; set the skill-repo token or DSH_SKILLS_TOKEN')
+    const uploader = await this.uploader()
+    const department = uploader.department ?? UNASSIGNED_DEPARTMENT
+    const tree = await readRepositoryTree({ target, token, branch: this.config.branch })
+    const published = await readDepartmentSkills({ target, token, branch: this.config.branch, tree })
+    const mine = published.find(skill => skill.department === department && skill.name === name)
+    if (mine === undefined) throw new Error(`skill-repo: ${name} is not published under ${department}`)
+    if (mine.uploader === null || mine.uploader !== uploader.name) {
+      throw new Error(`skill-repo: ${name} was published by ${mine.uploader ?? 'someone else'}, so it stays`)
+    }
+    return deleteSkillFiles({
+      target,
+      token,
+      branch: this.config.branch,
+      directory: mine.directory,
+      files: mine.files,
+      // The ownership check above already proved the stamp names this colleague.
+      message: `skill: remove ${name} by ${uploader.name}`,
+    })
   }
 
   /** Read one skill directory into the summary the settings page shows. */
@@ -275,12 +350,104 @@ export class SkillRepository extends Service {
     const manifest = contents.files.find(file => file.path === 'SKILL.md')
     if (manifest === undefined) return undefined
     const bytes = contents.files.reduce((total, file) => total + file.bytes.length, 0)
+    const text = new TextDecoder().decode(manifest.bytes)
     return {
       name,
-      description: describeManifest(new TextDecoder().decode(manifest.bytes)) ?? null,
+      description: describeManifest(text) ?? null,
+      version: parseSkillManifest(text).version,
       files: contents.files.length,
       bytes,
     }
+  }
+
+  /**
+   * Compare two version labels, so the page can say which side is newer.
+   *
+   * Labels are written by people, so only the numeric runs are compared and a
+   * label without any is treated as equal to everything: reporting "newer" on
+   * two unnumbered copies would be a guess.
+   * @param left - The local version.
+   * @param right - The published version.
+   * @returns Negative when left is older, positive when newer, zero when equal.
+   */
+  private static compareVersions(left: string | null, right: string | null): number {
+    if (left === null || right === null) return 0
+    const split = (value: string): number[] => value.split(/[^0-9]+/u).filter(part => part !== '').map(part => Number(part))
+    const a = split(left)
+    const b = split(right)
+    if (a.length === 0 || b.length === 0) return 0
+    for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+      const one = a[index] ?? 0
+      const other = b[index] ?? 0
+      if (one !== other) return one - other
+    }
+    return 0
+  }
+
+  /**
+   * Every department skill the repository holds, read once from its tree.
+   * @returns One entry per published department skill; empty when the token or
+   * the repository is unreachable, because the page still has to render.
+   */
+  async departmentSkills(): Promise<readonly DepartmentSkillView[]> {
+    const target = giteaTarget(this.config.url)
+    const token = this.publishingToken()
+    if (target === undefined || token === '') return []
+    try {
+      const tree = await readRepositoryTree({ target, token, branch: this.config.branch })
+      const skills = await readDepartmentSkills({ target, token, branch: this.config.branch, tree })
+      return skills.map(skill => ({
+        name: skill.name,
+        department: skill.department,
+        version: skill.version,
+        description: skill.description,
+        uploader: skill.uploader,
+        uploadedAt: skill.uploadedAt,
+        files: skill.files.length,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * This machine's skills beside what the repository already holds, which is
+   * what the page needs to decide between publishing, replacing and deleting.
+   * @returns One row per local skill, sorted by name.
+   */
+  async skillEntries(): Promise<readonly SkillEntryView[]> {
+    const locals = await this.localSkills()
+    const uploader = await this.uploader()
+    const department = uploader.department ?? UNASSIGNED_DEPARTMENT
+    const target = giteaTarget(this.config.url)
+    const token = this.publishingToken()
+    let published: readonly RemoteSkill[] = []
+    if (target !== undefined && token !== '') {
+      published = await readRepositoryTree({ target, token, branch: this.config.branch })
+        .then(tree => readDepartmentSkills({ target, token, branch: this.config.branch, tree }))
+        .catch(() => [])
+    }
+    return locals.map((local) => {
+      const mine = published.find(skill => skill.department === department && skill.name === local.name)
+      const state: SkillPublishState = mine === undefined
+        ? 'new'
+        : mine.version === local.version
+          ? 'published'
+          : SkillRepository.compareVersions(local.version, mine.version) > 0 ? 'ahead' : 'behind'
+      return {
+        name: local.name,
+        description: local.description,
+        version: local.version,
+        files: local.files,
+        bytes: local.bytes,
+        state,
+        publishedVersion: mine?.version ?? null,
+        department: mine?.department ?? null,
+        uploader: mine?.uploader ?? null,
+        uploadedAt: mine?.uploadedAt ?? null,
+        owned: mine !== undefined && uploader.name !== null && mine.uploader === uploader.name,
+      }
+    })
   }
 
   /** The token to publish with: the configured one, else the environment. */

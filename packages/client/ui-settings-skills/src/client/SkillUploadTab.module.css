@@ -90,3 +90,58 @@
   font-size: 12px;
   color: #1b7f3b;
 }
+
+.version {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+}
+
+.badgeNew {
+  color: #1d4ed8;
+  border-color: rgba(29, 78, 216, 0.45);
+}
+
+.badgePublished {
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.45);
+}
+
+.badgeAhead {
+  color: #b45309;
+  border-color: rgba(180, 83, 9, 0.45);
+}
+
+.badgeBehind {
+  color: #9d174d;
+  border-color: rgba(157, 23, 77, 0.45);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.sectionTitle {
+  margin: 26px 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.departmentRow {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid rgba(127, 127, 127, 0.22);
+  border-radius: 8px;
+}

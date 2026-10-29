@@ -29,3 +29,34 @@ export interface SkillRepoUploadView {
   /** Files skipped because one request cannot carry them. */
   readonly skipped: readonly string[]
 }
+
+/**
+ * One row of the publishing page: this machine's copy beside the repository's,
+ * which is what decides between publishing, replacing and deleting.
+ */
+export interface SkillRepoEntryView {
+  readonly name: string
+  readonly description: string | null
+  readonly version: string | null
+  readonly files: number
+  readonly bytes: number
+  /** `new` when the repository holds nothing, `published` when both agree. */
+  readonly state: 'new' | 'published' | 'ahead' | 'behind'
+  readonly publishedVersion: string | null
+  readonly department: string | null
+  readonly uploader: string | null
+  readonly uploadedAt: string | null
+  /** Whether the signed-in colleague published the copy the repository holds. */
+  readonly owned: boolean
+}
+
+/** One department skill the repository holds, as the page lists them. */
+export interface SkillRepoDepartmentView {
+  readonly name: string
+  readonly department: string
+  readonly version: string | null
+  readonly description: string | null
+  readonly uploader: string | null
+  readonly uploadedAt: string | null
+  readonly files: number
+}

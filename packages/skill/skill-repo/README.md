@@ -59,6 +59,8 @@ The sync reads the archive over HTTP and never runs a git binary, so a client ma
 
 The provider never throws. An unreachable host, a refused archive, or a timeout is logged as a warning and written to `status.detail`; `skill-filesystem` keeps scanning whatever the mirror already contains.
 
+Publishing is three operations over the department tree. `skillEntries()` reads one tree listing and pairs each local skill with the copy its department already published, so the page can say which side is newer; `uploadSkill(name, mode)` sends a skill, replacing an existing copy only when the caller asked for an update; `removeSkill(name)` deletes the files of a copy whose `.uploader.json` names the signed-in colleague, and refuses any other. `departmentSkills()` answers what every department has published, which is how a colleague finds a skill without opening the repository by hand.
+
 When the remote never answers and the machine has no readable mirror — a fresh install that has never seen the intranet, or a mirror left empty or half-written by an interrupted sync — `seed()` copies the skills this package carries out of `bundledDirectory` through the same staging step, publishes them, and reports `source: 'bundled'` with a null revision. A machine whose mirror still holds a readable skill keeps the remote copy instead, because that one is newer than the one this build shipped.
 
 ## Model Experience
