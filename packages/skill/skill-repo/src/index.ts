@@ -185,6 +185,9 @@ export function skillsDirectoryPath(config: Pick<Config, 'directory' | 'skillsDi
 /** Department recorded when the roster cannot place the uploader. */
 export const UNASSIGNED_DEPARTMENT = '未分配'
 
+/** Recorded as the uploader when the account service cannot name anybody. */
+const UNASSIGNED_UPLOADER = '未署名'
+
 /**
  * Pull the one-line description out of a skill manifest.
  *
@@ -296,11 +299,13 @@ export class SkillRepository extends Service {
     const stamp = new Date().toISOString()
     const record = JSON.stringify({ name, uploader: uploader.name, department: uploader.department, uploadedAt: stamp }, null, 2)
     const department = uploader.department ?? UNASSIGNED_DEPARTMENT
+    const author = uploader.name ?? UNASSIGNED_UPLOADER
     const files = contents.files
       .filter(file => file.path !== UPLOADER_FILE)
-      .map(file => (file.path === 'SKILL.md'
-        ? { path: file.path, bytes: departmentManifest(file.bytes, department, name) }
-        : file))
+      .map(file =>
+        file.path === 'SKILL.md'
+          ? { path: file.path, bytes: departmentManifest(file.bytes, department, name, author) }
+          : file)
     files.push({ path: UPLOADER_FILE, bytes: new TextEncoder().encode(`${record}\n`) })
     const outcome = await uploadSkillFiles({
       target,

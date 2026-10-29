@@ -348,30 +348,57 @@ export interface RemoteSkill {
  * @returns One entry per department skill, sorted by department then name.
  */
 /**
- * Stamp a department into the published manifest so two departments can publish
- * a skill with the same name.
+ * Prefix a description with the stamp, keeping whatever quoting it arrived with.
+ * @param value - The description as the author wrote it.
+ * @param stamp - `[<department> · <uploader>]`.
+ * @returns The description carrying the stamp exactly once.
+ */
+function stampDescription(value: string, stamp: string): string {
+  const quoted = /^(["'])(.*)\1$/u.exec(value)
+  const inner = quoted === null ? value : quoted[2] ?? ''
+  if (inner.startsWith(stamp)) return value
+  const body = `${stamp} ${inner}`.trimEnd()
+  return quoted === null ? body : `${quoted[1]}${body}${quoted[1]}`
+}
+
+/**
+ * Stamp the department and the uploader into the published manifest.
  *
- * The skills manager names a skill after the `name` in its frontmatter, and it
- * refuses a second one with the same name. Publishing `proposal-scoring` for
- * two departments would therefore collide; the department is written into the
- * name instead, and the local copy keeps whatever its author wrote.
+ * The skills manager lists a skill by the `name` in its frontmatter and its
+ * `description`, and it refuses a second one with the same name. Publishing
+ * `proposal-scoring` for two departments would therefore collide, and nothing in
+ * the list would say who published what. So publishing rewrites the name to
+ * `<department>-<name>` and prefixes the description with
+ * `[<department> · <uploader>]`; the local copy keeps whatever its author wrote,
+ * and `.uploader.json` beside it still carries the structured record.
  * @param bytes - The manifest as the author wrote it.
  * @param department - Department recorded for the uploader.
  * @param name - Skill name, the folder it was read from.
- * @returns The manifest with `name: <department>-<name>`.
+ * @param uploader - Name of the colleague who published it.
+ * @returns The manifest carrying the stamped name and description.
  */
-export function departmentManifest(bytes: Uint8Array, department: string, name: string): Uint8Array {
+export function departmentManifest(
+  bytes: Uint8Array,
+  department: string,
+  name: string,
+  uploader: string,
+): Uint8Array {
   const text = new TextDecoder().decode(bytes)
-  const label = `${department}-${name}`
   const opening = /^---\r?\n/u.exec(text)
   if (opening === null) return bytes
   const end = text.indexOf('\n---', opening[0].length)
   if (end < 0) return bytes
   const head = text.slice(opening[0].length, end + 1)
-  const next = /^name:[ \t]*(.+)$/mu.test(head)
+  const label = `${department}-${name}`
+  const stamp = `[${department} · ${uploader}]`
+  const describe = (value: string): string => `description: ${stampDescription(value, stamp)}`
+  const named = /^name:[ \t]*(.+)$/mu.test(head)
     ? head.replace(/^name:[ \t]*(.+)$/mu, (line, value: string) => (value.trim() === label ? line : `name: ${label}`))
     : `name: ${label}\n${head}`
-  return new TextEncoder().encode(`${opening[0]}${next}${text.slice(end + 1)}`)
+  const described = /^description:/mu.test(named)
+    ? named.replace(/^description:[ \t]*(.*)$/mu, (_whole, value: string) => describe(value))
+    : named.replace(/^name:[ \t]*.*$/mu, line => `${line}\ndescription: ${stamp}`)
+  return new TextEncoder().encode(`${opening[0]}${described}${text.slice(end + 1)}`)
 }
 
 /**

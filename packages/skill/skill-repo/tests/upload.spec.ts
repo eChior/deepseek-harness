@@ -149,26 +149,37 @@ describe('departmentManifest', () => {
 
   it('writes the department into the name the skills manager reads', () => {
     const bytes = manifest('---\nname: proposal-scoring\ndescription: 打分\n---\n\n# 打分\n')
-    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring'))
+    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring', '毛子艺'))
     expect(text).toContain('name: 研发部-proposal-scoring')
-    expect(text).toContain('description: 打分')
     expect(text).toContain('# 打分')
+  })
+
+  it('names the department and the colleague ahead of the description', () => {
+    const bytes = manifest('---\nname: proposal-scoring\ndescription: 打分\n---\n')
+    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring', '毛子艺'))
+    expect(text).toContain('description: [研发部 · 毛子艺] 打分')
+  })
+
+  it('keeps the quotes a description was written with', () => {
+    const bytes = manifest('---\nname: proposal-scoring\ndescription: "打分"\n---\n')
+    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring', '毛子艺'))
+    expect(text).toContain('description: "[研发部 · 毛子艺] 打分"')
   })
 
   it('adds a name when the manifest carries none', () => {
     const bytes = manifest('---\ndescription: 打分\n---\n')
-    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring'))
+    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring', '毛子艺'))
     expect(text.startsWith('---\nname: 研发部-proposal-scoring\n')).toBe(true)
   })
 
   it('leaves a manifest without frontmatter untouched', () => {
     const bytes = manifest('# 打分\n')
-    expect(new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring'))).toBe('# 打分\n')
+    expect(new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring', '毛子艺'))).toBe('# 打分\n')
   })
 
-  it('does not repeat a department already in the name', () => {
-    const bytes = manifest('---\nname: 研发部-proposal-scoring\n---\n')
-    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring'))
-    expect(text).toBe('---\nname: 研发部-proposal-scoring\n---\n')
+  it('does not repeat a stamp the manifest already carries', () => {
+    const bytes = manifest('---\nname: 研发部-proposal-scoring\ndescription: [研发部 · 毛子艺] 打分\n---\n')
+    const text = new TextDecoder().decode(departmentManifest(bytes, '研发部', 'proposal-scoring', '毛子艺'))
+    expect(text).toBe('---\nname: 研发部-proposal-scoring\ndescription: [研发部 · 毛子艺] 打分\n---\n')
   })
 })
