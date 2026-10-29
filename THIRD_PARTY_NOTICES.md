@@ -89,6 +89,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`dompurify`](https://github.com/cure53/DOMPurify) | (MPL-2.0 OR Apache-2.0) |
 | [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar) | MIT |
 | [`dsh-notify-me`](https://github.com/chromoany/dsh-notify-me) | MIT |
+| [`dsh-ops`](https://github.com/T-Auto/dsh-ops) | MIT |
 | [`dsh-rewind-plugin`](https://github.com/SiriLee/dsh-rewind) | MIT |
 | [`dsh-zh-thinking`](https://github.com/yingjian666/dsh-zh-thinking) | MIT |
 | [`dshmarket`](https://github.com/dsh-market/dsh-market) | MIT |

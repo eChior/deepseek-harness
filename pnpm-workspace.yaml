@@ -56,6 +56,7 @@ allowBuilds:
   # Electron's own postinstall materialises node_modules/electron/dist; electron-builder reuses that
   # copy instead of downloading the same archive twice, so the script is wanted here.
   electron: true
+  '@deepseek-ai/dsh-subprocess-local': set this to true or false
 
 # pnpm 11 enforces this supply-chain policy by default with a 24 hour cutoff. This distribution
 # preinstalls plugins as soon as they are published, and the cutoff also rejects them during

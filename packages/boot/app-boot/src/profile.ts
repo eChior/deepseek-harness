@@ -192,6 +192,7 @@ export const PROFILE_TEMPLATES: Record<string, ProfileTemplate> = {
       'superpowers-dsh',
       'dsh-better-sidebar',
       'dsh-notify-me',
+      'dsh-ops',
       'dsh-rewind-plugin',
       'dshmarket',
       '@michengai/dsh-skills-manager',
