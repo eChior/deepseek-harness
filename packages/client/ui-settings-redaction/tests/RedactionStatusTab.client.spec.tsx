@@ -24,6 +24,7 @@ const READY: RedactionStatusView = {
   lastError: null,
   detail: null,
   pending: 0,
+  departments: 0,
   localFiles: 0,
   roster: 0,
   imageTool: true,
