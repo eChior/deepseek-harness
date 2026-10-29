@@ -38,4 +38,5 @@ export const en = {
   loadFailed: 'Reading the skills failed: {reason}',
 }
 
+/** Every copy string the skills tab renders. */
 export type SkillUploadLocaleKey = keyof typeof zh
