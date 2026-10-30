@@ -58,6 +58,9 @@ PATH_FIELDS = f"/open-apis/bitable/v1/apps/{APP_TOKEN}/tables/{TABLE_ID}/fields"
 
 # 台账里承载量化效益的那一列（文本）。提交前会确认它存在，缺了就建一个。
 QUANT_FIELD = "量化效益"
+
+# 每月省下的工时（纯数字，小时/月）。台账按这一列求和出月度总效益。
+MONTH_FIELD = "月度效益"
 PATH_UPLOAD = "/open-apis/drive/v1/medias/upload_all"
 
 # 下面两份是兜底清单：正常情况下选项从表里现读（fetch_options），
@@ -288,6 +291,21 @@ def dig(data: dict, key: str):
 # 组记录
 # --------------------------------------------------------------------------- #
 
+def ensure_month_field(token: str, warnings: list) -> None:
+    """确保台账里有「月度效益」这一列（文本，存每月省下的工时数字）。"""
+    items = fetch_options(token, PATH_FIELDS, warnings)
+    if items is None:
+        warnings.append(
+            f"没能读到台账字段列表，无法确认「{MONTH_FIELD}」列是否存在")
+        return
+    if any(str(it.get("field_name") or "") == MONTH_FIELD for it in items):
+        return
+    made = call(token, PATH_FIELDS, "POST", {"field_name": MONTH_FIELD, "type": 1})
+    if made.get("code") not in (0, None):
+        warnings.append(f"没能新建「{MONTH_FIELD}」列（code={made.get('code')} "
+                        f"{made.get('msg')}），提交会跳过它")
+
+
 def ensure_quant_field(token: str, warnings: list) -> None:
     """确保台账里有「量化效益」这一列（多行文本），没有就建一个。"""
     out = call(token, PATH_FIELDS, "GET", None, {"page_size": 200})
@@ -374,6 +392,9 @@ def build_fields(data: dict, people: dict, file_token: str, ai_check: bool,
             warnings.append(f"「经济效益」= “{money}” 不是数字，这一栏按 0 提交")
 
     if file_token:
+        month = str(dig(data, "月度效益") or "").strip()
+        if month:
+            f[MONTH_FIELD] = month
         quant = str(dig(data, "量化效益") or "").strip()
     if quant:
         f[QUANT_FIELD] = quant
@@ -463,6 +484,7 @@ def main(argv=None) -> int:
     options = fetch_options(token, warnings) if token else {}
     if token:
         ensure_quant_field(token, warnings)
+        ensure_month_field(token, warnings)
     fields = build_fields(data, people, file_token, args.ai_check, warnings, options)
 
     print("将要提交的内容：")
