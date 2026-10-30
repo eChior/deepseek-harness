@@ -55,7 +55,7 @@ https://app.rwork.crc.com.cn/base/bask9wcePBHUds0Vzb3a1L4d9Tb?table=tblq9Acb2Kn1
 
 ## 月度效益这一列
 
-台账里有独立的「月度效益」列（文本，**必填一个数字**：每月省下的小时数）。提交时 `submit_bitable.py` 会先确认这一列存在，缺了就自动新建（`ensure_month_field`）。
+台账里有独立的「月度效益」列（文本，**必填一个数字**：每月省下的小时数）。提交时 `submit_bitable.py` 只**确认这一列存在**（`check_text_fields`），缺了就提示、这一项跳过，**不擅自改表结构**——列由台账管理员在网页上新增，类型选文本。
 
 写法只有两种：`4`、`2.5` 这样的数字，或者 `0`。带单位（`4 小时`）、写文字（`没有`）、留空，都会让台账没法求和，`make_proposal.py` 会直接报警。
 

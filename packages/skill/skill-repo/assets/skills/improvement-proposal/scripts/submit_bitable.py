@@ -291,36 +291,18 @@ def dig(data: dict, key: str):
 # 组记录
 # --------------------------------------------------------------------------- #
 
-def ensure_month_field(token: str, warnings: list) -> None:
-    """确保台账里有「月度效益」这一列（文本，存每月省下的工时数字）。"""
+def check_text_fields(token: str, warnings: list) -> None:
+    """确认台账里有承载效益文字的那两列（本 skill 只填写，不建列）。"""
     out = call(token, PATH_FIELDS, "GET", None, {"page_size": 200})
     if out.get("code") != 0:
         warnings.append(f"没能读取台账字段（code={out.get('code')} msg={out.get('msg')}），"
-                        f"「{MONTH_FIELD}」如果不存在，提交会失败")
+                        "无法确认效益列是否存在")
         return
-    items = (out.get("data") or {}).get("items") or []
-    if any(str(it.get("field_name") or "") == MONTH_FIELD for it in items):
-        return
-    made = call(token, PATH_FIELDS, "POST", {"field_name": MONTH_FIELD, "type": 1})
-    if made.get("code") not in (0, None):
-        warnings.append(f"没能新建「{MONTH_FIELD}」列（code={made.get('code')} "
-                        f"{made.get('msg')}），提交会跳过它")
-
-
-def ensure_quant_field(token: str, warnings: list) -> None:
-    """确保台账里有「量化效益」这一列（多行文本），没有就建一个。"""
-    out = call(token, PATH_FIELDS, "GET", None, {"page_size": 200})
-    if out.get("code") != 0:
-        warnings.append(f"没能读取台账字段（code={out.get('code')} msg={out.get('msg')}），"
-                        f"「{QUANT_FIELD}」如果不存在，提交会失败")
-        return
-    items = (out.get("data") or {}).get("items") or []
-    if any(str(it.get("field_name") or "") == QUANT_FIELD for it in items):
-        return
-    made = call(token, PATH_FIELDS, "POST", {"field_name": QUANT_FIELD, "type": 1})
-    if made.get("code") != 0:
-        warnings.append(f"没能新建「{QUANT_FIELD}」列（code={made.get('code')} "
-                        f"msg={made.get('msg')}），请在多维表格里手动加一列文本字段")
+    names = {str(it.get("field_name") or "") for it in ((out.get("data") or {}).get("items") or [])}
+    for field in (QUANT_FIELD, MONTH_FIELD):
+        if field not in names:
+            warnings.append(f"台账里还没有「{field}」列——这一项会被跳过；"
+                            "请台账管理员新增一列文本字段（本 skill 不擅自改表结构）")
 
 
 def build_fields(data: dict, people: dict, file_token: str, ai_check: bool,
@@ -484,8 +466,7 @@ def main(argv=None) -> int:
 
     options = fetch_options(token, warnings) if token else {}
     if token:
-        ensure_quant_field(token, warnings)
-        ensure_month_field(token, warnings)
+        check_text_fields(token, warnings)
     fields = build_fields(data, people, file_token, args.ai_check, warnings, options)
 
     print("将要提交的内容：")
