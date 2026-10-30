@@ -8,8 +8,6 @@ import subprocess
 import sys
 import tempfile
 
-import numpy
-import pandas
 from docx import Document
 from docx.shared import Inches as DocxInches
 from openpyxl import Workbook, load_workbook
@@ -36,8 +34,6 @@ def main():
     for name, expected in versions.items():
         actual = importlib.metadata.version(name)
         assert actual == expected, (name, actual, expected)
-    assert numpy.arange(4).sum() == 6
-    assert pandas.DataFrame({"n": [1, 2]}).n.sum() == 3
 
     with tempfile.TemporaryDirectory(prefix="dsh-office-smoke-") as directory:
         root = Path(directory)
@@ -83,7 +79,6 @@ def main():
             assert reopened_workbook.active["A1"].font.bold
         finally:
             reopened_workbook.close()
-        assert pandas.read_excel(root / "workbook.xlsx")["Value"].iloc[0] == 42
         for file, arguments in [
             ("document.docx", ["--contains", "Office 文档"]),
             ("presentation.pptx", ["--contains", "Office 演示", "--count", "1"]),

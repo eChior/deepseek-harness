@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -155,6 +155,7 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     for (const wheel of [...artifact.wheels, ...lock.wheels]) {
       await unpackPrimaryRuntimeWheel(await downloadPrimaryRuntimeAsset(wheel.url, wheel.sha256, paths.downloads), entries.pythonPackages)
     }
+    pruneInterpreter(join(dependencies, 'python'))
     writeFileSync(join(output, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
     const destination = join(paths.runtime, 'primary-runtime')
     rmSync(destination, { recursive: true, force: true })
@@ -165,6 +166,29 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
   const require = createRequire(import.meta.url)
   await prepareOfficeSkillAssets(join(dirname(require.resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets'),
     join(paths.runtime, 'office-skills'))
+}
+
+/**
+ * Directories a packaged interpreter never loads: the IDE sample code, the bytecode
+ * compiler's test corpus and the Tk data behind tkinter. pip stays, so the smoke check
+ * can still verify the installed distributions against the lock.
+ */
+const UNNEEDED_INTERPRETER_PATHS = [
+  'Lib/ensurepip',
+  'Lib/idlelib',
+  'Lib/lib2to3',
+  'Lib/test',
+  'tcl',
+] as const
+
+/**
+ * Delete the parts of a freshly unpacked interpreter that no shipped script imports.
+ * @param root - Directory holding `python.exe` and `Lib`.
+ */
+function pruneInterpreter(root: string): void {
+  for (const relative of UNNEEDED_INTERPRETER_PATHS) {
+    for (const match of globSync(relative, { cwd: root })) rmSync(join(root, match), { recursive: true, force: true })
+  }
 }
 
 /**
@@ -180,7 +204,7 @@ export function smokePrimaryRuntime(root: string, environment: NodeJS.ProcessEnv
   if (Object.keys(manifest.pythonPackages).length === 0) throw new Error('primary runtime: missing Python distribution versions; prepare the payload before running its smoke checks.')
   const entries = workspaceDependencyPaths(root, manifest)
   const options = { stdio: 'inherit', timeout: 120_000, env: environment } as const
-  execFileSync(entries.python, ['-I', '-B', '-c', 'import decimal, xml.parsers.expat, lzma, uuid, numpy, pandas; assert numpy.arange(4).sum() == 6; assert pandas.DataFrame({"n": [1, 2]}).n.sum() == 3'], options)
+  execFileSync(entries.python, ['-I', '-B', '-c', 'import decimal, xml.parsers.expat, lzma, uuid'], options)
   execFileSync(entries.python, ['-I', '-B', join(import.meta.dirname, 'smoke.py'), JSON.stringify(manifest.pythonPackages),
     manifest.python, join(dirname(root), 'office-skills', 'scripts', 'check_office.py')], options)
   execFileSync(entries.python, ['-I', '-B', '-m', 'pip', 'check'], options)

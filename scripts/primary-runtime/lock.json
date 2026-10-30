@@ -10,14 +10,6 @@
       "pythonSha256": "7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14",
       "wheels": [
         {
-          "url": "https://files.pythonhosted.org/packages/2d/57/8aeaf160312f7f489dea47ab61e430b5cb051f59a98ae68b7133ce8fa06a/numpy-2.3.5-cp312-cp312-win_amd64.whl",
-          "sha256": "86945f2ee6d10cdfd67bcb4069c1662dd711f7e2a4343db5cecec06b87cf31aa"
-        },
-        {
-          "url": "https://files.pythonhosted.org/packages/75/08/67cc404b3a966b6df27b38370ddd96b3b023030b572283d035181854aac5/pandas-3.0.1-cp312-cp312-win_amd64.whl",
-          "sha256": "536232a5fe26dd989bd633e7a0c450705fdc86a207fec7254a55e9a22950fe43"
-        },
-        {
           "url": "https://files.pythonhosted.org/packages/45/89/da2f7971a317f83d807fdd4065c0af40208e59e692cc43d315a71a0e96d1/pillow-12.3.0-cp312-cp312-win_amd64.whl",
           "sha256": "a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09"
         },
@@ -33,14 +25,6 @@
       "pythonTarget": "aarch64-apple-darwin",
       "pythonSha256": "81a359f1cfadd4da11766534c5913791cea55f26e1bb902cacd2a531bb1e4b2b",
       "wheels": [
-        {
-          "url": "https://files.pythonhosted.org/packages/c5/65/df0db6c097892c9380851ab9e44b52d4f7ba576b833996e0080181c0c439/numpy-2.3.5-cp312-cp312-macosx_11_0_arm64.whl",
-          "sha256": "ee3888d9ff7c14604052b2ca5535a30216aa0a58e948cdd3eeb8d3415f638769"
-        },
-        {
-          "url": "https://files.pythonhosted.org/packages/7c/f1/e2567ffc8951ab371db2e40b2fe068e36b81d8cf3260f06ae508700e5504/pandas-3.0.1-cp312-cp312-macosx_11_0_arm64.whl",
-          "sha256": "0ab749dfba921edf641d4036c4c21c0b3ea70fea478165cb98a998fb2a261955"
-        },
         {
           "url": "https://files.pythonhosted.org/packages/d8/66/9a386a92561f402389a4fc70c18838bf6d35eb5eb5c6850b4b2dc64f5048/pillow-12.3.0-cp312-cp312-macosx_11_0_arm64.whl",
           "sha256": "ffd0c5368496f41b0944be820fcb7a838aa6e623d250b01acf2643939c3f99d7"
@@ -58,14 +42,6 @@
       "pythonSha256": "65b195c9cedc1fef6767f044f9822069adbd1bd9204d424ece4628776fdc04bb",
       "wheels": [
         {
-          "url": "https://files.pythonhosted.org/packages/44/37/e669fe6cbb2b96c62f6bbedc6a81c0f3b7362f6a59230b23caa673a85721/numpy-2.3.5-cp312-cp312-macosx_10_13_x86_64.whl",
-          "sha256": "74ae7b798248fe62021dbf3c914245ad45d1a6b0cb4a29ecb4b31d0bfbc4cc3e"
-        },
-        {
-          "url": "https://files.pythonhosted.org/packages/37/51/b467209c08dae2c624873d7491ea47d2b47336e5403309d433ea79c38571/pandas-3.0.1-cp312-cp312-macosx_10_13_x86_64.whl",
-          "sha256": "476f84f8c20c9f5bc47252b66b4bb25e1a9fc2fa98cead96744d8116cb85771d"
-        },
-        {
           "url": "https://files.pythonhosted.org/packages/37/bf/fb3ebff8ddcb76aac5a01389251bbbb9519922a9b520d8247c1ca864a25d/pillow-12.3.0-cp312-cp312-macosx_10_13_x86_64.whl",
           "sha256": "ba09209fbe443b4acccebe845d8a138b89a8f4fbaeedd44953490b5315d5e965"
         },
@@ -82,14 +58,6 @@
       "pythonSha256": "72748da13197c1fb161e3afeef20a6a385ff24f2165e6e2758e47008e7faba4c",
       "wheels": [
         {
-          "url": "https://files.pythonhosted.org/packages/b6/23/2a1b231b8ff672b4c450dac27164a8b2ca7d9b7144f9c02d2396518352eb/numpy-2.3.5-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-          "sha256": "0d8163f43acde9a73c2a33605353a4f1bc4798745a8b1d73183b28e5b435ae28"
-        },
-        {
-          "url": "https://files.pythonhosted.org/packages/3d/fe/89d77e424365280b79d99b3e1e7d606f5165af2f2ecfaf0c6d24c799d607/pandas-3.0.1-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
-          "sha256": "532527a701281b9dd371e2f582ed9094f4c12dd9ffb82c0c54ee28d8ac9520c4"
-        },
-        {
           "url": "https://files.pythonhosted.org/packages/84/21/a35af28dcc61f37ed850a2d64c65c701321dfbf25085e469d5559360cbbf/pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
           "sha256": "78cb2c6865a35ab8ff8b75fd122f6033b92a62c82801110e48ddd6c936a45d91"
         },
@@ -105,14 +73,6 @@
       "pythonTarget": "aarch64-unknown-linux-gnu",
       "pythonSha256": "577b4bec0793ad1ff0cbff9adbd0df078eddde38a4c41bf5d83ad381a85ee39d",
       "wheels": [
-        {
-          "url": "https://files.pythonhosted.org/packages/74/78/fcd41e5a0ce4f3f7b003da85825acddae6d7ecb60cf25194741b036ca7d6/numpy-2.3.5-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
-          "sha256": "8b973c57ff8e184109db042c842423ff4f60446239bd585a5131cc47f06f789d"
-        },
-        {
-          "url": "https://files.pythonhosted.org/packages/d7/39/327802e0b6d693182403c144edacbc27eb82907b57062f23ef5a4c4a5ea7/pandas-3.0.1-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl",
-          "sha256": "b8e36891080b87823aff3640c78649b91b8ff6eea3c0d70aeabd72ea43ab069b"
-        },
         {
           "url": "https://files.pythonhosted.org/packages/25/27/ac8f99618ffd3dde21db0f4d4b1d2ab00c0880595bfd17df103f7f39fd0c/pillow-12.3.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
           "sha256": "d9c7f76c0673154f044e9d78c8655fb4213f6ca31a836df48b40fe5d187717b9"
@@ -163,8 +123,6 @@
     }
   ],
   "pythonPackages": {
-    "numpy": "2.3.5",
-    "pandas": "3.0.1",
     "python-dateutil": "2.9.0.post0",
     "six": "1.17.0",
     "tzdata": "2025.2",
