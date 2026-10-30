@@ -20,7 +20,7 @@
     提案日期           ← 完成日期 / 提案日期
     经济效益           ← 经济效益        （数字，元）
     改善提案报告       ← 本 Excel（自动上传为附件）
-    AI相关             ← true（默认打勾；--no-ai-check 可关）
+    AI相关             ← 只在「新增 skill」或「程序/脚本类」提案打勾（加 --ai-related；默认不打勾）
 
 令牌（授权码）：
     脚本内置一份加密凭据（见 _SEALED_CRED），运行时只在内存里解出，不落盘、不打印、
@@ -372,8 +372,8 @@ def main(argv=None) -> int:
     p.add_argument("xlsx", nargs="?", default="", help="要上传的《改善提案报告》Excel")
     p.add_argument("--token", default="", help="授权码 pt-…（默认读本地配置/环境变量）")
     p.add_argument("--people-map", default="", help="姓名→open_id 映射 JSON")
-    p.add_argument("--no-ai-check", dest="ai_check", action="store_false", default=True,
-                   help="不在「AI相关」复选框打勾（默认打勾）")
+    p.add_argument("--ai-related", dest="ai_check", action="store_true", default=False,
+                   help="在「AI相关」复选框打勾（只有新增 skill 或程序/脚本类提案才加这个开关）")
     p.add_argument("--dry-run", action="store_true", help="只体检，不写多维表格")
     p.add_argument("--done", action="store_true",
                    help="确认提案已实施完成（结案提交必填；台账不收没做完的提案）")
