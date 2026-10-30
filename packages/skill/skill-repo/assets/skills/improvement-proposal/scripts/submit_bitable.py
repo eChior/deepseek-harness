@@ -378,7 +378,7 @@ def build_fields(data: dict, people: dict, file_token: str, ai_check: bool,
     if quant:
         f[QUANT_FIELD] = quant
     else:
-        warnings.append("「量化效益」为空——这一列是必填，确实没有量化就写“没有”")
+        warnings.append("「量化效益」为空——这一列是必填，算不出数字就写“没有量化指标”")
 
     f["改善提案报告"] = [{"file_token": file_token}]
 

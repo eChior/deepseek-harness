@@ -502,6 +502,10 @@ def build_xlsx(data, template, out_dir, photo_before="", photo_after="",
 # 五、填写校验与台账（台账默认不生成，加 --ledger 才写）
 # --------------------------------------------------------------------------- #
 
+# 明确表示"这次确实没有量化指标"的写法。写了这些就不必带数字。
+NO_MEASURE_WORDS = ("没有量化指标", "没有", "无", "说不上具体数字", "无法量化")
+
+
 def validate(data) -> list:
     """内容层面的检查（Excel 每格容量另由 build_xlsx 按模板实际尺寸测量）。"""
     w = []
@@ -517,10 +521,10 @@ def validate(data) -> list:
 
     quant = str(data.get("量化效益", "") or "").strip()
     if not quant:
-        w.append("「量化效益」为空——必须问出节省了多少时间或什么量化效益，确实没有就写“没有”")
-    elif quant not in ("没有", "说不上具体数字") and not re.search(r"\d", quant):
-        w.append("「量化效益」里没有数字——写成“节省工时：X 小时/月”这种可比的形式，"
-                 "或者明确写“没有”")
+        w.append("「量化效益」为空——强问答这一项：算得出就写“节省工时：X 小时/月”，"
+                 "算不出就写“没有量化指标”")
+    elif not re.search(r"\d", quant) and quant not in NO_MEASURE_WORDS:
+        w.append("「量化效益」既没有数字、也没明确写“没有量化指标”——两种写法选一个，别写成散文")
 
     how = str(data.get("计算方式", "") or "").strip()
     if money:
