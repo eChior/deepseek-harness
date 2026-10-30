@@ -29,7 +29,7 @@ import {
   type SignInAttemptId,
   type SignInAttemptView,
 } from '@deepseek-ai/dsh-deepseek-account'
-import { credentialKey } from '@deepseek-ai/dsh-credentials'
+import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
 import {
   parseRworkUser,
   rworkIdentityHeaders,
@@ -44,6 +44,9 @@ import { RWORK_PROVIDER, type ExternalAccountSession, type RworkUser } from './t
 import { NO_KEYS, pickDepartmentKey, readDepartmentKeys, type DepartmentKeys } from './keys.ts'
 
 const KEY = credentialKey('hrzszy-account', 'default')
+
+/** The reference the Qwen route resolves before it asks any other seam. */
+const DEPARTMENT_KEY_REF = 'QWEN_API_KEY'
 
 /** Deployment endpoints and request deadlines. */
 export interface Config {
@@ -118,6 +121,7 @@ export default class RworkAccount extends DeepSeekAccount {
     ctx.effect(() => {
       void readDepartmentKeys().then((keys) => {
         this.keys = keys
+        void this.publishDepartmentKey(null)
       })
       return () => undefined
     })
@@ -126,6 +130,28 @@ export default class RworkAccount extends DeepSeekAccount {
   override async getState(): Promise<AccountView> {
     const record = await this.ctx.credentials.readRecord(KEY)
     return this.view(record === undefined ? 'signed-out' : 'credential-stored')
+  }
+
+  /**
+   * Store the key this deployment issued under the reference the route reads.
+   *
+   * The route resolves stored credentials before it asks the account
+   * provider, so writing the key here is what makes a freshly installed
+   * build answer without a manual step; a later sign-in rewrites it with the
+   * key of the department the roster attributes to that colleague.
+   * @param department - the department of the signed-in colleague, if known.
+   */
+  private async publishDepartmentKey(department: string | null): Promise<void> {
+    const key = this.qwenKeyFor(department)
+    if (key === undefined) return
+    const ref = credentialRef(DEPARTMENT_KEY_REF)
+    try {
+      const stored = await this.ctx.credentials.resolve(ref)
+      if (stored?.value === key) return
+      await this.ctx.credentials.set(ref, key)
+    } catch {
+      // A store that refuses the write leaves the route exactly as it was.
+    }
   }
 
   /**
@@ -144,6 +170,8 @@ export default class RworkAccount extends DeepSeekAccount {
     void client
     const grant = await this.readGrant()
     if (grant === undefined) return null
+    // Refresh the published key now that the roster can name a department.
+    void this.publishDepartmentKey(this.departmentOf(grant.user.name))
     return {
       status: 'ready',
       value: {
@@ -153,6 +181,14 @@ export default class RworkAccount extends DeepSeekAccount {
         ...grant.user.avatarUrl === undefined ? {} : { avatarUrl: grant.user.avatarUrl },
       },
     }
+  }
+
+  /** The department the roster attributes to a colleague name. */
+  private departmentOf(name: string): string | null {
+    const redaction = this.ctx.get('redaction') as {
+      identify?: (account: string) => { department?: string } | undefined
+    } | undefined
+    return redaction?.identify?.(name)?.department ?? null
   }
 
   override async getBalance(client: AccountClientMetadata): Promise<AccountDetails['balance'] | null> {
