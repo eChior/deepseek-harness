@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join, relative, resolve } from 'node:path'
+import * as yaml from 'js-yaml'
 import { desktopNodeEnvironment } from '../src/node-environment.ts'
 import { createRuntimeProjectMetadata } from '../src/project-manager.ts'
 import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
@@ -34,6 +35,7 @@ import { desktopRuntimeFileExclusion } from './runtime-file-policy.ts'
 import { selectOfficeEngine } from '../../../scripts/libreoffice-packages.mjs'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
+const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const DSH_OUTPUT_ROOT = BUILD_PATHS.dsh
 const BUILD_ROOT = mkdtempSync(join(tmpdir(), 'dsh-desktop-runtime-'))
@@ -127,6 +129,17 @@ function runPnpm(args: readonly string[]): Promise<void> {
   })
 }
 
+/**
+ * Read the patches the repository applies to third-party packages.
+ * @returns package name to patch file, as `patchedDependencies` names them.
+ */
+function readPatchedDependencies(): Record<string, string> {
+  const path = join(REPOSITORY_ROOT, 'pnpm-workspace.yaml')
+  if (!existsSync(path)) return {}
+  const workspace = yaml.load(readFileSync(path, 'utf8')) as { patchedDependencies?: Record<string, string> } | undefined
+  return workspace?.patchedDependencies ?? {}
+}
+
 async function main(): Promise<void> {
   try {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:reset', async () => {
@@ -138,7 +151,11 @@ async function main(): Promise<void> {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:stage-packages', async () => {
       copyFileSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGE_SET_FILE), join(BUILD_ROOT, DESKTOP_PACKAGE_SET_FILE))
       cpSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGES_DIR), join(BUILD_ROOT, DESKTOP_PACKAGES_DIR), { recursive: true })
-      createRuntimeProjectMetadata(BUILD_ROOT, release)
+      const patched = readPatchedDependencies()
+      if (Object.keys(patched).length > 0) {
+        cpSync(join(REPOSITORY_ROOT, 'patches'), join(BUILD_ROOT, 'patches'), { recursive: true })
+      }
+      createRuntimeProjectMetadata(BUILD_ROOT, release, patched)
     })
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:lockfile', () => runPnpm(['install', '--lockfile-only']))
     verifyDesktopCoreLockfile(
