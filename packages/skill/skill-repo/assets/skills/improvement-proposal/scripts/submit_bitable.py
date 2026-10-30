@@ -293,11 +293,12 @@ def dig(data: dict, key: str):
 
 def ensure_month_field(token: str, warnings: list) -> None:
     """确保台账里有「月度效益」这一列（文本，存每月省下的工时数字）。"""
-    items = fetch_options(token, PATH_FIELDS, warnings)
-    if items is None:
-        warnings.append(
-            f"没能读到台账字段列表，无法确认「{MONTH_FIELD}」列是否存在")
+    out = call(token, PATH_FIELDS, "GET", None, {"page_size": 200})
+    if out.get("code") != 0:
+        warnings.append(f"没能读取台账字段（code={out.get('code')} msg={out.get('msg')}），"
+                        f"「{MONTH_FIELD}」如果不存在，提交会失败")
         return
+    items = (out.get("data") or {}).get("items") or []
     if any(str(it.get("field_name") or "") == MONTH_FIELD for it in items):
         return
     made = call(token, PATH_FIELDS, "POST", {"field_name": MONTH_FIELD, "type": 1})
