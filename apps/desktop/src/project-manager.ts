@@ -44,11 +44,14 @@ function workspaceFile(
     ? ''
     : `overrides:\n${entries.map(([name, spec]) => `  ${JSON.stringify(name)}: ${JSON.stringify(spec)}`).join('\n')}\n`
   // The packaged runtime installs from its own directory, so the patches this repository applies
-  // through `patchedDependencies` only reach it when they travel with this workspace file.
+  // through `patchedDependencies` only reach it when they travel with this workspace file. The
+  // runtime installs `--prod`, so patches for build-time packages (`tsdown`, `@yao-pkg/pkg`,
+  // `exceljs`, the FortuneSheet pair, `@electron/osx-sign`) have no dependency to attach to; pnpm
+  // fails the whole install over that, so unused entries are a warning here instead of an error.
   const patchedEntries = Object.entries(patched).sort(([left], [right]) => left.localeCompare(right))
   const patchedSection = patchedEntries.length === 0
     ? ''
-    : `patchedDependencies:\n${patchedEntries.map(([name, file]) => `  ${JSON.stringify(name)}: ${JSON.stringify(file)}`).join('\n')}\n`
+    : `allowUnusedPatches: true\npatchedDependencies:\n${patchedEntries.map(([name, file]) => `  ${JSON.stringify(name)}: ${JSON.stringify(file)}`).join('\n')}\n`
   if (entries.length === 0) return `packages:\n  - .\n\n${overrideSection}${patchedSection}${WORKSPACE_SETTINGS}`
   const coreBuildSpec = overrides[CORE_BUILD_PACKAGE]
   const coreBuildKey = coreBuildSpec === undefined
