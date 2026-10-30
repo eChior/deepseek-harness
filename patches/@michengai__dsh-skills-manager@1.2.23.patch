@@ -1,7 +1,7 @@
 diff --git a/lib/repositories.js b/lib/repositories.js
 --- a/lib/repositories.js
 +++ b/lib/repositories.js
-@@ -8,6 +8,18 @@
+@@ -8,6 +8,18 @@ const LIMIT = 32 << 20;
  const STATE_LIMIT = 16 << 20;
  const STATE_READ_LIMIT = 64 << 20;
  const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -20,7 +20,7 @@ diff --git a/lib/repositories.js b/lib/repositories.js
  function failure(message, code = "error.repo.invalid", params) {
    return Object.assign(new Error(message), { code, statusCode: 400, ...params && typeof params === "object" && !Array.isArray(params) ? { params } : {} });
  }
-@@ -174,7 +186,7 @@
+@@ -174,7 +186,7 @@ function createRepositoryManager({ fetchImpl = globalThis.fetch, log, registered
        return value;
      } catch (caught) {
        const error = caught;
@@ -29,7 +29,7 @@ diff --git a/lib/repositories.js b/lib/repositories.js
        throw failure("\u4ED3\u5E93\u72B6\u6001\u6587\u4EF6\u635F\u574F\u6216\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u8BF7\u4FDD\u7559\u6587\u4EF6\u5E76\u4FEE\u590D\u540E\u91CD\u8BD5", "error.repo.state");
      }
    }
-@@ -241,7 +253,7 @@
+@@ -241,7 +253,7 @@ function createRepositoryManager({ fetchImpl = globalThis.fetch, log, registered
      }
    }
    async function download(repo) {
@@ -38,7 +38,7 @@ diff --git a/lib/repositories.js b/lib/repositories.js
      if (!/^[a-f0-9]{64}$/.test(repo.commit || "")) throw failure("\u8BF7\u5148\u5237\u65B0\u4ED3\u5E93");
      try {
        const target = join(await cacheDirectory(), `${repo.id}-${repo.commit}.zip`);
-@@ -258,7 +270,7 @@
+@@ -258,7 +270,7 @@ function createRepositoryManager({ fetchImpl = globalThis.fetch, log, registered
      const refs = repo.ref && repo.ref !== "HEAD" ? [`refs/heads/${repo.ref}`, `refs/tags/${repo.ref}`] : ["HEAD", "refs/heads/main", "refs/heads/master"];
      for (let i = 0; i < refs.length; i++) {
        try {

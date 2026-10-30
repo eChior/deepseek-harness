@@ -153,7 +153,7 @@ pnpm applies local patches to the following packages at install time, so shipped
 - `@electron/osx-sign@1.3.3` — [`patches/@electron__osx-sign@1.3.3.patch`](patches/@electron__osx-sign@1.3.3.patch)
 - `@fortune-sheet/core@1.0.4` — [`patches/@fortune-sheet__core@1.0.4.patch`](patches/@fortune-sheet__core@1.0.4.patch)
 - `@fortune-sheet/react@1.0.4` — [`patches/@fortune-sheet__react@1.0.4.patch`](patches/@fortune-sheet__react@1.0.4.patch)
-- `@michengai/dsh-skills-manager@1.2.9` — [`patches/@michengai__dsh-skills-manager@1.2.9.patch`](patches/@michengai__dsh-skills-manager@1.2.9.patch)
+- `@michengai/dsh-skills-manager@1.2.23` — [`patches/@michengai__dsh-skills-manager@1.2.23.patch`](patches/@michengai__dsh-skills-manager@1.2.23.patch)
 - `@yao-pkg/pkg@6.21.0` — [`patches/@yao-pkg__pkg@6.21.0.patch`](patches/@yao-pkg__pkg@6.21.0.patch)
 - `exceljs@4.4.0` — [`patches/exceljs@4.4.0.patch`](patches/exceljs@4.4.0.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)
