@@ -267,14 +267,18 @@ export class SkillRepository extends Service {
 
   /**
    * List the skills this machine can publish, read from the directory the mirror
-   * publishes into. A directory without `SKILL.md` is not a skill and is left out.
-   * @returns One entry per skill, sorted by name.
+   * publishes into. A directory without `SKILL.md` is not a skill and is left out,
+   * and so is every skill the repository itself handed down: the mirror writes its
+   * own copies there, and offering them for upload would just push them back.
+   * @returns One entry per skill written on this machine, sorted by name.
    */
   async localSkills(): Promise<readonly LocalSkillView[]> {
+    const shipped = await readPublished(join(dirname(this.current.directory), PUBLISH_MANIFEST))
     const entries = await readdir(this.config.publishDirectory, { withFileTypes: true }).catch(() => [])
     const views: LocalSkillView[] = []
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
+      if (shipped.includes(entry.name)) continue
       const view = await this.describeSkill(entry.name)
       if (view !== undefined) views.push(view)
     }

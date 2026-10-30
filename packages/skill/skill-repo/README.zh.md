@@ -61,7 +61,7 @@ kind: "package-reference"
 
 发布是三件针对部门目录树的操作。`skillEntries()` 只读一次目录树，把每个本机技能与它部门已发布的那一份配对，页面据此判断哪一侧更新；`uploadSkill(name, mode)` 发送一个技能，只有调用方要求更新时才替换已有副本；`removeSkill(name)` 删除 `.uploader.json` 里署着当前登录者的那份副本的文件，其它人的一律拒绝。`departmentSkills()` 回答各部门发布过什么，同事不必手工打开仓库就能找到技能。
 
-发布时会把部门和上传者都写进 manifest：技能管理器按 frontmatter 的 `name` 与 `description` 列技能，且拒绝重名。因此写到 `<skillsDirectory>/<部门>/<技能名>/` 的那一份既带 `name: <部门>-<技能名>`，描述也以 `[<部门> · <上传者>]` 开头，列表本身就能看出是哪个部门的谁发布的；本机那一份仍保留作者原本写的内容，发布副本旁边的 `.uploader.json` 里另有结构化记录。
+发布时会把部门和上传者都写进 manifest：技能管理器按 frontmatter 的 `name` 与 `description` 列技能，且拒绝重名。因此写到 `<skillsDirectory>/<部门>/<技能名>/` 的那一份既带 `name: <部门>-<技能名>`，描述也以 `[<部门> · <上传者>]` 开头，列表本身就能看出是哪个部门的谁发布的；本机那一份仍保留作者原本写的内容，发布副本旁边的 `.uploader.json` 里另有结构化记录。上传页只列本机手写的技能：仓库自己下发的那批名字记在 `.dsh-skill-repo-published.json` 里，它们不进列表，免得把同步出来的副本又推回去。
 
 构建时还可以把发布令牌一起打包，同事不需要自己配置：`scripts/gen-skills-token.mjs` 在打包阶段从 `DSH_SKILLS_TOKEN` 写出 `assets/skills.token`，服务启动时读一次，优先级在配置值与环境变量之后。没有这个 secret 的构建保持原行为，只在有人发布时报缺少令牌。
 
