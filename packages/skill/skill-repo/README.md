@@ -63,6 +63,9 @@ Publishing is three operations over the department tree. `skillEntries()` reads 
 
 Publishing stamps the department and the uploader into the manifest, because the skills manager lists a skill by its frontmatter `name` and `description` and refuses a duplicate name. The copy written under `<skillsDirectory>/<department>/<name>/` therefore carries `name: <department>-<name>` and a description that starts with `[<department> · <uploader>]`, so the list itself says which department and which colleague published it; the local copy keeps what its author wrote, and `.uploader.json` beside the published copy still holds the structured record.
 
+A build can also ship the publishing token, so a colleague never configures one: `scripts/gen-skills-token.mjs` writes `assets/skills.token` from `DSH_SKILLS_TOKEN` while packaging, and the service reads that file once at startup after the config value and the environment variable. A build without the secret keeps the previous behaviour and reports the missing token only when somebody publishes.
+
+
 When the remote never answers and the machine has no readable mirror — a fresh install that has never seen the intranet, or a mirror left empty or half-written by an interrupted sync — `seed()` copies the skills this package carries out of `bundledDirectory` through the same staging step, publishes them, and reports `source: 'bundled'` with a null revision. A machine whose mirror still holds a readable skill keeps the remote copy instead, because that one is newer than the one this build shipped.
 
 ## Model Experience

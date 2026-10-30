@@ -30,6 +30,7 @@ import {
   type RemoteSkill,
 } from './upload.ts'
 import { archiveUrl, branchRevision, downloadArchive, readArchive, writeArchive } from './archive.ts'
+import { readBundledToken } from './token.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -218,6 +219,9 @@ export class SkillRepository extends Service {
   /** In-flight sync, shared by every caller that arrives while it runs. */
   private pending: Promise<SkillRepositoryStatus> | undefined
 
+  /** The token the package shipped, read once at startup. */
+  private bundledToken = ''
+
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'skillRepo')
     this.config = {
@@ -242,6 +246,12 @@ export class SkillRepository extends Service {
       state: 'idle',
       detail: null,
     }
+    ctx.effect(() => {
+      void readBundledToken().then((token) => {
+        this.bundledToken = token
+      })
+      return () => undefined
+    })
     if (this.config.enabled) {
       ctx.effect(() => {
         void this.sync()
@@ -468,7 +478,11 @@ export class SkillRepository extends Service {
   /** The token to publish with: the configured one, else the environment. */
   private publishingToken(): string {
     const configured = this.config.token.trim()
-    return configured === '' ? (process.env['DSH_SKILLS_TOKEN'] ?? '').trim() : configured
+    if (configured !== '') return configured
+    const fromEnvironment = (process.env['DSH_SKILLS_TOKEN'] ?? '').trim()
+    if (fromEnvironment !== '') return fromEnvironment
+    // Last resort: the token the package shipped, so a colleague never configures one.
+    return this.bundledToken
   }
 
   /** Who is publishing, read from the account the desktop signed in with. */

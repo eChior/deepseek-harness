@@ -135,6 +135,15 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/gen-qwen-keys.mjs
+      - name: Write the skills publishing token
+        shell: bash
+        env:
+          DSH_SKILLS_TOKEN: ${{ secrets.DSH_SKILLS_TOKEN }}
+        # Publishing a skill writes into the shared Gitea repository, so the build carries a token
+        # instead of asking every colleague for one. Without the secret the package simply cannot
+        # publish, and says so when somebody tries.
+        run: |
+          node scripts/gen-skills-token.mjs
           if [ -z "${DSH_QWEN_KEYS:-}" ]; then
             echo 'No DSH_QWEN_KEYS secret is set; packaging without department keys.' >> "$GITHUB_STEP_SUMMARY"
           else

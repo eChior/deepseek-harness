@@ -56,6 +56,9 @@ apps/desktop/resources/wps/wps2pdf
 packages/credentials/hrzszy-account/assets/qwen-keys.json
 # The staff roster travels as ciphertext; the key it was sealed with is a CI secret.
 packages/security/redaction/assets/roster.key
+# The skill repository token a deployment ships, written from DSH_SKILLS_TOKEN at build time.
+packages/skill/skill-repo/assets/skills.token
+
 
 # Scratch files the file tools and the dev launcher leave behind.
 .dsh-ops-update-*.lock

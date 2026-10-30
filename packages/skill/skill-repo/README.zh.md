@@ -63,6 +63,9 @@ kind: "package-reference"
 
 发布时会把部门和上传者都写进 manifest：技能管理器按 frontmatter 的 `name` 与 `description` 列技能，且拒绝重名。因此写到 `<skillsDirectory>/<部门>/<技能名>/` 的那一份既带 `name: <部门>-<技能名>`，描述也以 `[<部门> · <上传者>]` 开头，列表本身就能看出是哪个部门的谁发布的；本机那一份仍保留作者原本写的内容，发布副本旁边的 `.uploader.json` 里另有结构化记录。
 
+构建时还可以把发布令牌一起打包，同事不需要自己配置：`scripts/gen-skills-token.mjs` 在打包阶段从 `DSH_SKILLS_TOKEN` 写出 `assets/skills.token`，服务启动时读一次，优先级在配置值与环境变量之后。没有这个 secret 的构建保持原行为，只在有人发布时报缺少令牌。
+
+
 当远端始终无应答、而这台机器没有可读的镜像时 —— 从未连过内网的首次安装，或被中断的同步留下的空目录、半成品目录 —— `seed()` 会通过同样的暂存步骤把本包携带的技能从 `bundledDirectory` 复制出来并发布，同时以 `source: 'bundled'` 与空的版本号上报。镜像里仍读得到技能的机器保留远端那一份，因为它比本次构建携带的更新。
 
 <a id="model-experience"></a>

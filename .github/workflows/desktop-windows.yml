@@ -124,6 +124,15 @@ jobs:
         # without the secret still packages: the route then only honours a key the colleague typed.
         run: |
           node scripts/gen-qwen-keys.mjs
+      - name: Write the skills publishing token
+        shell: pwsh
+        env:
+          DSH_SKILLS_TOKEN: ${{ secrets.DSH_SKILLS_TOKEN }}
+        # Publishing a skill writes into the shared Gitea repository, so the build carries a token
+        # instead of asking every colleague for one. Without the secret the package simply cannot
+        # publish, and says so when somebody tries.
+        run: |
+          node scripts/gen-skills-token.mjs
           if ([string]::IsNullOrWhiteSpace($env:DSH_QWEN_KEYS)) {
             'No DSH_QWEN_KEYS secret is set; packaging without department keys.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
           } else {
