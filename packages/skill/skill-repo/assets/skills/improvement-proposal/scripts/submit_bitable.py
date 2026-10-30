@@ -55,6 +55,9 @@ TIMEOUT = 30
 
 PATH_RECORDS = f"/open-apis/bitable/v1/apps/{APP_TOKEN}/tables/{TABLE_ID}/records"
 PATH_FIELDS = f"/open-apis/bitable/v1/apps/{APP_TOKEN}/tables/{TABLE_ID}/fields"
+
+# 台账里承载量化效益的那一列（文本）。提交前会确认它存在，缺了就建一个。
+QUANT_FIELD = "量化效益"
 PATH_UPLOAD = "/open-apis/drive/v1/medias/upload_all"
 
 # 下面两份是兜底清单：正常情况下选项从表里现读（fetch_options），
@@ -285,6 +288,22 @@ def dig(data: dict, key: str):
 # 组记录
 # --------------------------------------------------------------------------- #
 
+def ensure_quant_field(token: str, warnings: list) -> None:
+    """确保台账里有「量化效益」这一列（多行文本），没有就建一个。"""
+    out = call(token, PATH_FIELDS, "GET", None, {"page_size": 200})
+    if out.get("code") != 0:
+        warnings.append(f"没能读取台账字段（code={out.get('code')} msg={out.get('msg')}），"
+                        f"「{QUANT_FIELD}」如果不存在，提交会失败")
+        return
+    items = (out.get("data") or {}).get("items") or []
+    if any(str(it.get("field_name") or "") == QUANT_FIELD for it in items):
+        return
+    made = call(token, PATH_FIELDS, "POST", {"field_name": QUANT_FIELD, "type": 1})
+    if made.get("code") != 0:
+        warnings.append(f"没能新建「{QUANT_FIELD}」列（code={made.get('code')} "
+                        f"msg={made.get('msg')}），请在多维表格里手动加一列文本字段")
+
+
 def build_fields(data: dict, people: dict, file_token: str, ai_check: bool,
                  warnings: list, options: dict | None = None) -> dict:
     options = options or {}
@@ -355,7 +374,13 @@ def build_fields(data: dict, people: dict, file_token: str, ai_check: bool,
             warnings.append(f"「经济效益」= “{money}” 不是数字，这一栏按 0 提交")
 
     if file_token:
-        f["改善提案报告"] = [{"file_token": file_token}]
+        quant = str(dig(data, "量化效益") or "").strip()
+    if quant:
+        f[QUANT_FIELD] = quant
+    else:
+        warnings.append("「量化效益」为空——这一列是必填，确实没有量化就写“没有”")
+
+    f["改善提案报告"] = [{"file_token": file_token}]
 
     if ai_check:
         f["AI相关"] = True
@@ -436,6 +461,8 @@ def main(argv=None) -> int:
             return 1
 
     options = fetch_options(token, warnings) if token else {}
+    if token:
+        ensure_quant_field(token, warnings)
     fields = build_fields(data, people, file_token, args.ai_check, warnings, options)
 
     print("将要提交的内容：")

@@ -52,3 +52,11 @@ https://app.rwork.crc.com.cn/base/bask9wcePBHUds0Vzb3a1L4d9Tb?table=tblq9Acb2Kn1
 
 1. **照片位是 WPS 的 `DISPIMG` 嵌入单元格图片**，用 openpyxl 另存会损坏（`cellimages.xml` / `richData` / `metadata` 会被丢掉），必须走 ZIP 层手术。
 2. **剥 `ht=` 属性必须带空格边界**——`customHeight` 恰好以 `ht` 结尾，不带边界会被削成 `customHeig`，产出非法 XML。匹配单元格的正则行内断言要写成 `(?:(?!/>)[^>])*`，否则自闭合的 `<c ... />` 匹配不到。
+
+## 量化效益这一列
+
+台账里有独立的「量化效益」列（多行文本，必填）。提交时 `submit_bitable.py` 会先确认这一列存在，
+缺了就自动建一个；建不出来会在 warnings 里提示你手动加一列文本字段。
+
+写法固定成一行：`节省工时：<数字> 小时/月；<其他量化>`。**必须带数字**；确实量化不了就写"没有"，
+不要留空——空着评审会当成"没效果"，也会被判为漏填。

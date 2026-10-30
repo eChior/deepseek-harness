@@ -74,7 +74,7 @@ CHAR_MARGIN = 0.92      # 留余量，避免刚好卡满
 
 LEDGER_COLUMNS = ["提案编号", "提案名称", "提案人", "实施人", "部门", "班组", "岗位", "完成日期",
                   "提案类型", "业务类型", "改善类别", "存在问题", "主要原因", "改善对策", "控制措施",
-                  "成果标准化", "无形效益", "经济效益元", "计算方式", "提交状态"]
+                  "成果标准化", "无形效益", "量化效益", "经济效益元", "计算方式", "提交状态"]
 
 NEW_TEMPLATE = {
     "_说明": "提案改善填报模板。带 ★ 的要填准，其余按实际情况填；填完跑 make_proposal.py 生成材料。",
@@ -514,6 +514,13 @@ def validate(data) -> list:
     except (TypeError, ValueError):
         money = None
         w.append(f"「经济效益」= “{data.get('经济效益')}” 不是数字——那格是数值型单元格，只能填数字（单位元）")
+
+    quant = str(data.get("量化效益", "") or "").strip()
+    if not quant:
+        w.append("「量化效益」为空——必须问出节省了多少时间或什么量化效益，确实没有就写“没有”")
+    elif quant not in ("没有", "说不上具体数字") and not re.search(r"\d", quant):
+        w.append("「量化效益」里没有数字——写成“节省工时：X 小时/月”这种可比的形式，"
+                 "或者明确写“没有”")
 
     how = str(data.get("计算方式", "") or "").strip()
     if money:
