@@ -51,31 +51,55 @@ diff --git a/lib/shells/pinned.js b/lib/shells/pinned.js
 diff --git a/lib/profile-install.js b/lib/profile-install.js
 --- a/lib/profile-install.js
 +++ b/lib/profile-install.js
-@@ -21,16 +21,18 @@ const SUPPORTED_TARGETS = Object.freeze({ win32: ['x64'], linux: ['x64'], darwin
+@@ -21,18 +21,41 @@ const SUPPORTED_TARGETS = Object.freeze({ win32: ['x64'], linux: ['x64'], darwin
   * The desktop profile is Electron-owned: an ordinary `dsh` refuses to manage it,
   * so the carrier's bundled launcher is the only supported entry point.
   */
-+/** Product names this distribution installs under; the upstream name stays as the fallback. */
++/** Product names this distribution installs under; the directory itself is the user's choice. */
 +const DESKTOP_PRODUCT_NAMES = ['益办公', 'DeepSeek Harness'];
++/**
++ * The installation this process runs from, derived from its own asar path
++ * (`<install>/resources/app.asar/dsh/...`), so no folder name has to be guessed.
++ */
++function installationRoot() {
++    const marker = `${path.sep}resources${path.sep}app.asar${path.sep}`;
++    const at = PACKAGE_ROOT.indexOf(marker);
++    return at === -1 ? undefined : PACKAGE_ROOT.slice(0, at);
++}
  function desktopCliCandidates(platform = process.platform, env = process.env, home = os.homedir()) {
++    const own = installationRoot();
++    const file = platform === 'win32' ? 'dsh.cmd' : 'dsh';
++    const candidates = own === undefined ? [] : [path.join(own, 'resources', 'runtime', 'cli', 'bin', file)];
      if (platform === 'win32') {
          const local = env.LOCALAPPDATA ?? path.join(home, 'AppData/Local');
 -        return [path.join(local, 'Programs/DeepSeek Harness/resources/runtime/cli/bin/dsh.cmd')];
-+        return DESKTOP_PRODUCT_NAMES.map(name => path.join(local, `Programs/${name}/resources/runtime/cli/bin/dsh.cmd`));
++        for (const name of DESKTOP_PRODUCT_NAMES)
++            candidates.push(path.join(local, 'Programs', name, 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd'));
++        // The installer accepts any folder name, so look one level down as well.
++        try {
++            for (const entry of fs.readdirSync(path.join(local, 'Programs')))
++                candidates.push(path.join(local, 'Programs', entry, 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd'));
++        }
++        catch { }
++        return candidates;
      }
      if (platform === 'darwin') {
 -        return [
 -            '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
 -            path.join(home, 'Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'),
 -        ];
-+        return DESKTOP_PRODUCT_NAMES.flatMap(name => [
-+            `/Applications/${name}.app/Contents/Resources/runtime/cli/bin/dsh`,
-+            path.join(home, `Applications/${name}.app/Contents/Resources/runtime/cli/bin/dsh`),
-+        ]);
++        for (const name of DESKTOP_PRODUCT_NAMES) {
++            candidates.push(`/Applications/${name}.app/Contents/Resources/runtime/cli/bin/dsh`);
++            candidates.push(path.join(home, `Applications/${name}.app/Contents/Resources/runtime/cli/bin/dsh`));
++        }
++        return candidates;
      }
-     return [];
+-    return [];
++    return candidates;
  }
-@@ -132,8 +134,7 @@ export function profileCommand(operation, { profile, dshCli, dryRun = false }) {
+ function record(value) {
+     return value !== null && typeof value === 'object' && !Array.isArray(value);
+@@ -132,8 +155,7 @@ export function profileCommand(operation, { profile, dshCli, dryRun = false }) {
          }
          if (!command) {
              if (process.platform === 'win32') {
