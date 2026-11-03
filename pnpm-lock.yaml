@@ -16,7 +16,7 @@ patchedDependencies:
   '@fortune-sheet/react@1.0.4': 2932e52e79afcd4ced08cfa123b5eded786c85043da32f622f3e80af6fc96c37
   '@michengai/dsh-skills-manager@1.2.26': 3f85da284ca0f498fe68d40b2e2c24b9463f17ba7e4a099736458c235501c80a
   '@yao-pkg/pkg@6.21.0': 75891fc22b277c145cafeab83e41baf4a70f5b8fe6dc0801c6a0b922d7ee88c7
-  dsh-ops@0.4.4: 777574165b25964bb3cec1b798170bd679a749a4dd8ec5d3633158c42344eef4
+  dsh-ops@0.4.4: 99b3596562c969606fac701d027b1a348bd2a6f1b0954a410053e672ad36d34f
   exceljs@4.4.0: c1bf8ac8f319dab382f08e3a669b715e691d46c703ac5a4163eb383fbedd1d48
   node-pty@1.2.0-beta.15: b40ae545608897914bd25fb009c97eeac478c34e8a910298ddcb01b746534bb0
   tsdown@0.22.2: b629cbef4ea97d589279e75878e48246ca4d6b6dd67d4aef024a512e5aa6bd86
@@ -2823,7 +2823,7 @@ importers:
         version: 1.17.0(@deepseek-ai/dsh-client-locale@packages+client+locale)
       dsh-ops:
         specifier: 0.4.4
-        version: 0.4.4(patch_hash=777574165b25964bb3cec1b798170bd679a749a4dd8ec5d3633158c42344eef4)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh@0.2.0-rc.2(738c6b7705132dbe60c681b59339e26c))
+        version: 0.4.4(patch_hash=99b3596562c969606fac701d027b1a348bd2a6f1b0954a410053e672ad36d34f)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh@0.2.0-rc.2(738c6b7705132dbe60c681b59339e26c))
       dsh-rewind-plugin:
         specifier: 0.15.3
         version: 0.15.3(4bfac47db3966e07df4b841ad35e7156)
@@ -35820,7 +35820,7 @@ snapshots:
     optionalDependencies:
       '@deepseek-ai/dsh-client-locale': link:packages/client/locale
 
-  dsh-ops@0.4.4(patch_hash=777574165b25964bb3cec1b798170bd679a749a4dd8ec5d3633158c42344eef4)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh@0.2.0-rc.2(738c6b7705132dbe60c681b59339e26c)):
+  dsh-ops@0.4.4(patch_hash=99b3596562c969606fac701d027b1a348bd2a6f1b0954a410053e672ad36d34f)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh@0.2.0-rc.2(738c6b7705132dbe60c681b59339e26c)):
     optionalDependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       '@deepseek-ai/dsh': 0.2.0-rc.2(738c6b7705132dbe60c681b59339e26c)
