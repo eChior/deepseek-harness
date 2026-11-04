@@ -44,9 +44,13 @@ ManifestDPIAware true
   !insertmacro setInstallModePerUser
   StrCpy $hasPerMachineInstallation 0
   StrCpy $hasPerUserInstallation 1
-  ; The product is named 益办公, but the folder keeps the upstream name: an
-  ; update then lands in the tree the previous version registered instead of
-  ; forking a second one beside it.
+  ; Install under D:\DeepSeek Harness by default; a machine without a D:
+  ; drive falls back to the per-user Programs folder. The folder name is not
+  ; load-bearing: an update reuses whatever InstallLocation the previous
+  ; version registered (read just below), and the app finds its own runtime
+  ; from the asar path it runs from.
+  StrCpy $INSTDIR "D:\DeepSeek Harness"
+  IfFileExists "D:\*.*" +2 0
   StrCpy $INSTDIR "$LOCALAPPDATA\Programs\DeepSeek Harness"
   ReadRegStr $0 HKCU "${INSTALL_REGISTRY_KEY}" "InstallLocation"
   ${If} $0 != ""
