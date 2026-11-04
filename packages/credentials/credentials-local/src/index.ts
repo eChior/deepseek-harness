@@ -434,6 +434,20 @@ function mutableDocument(text: string | undefined): Document {
 }
 
 /**
+ * Drop a section that parses as anything but a map, so the edit that follows can
+ * build a fresh one. A `refs:` with nothing under it parses as null, and
+ * js-yaml's `setIn`/`deleteIn` refuse to descend into null instead of replacing
+ * it: the write then fails with "Expected YAML collection at refs".
+ * @param document - the mutable tree being edited.
+ * @param section - the section about to be written.
+ */
+function resetSection(document: Document, section: 'refs' | 'records'): void {
+  const node: unknown = document.get(section, true)
+  if (node === undefined) return
+  if (!isMap(node)) document.delete(section)
+}
+
+/**
  * Render the next document text with one reference set or deleted.
  * @param text - the current document text, `undefined` while the file is absent.
  * @param ref - the reference to write.
@@ -442,6 +456,7 @@ function mutableDocument(text: string | undefined): Document {
  */
 function renderRef(text: string | undefined, ref: CredentialRef, value: string | undefined): string {
   const document = mutableDocument(text)
+  resetSection(document, 'refs')
   if (value === undefined) deleteSectionEntry(document, 'refs', ref)
   else document.setIn(['refs', ref], value)
   return document.toString()
@@ -458,6 +473,7 @@ function renderRef(text: string | undefined, ref: CredentialRef, value: string |
  */
 function renderRecord(text: string | undefined, key: CredentialKey, record: CredentialRecord | undefined): string {
   const document = mutableDocument(text)
+  resetSection(document, 'records')
   if (record === undefined) deleteSectionEntry(document, 'records', key)
   else document.setIn(['records', key], record)
   return document.toString()
@@ -475,6 +491,9 @@ function renderRecord(text: string | undefined, key: CredentialKey, record: Cred
  */
 function deleteSectionEntry(document: Document, section: 'refs' | 'records', key: string): void {
   const map: unknown = document.get(section, true)
+  // A section that is absent or parses as null holds no entry to remove, and
+  // `deleteIn` would throw on the way down instead of returning.
+  if (!isMap(map)) return
   /* v8 ignore next -- both callers render a delete only for an entry they just
      found in the parsed snapshot, so the section it lives in is always a map;
      the guard is what narrows `get`'s `unknown`. */

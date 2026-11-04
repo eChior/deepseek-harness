@@ -463,3 +463,26 @@ describe('real hot reload', () => {
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'self-written', source: 'file' })
   })
 })
+
+describe('a section the author emptied', () => {
+  // A `refs:` with nothing under it parses as null, and js-yaml refuses to
+  // descend into null rather than replacing it, so the write used to fail with
+  // "Expected YAML collection at refs".
+  it('writes a reference into an empty `refs:` block', async () => {
+    const dir = await tempDir()
+    const path = join(dir, '.credentials.yaml')
+    await writeCredentials(path, 'version: 1\nrefs:\nrecords:\n')
+    const ctx = await boot({ path, watch: false })
+    await expect(ctx.credentials.set(KEY, 'written')).resolves.toBeUndefined()
+    expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'written', source: 'file' })
+    expect(await readFile(path, 'utf8')).toContain('DSH_CRED_TEST: written')
+  })
+
+  it('drops a reference from an empty `refs:` block without throwing', async () => {
+    const dir = await tempDir()
+    const path = join(dir, '.credentials.yaml')
+    await writeCredentials(path, 'version: 1\nrefs:\nrecords:\n')
+    const ctx = await boot({ path, watch: false })
+    await expect(ctx.credentials.unset(KEY)).resolves.toBeUndefined()
+  })
+})
