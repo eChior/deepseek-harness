@@ -92,12 +92,10 @@ describe('desktop external plugin profile', () => {
     expect(updated.dsh.profile.bundles).toEqual([
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-web-app',
-      'billion-context',
       'dsh-zh-thinking',
       'superpowers-dsh',
       'dsh-better-sidebar',
       'dsh-notify-me',
-      'dsh-ops',
       'dsh-rewind-plugin',
       'dshmarket',
       '@michengai/dsh-skills-manager',

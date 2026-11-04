@@ -214,6 +214,9 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // each of these publishes its assets directory beside lib rather than inlining it.
   '@deepseek-ai/dsh-redaction': ['assets'],
   '@deepseek-ai/dsh-skill-repo': ['assets'],
+  // The department API keys ride beside the bundle: the account service reads
+  // them by path at runtime, so they never enter the loader graph.
+  '@deepseek-ai/dsh-hrzszy-account': ['assets'],
   '@deepseek-ai/dsh-subprocess': ['lib/control.js'],
   // SSH launches a private helper and shares wire definitions and TLS setup
   // between that helper and the connection owner.

@@ -1519,7 +1519,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-hrzszy-account`
 
 - `inject`: `credentials`
-- `source`: [`packages/credentials/hrzszy-account/src/index.ts:49`](../packages/credentials/hrzszy-account/src/index.ts)
+- `source`: [`packages/credentials/hrzszy-account/src/index.ts:52`](../packages/credentials/hrzszy-account/src/index.ts)
 
 ```ts config-catalog
 /** Deployment endpoints and request deadlines. */
@@ -3001,7 +3001,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-repo`
 
-- `source`: [`packages/skill/skill-repo/src/index.ts:59`](../packages/skill/skill-repo/src/index.ts)
+- `source`: [`packages/skill/skill-repo/src/index.ts:60`](../packages/skill/skill-repo/src/index.ts)
 
 ```ts config-catalog
 /** Fields a deployment can set for the skill mirror. */

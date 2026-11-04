@@ -2789,9 +2789,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async localSkills(): Promise<readonly LocalSkillView[]>',
-        description: 'List the skills this machine can publish, read from the directory the mirror publishes into. A directory without `SKILL.md` is not a skill and is left out.',
+        description: 'List the skills this machine can publish, read from the directory the mirror publishes into. A directory without `SKILL.md` is not a skill and is left out, and so is every skill the repository itself handed down: the mirror writes its own copies there, and offering them for upload would just push them back.',
         parameters: [],
-        returns: 'One entry per skill, sorted by name.',
+        returns: 'One entry per skill written on this machine, sorted by name.',
       },
       {
         signature: 'async uploadSkill(name: string, mode: \'new\' | \'update\' = \'new\'): Promise<SkillUploadView>',

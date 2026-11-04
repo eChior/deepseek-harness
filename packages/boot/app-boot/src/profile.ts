@@ -187,12 +187,10 @@ export const PROFILE_TEMPLATES: Record<string, ProfileTemplate> = {
       // Distribution additions: the third-party plugins this fork preinstalls. Listing them as
       // bundles — rather than inserting them from the web-app layer — is what lets the plugin
       // manager report them as installed community plugins, since it reads this list.
-      'billion-context',
       'dsh-zh-thinking',
       'superpowers-dsh',
       'dsh-better-sidebar',
       'dsh-notify-me',
-      'dsh-ops',
       'dsh-rewind-plugin',
       'dshmarket',
       '@michengai/dsh-skills-manager',
