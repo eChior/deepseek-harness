@@ -43,6 +43,9 @@
       "path": "../../attachment/attachment"
     },
     {
+      "path": "../../core/session"
+    },
+    {
       "path": "../../util/code-language"
     }
   ]
