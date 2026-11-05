@@ -5,6 +5,8 @@ import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 import { execFileSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { installBundledReader } from './reader.ts'
 import { fileURLToPath } from 'node:url'
 import {
   app,
@@ -237,6 +239,21 @@ if (process.platform === 'win32' || process.platform === 'linux') {
     // The ready rejection is reported by the startup path that awaits it.
   })
 }
+
+/**
+ * Put the reader that travels with the client where the plugin looks for it.
+ *
+ * The archive is per platform, so one installation unpacks only its own. This
+ * runs beside the window rather than before it: an image cannot be read until
+ * a session exists, and a slow disk must not delay the first paint.
+ */
+app.whenReady().then(() => installBundledReader({
+  resources: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'),
+  home: resolveDshHome(),
+  log: (message) => { console.info(message) },
+})).catch((error: unknown) => {
+  console.warn('Could not unpack the bundled reader', error)
+})
 
 protocol.registerSchemesAsPrivileged([{
   scheme: SCHEME,

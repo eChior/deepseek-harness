@@ -1,6 +1,6 @@
 import { officePackageDirectories } from '../../../scripts/libreoffice-packages.mjs'
 import { X509Certificate } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -40,6 +40,18 @@ import {
  * rest of it here.
  */
 const DEFAULT_DEB_DEPENDS = ['libgtk-3-0', 'libnotify4', 'libnss3', 'libxss1', 'libxtst6', 'xdg-utils', 'libatspi2.0-0', 'libuuid1', 'libsecret-1-0']
+
+/**
+ * Collect the bundled reader archive for one platform, when the build fetched it.
+ * @param {string} name - Archive file name under `resources/ocr`.
+ * @returns {Array<{ from: string, to: string }>} Zero or one extraResources entry.
+ */
+function readerResources(name) {
+  const path = fileURLToPath(new URL(`../resources/ocr/${name}`, import.meta.url))
+  if (existsSync(path)) return [{ from: path, to: `ocr/${name}` }]
+  console.warn(`No bundled reader archive at ${path}; this build ships without one.`)
+  return []
+}
 
 /**
  * Create electron-builder configuration from one release environment.
@@ -172,6 +184,13 @@ export function createElectronBuilderConfig(
       // There is no LibreOffice engine for Linux, so the Office skill runs this WPS-backed CLI
       // instead. The build compiles wps2pdf from the source next to the shim; sources are not shipped.
       ...(packagesLinux ? [{ from: fileURLToPath(new URL('../resources/wps', import.meta.url)), to: 'wps', filter: ['**/*', '!**/*.cpp'] }] : []),
+      // The reader that takes text out of pictures travels with the client, one archive per
+      // platform: an installation unpacks only its own, and a machine with no route to the
+      // intranet gets the same reader as one that has it. The archives are release assets, not
+      // repository files — a pack this large does not make it through the proxy — so
+      // `scripts/fetch-reader.mjs` collects them before a release build.
+      ...(packagesWindows ? readerResources('dsh-ocr-win-x64.zip') : []),
+      ...(packagesLinux ? readerResources('dsh-ocr-linux-arm64.zip') : []),
     ],
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
