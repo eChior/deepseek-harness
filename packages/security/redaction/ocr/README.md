@@ -50,21 +50,25 @@ Needs the .NET 10 SDK. The GPU backends only exist in the `net10.0` build; the
 ```powershell
 # Windows x64
 dotnet publish -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=false `
-  -p:IncludeNativeLibrariesForSelfExtract=false -o out/win-x64
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=false `
+  -p:PublishTrimmed=true -p:TrimMode=partial -o out/win-x64
 
 # Linux arm64 (the Kylin machines)
 dotnet publish -c Release -r linux-arm64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=false `
-  -p:IncludeNativeLibrariesForSelfExtract=false -o out/linux-arm64
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=false `
+  -p:PublishTrimmed=true -p:TrimMode=partial -o out/linux-arm64
 ```
 
-Do not turn either switch on. `EnableCompressionInSingleFile=true` together with
-`IncludeNativeLibrariesForSelfExtract=true` produces an executable that starts,
-prints nothing and exits 0 — SkiaSharp's native library is the part that does not
-survive the self-extract, and the failure is silent. The working configuration
-above leaves `libSkiaSharp.dll` beside the executable, so a release ships a zip
-holding both files:
+Do not turn `IncludeNativeLibrariesForSelfExtract` on. Together with compression
+it produces an executable that starts, prints nothing and exits 0 — SkiaSharp's
+native library is the part that does not survive the self-extract, and the failure
+is silent. Keeping the library beside the executable makes compression safe, and
+trimming then takes the 84 MB untrimmed bundle down to 19 MB; the trimmed reader
+was run against a real screenshot before it shipped, and `TrimMode=partial` is
+what keeps PaddleOCR's reflection paths intact. A release ships a zip holding both
+files:
 
 ```powershell
 tar -a -c -f dsh-ocr-win-x64.zip -C out/win-x64 dsh-ocr.exe libSkiaSharp.dll

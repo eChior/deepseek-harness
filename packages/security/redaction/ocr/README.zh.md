@@ -45,20 +45,23 @@ stdout 显式用 UTF-8，而不是控制台代码页：Windows 进程若按 ANSI
 ```powershell
 # Windows x64
 dotnet publish -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=false `
-  -p:IncludeNativeLibrariesForSelfExtract=false -o out/win-x64
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=false `
+  -p:PublishTrimmed=true -p:TrimMode=partial -o out/win-x64
 
 # Linux arm64 (the Kylin machines)
 dotnet publish -c Release -r linux-arm64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=false `
-  -p:IncludeNativeLibrariesForSelfExtract=false -o out/linux-arm64
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=false `
+  -p:PublishTrimmed=true -p:TrimMode=partial -o out/linux-arm64
 ```
 
-这两个开关都不能打开。`EnableCompressionInSingleFile=true` 与
-`IncludeNativeLibrariesForSelfExtract=true` 一起用时，产出的可执行文件能启动、
-什么都不输出、然后 exit 0——SkiaSharp 的原生库就是过不了自解压的那一部分，而
-且失败是静默的。上面这套可用配置会把 `libSkiaSharp.dll` 留在可执行文件旁边，
-所以发布物是一个 zip，装两个文件：
+不能打开的是 `IncludeNativeLibrariesForSelfExtract`：它和压缩一起用时，
+产出的可执行文件能启动、什么都不输出、然后 exit 0——SkiaSharp 的原生库就是
+过不了自解压的那一部分，而且失败是静默的。把原生库留在可执行文件旁边，压缩
+就是安全的；裁剪再把没裁剪时的 84MB 降到 19MB，裁剪版在发布前拿真实截图跑过，
+`TrimMode=partial` 是保住 PaddleOCR 反射路径的那一档。发布物是一个 zip，装
+两个文件：
 
 ```powershell
 tar -a -c -f dsh-ocr-win-x64.zip -C out/win-x64 dsh-ocr.exe libSkiaSharp.dll
