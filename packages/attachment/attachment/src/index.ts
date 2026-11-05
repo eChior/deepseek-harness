@@ -47,8 +47,10 @@ export type {
  * What this store needs from a local image reader.
  *
  * Declared here instead of imported so the attachment layer stays independent of
- * whichever plugin reads images: a deployment without one stores images as before.
- * A reader is expected to hand back text that has already been redacted.
+ * whichever plugin reads images: a deployment without one stores images and sends
+ * them as pictures. A reader is expected to hand back text that has already been
+ * redacted; with one, the stored image stays in the session and every model request
+ * carries that text instead of the pixels.
  */
 export interface LocalImageReader {
   /**
@@ -125,12 +127,12 @@ export abstract class AttachmentStore extends Service {
   }
 
   /**
-   * Admit one Host prompt: give every uploaded image the reader's text, or replace it
-   * with its durable reference when the caller supplies no reader.
+   * Admit one Host prompt: store every uploaded image and, when the caller also supplies
+   * a reader, keep the text it read beside that image.
    * Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.
    * @param content - prompt parts in message order after file receipt resolution.
-   * @param reader - local image reader; without one an image is stored as pixels.
-   * @returns admitted prompt parts in the same order as `content`.
+   * @param reader - local image reader; its text travels beside the durable image reference.
+   * @returns admitted prompt parts in message order, each image followed by its text.
    * @throws AttachmentError when the image batch is refused.
    */
   async admitPromptContent(
@@ -142,21 +144,27 @@ export abstract class AttachmentStore extends Service {
         ? { type: 'text', text: part.text }
         : { type: 'file', attachment: part.attachment })
     }
-    // A caller with a reader never stores the image: each one becomes the text it
-    // held, so the pixels stay out of the store and out of every model request,
-    // and what the session keeps has already been redacted.
+    // A caller with a reader stores the image and appends the text that reader saw,
+    // so the session still shows the picture while a text-only route replaces the
+    // image block with its placeholder and answers from the text beside it.
     if (reader !== undefined) {
-      const texts = await Promise.all(
-        content
-          .filter(part => part.type === 'image')
-          .map(image => reader.recognizeImage(image.data, image.mediaType)),
-      )
-      let read = 0
-      return content.map((part) => {
-        if (part.type === 'text') return { type: 'text', text: part.text }
-        if (part.type === 'file') return { type: 'file', attachment: part.attachment }
-        return { type: 'text', text: texts[read++] ?? UNREAD_IMAGE_PLACEHOLDER }
-      })
+      const images = content.filter(part => part.type === 'image')
+      const [refs, texts] = await Promise.all([
+        admitEncodedImages(this, images),
+        Promise.all(images.map(image => reader.recognizeImage(image.data, image.mediaType))),
+      ])
+      const admitted: AdmittedPromptContentPart[] = []
+      let index = 0
+      for (const part of content) {
+        if (part.type === 'text') admitted.push({ type: 'text', text: part.text })
+        else if (part.type === 'file') admitted.push({ type: 'file', attachment: part.attachment })
+        else {
+          admitted.push({ type: 'image', attachment: refs[index] as ImageAttachmentRef })
+          admitted.push({ type: 'text', text: texts[index] ?? UNREAD_IMAGE_PLACEHOLDER })
+          index += 1
+        }
+      }
+      return admitted
     }
     const refs = await admitEncodedImages(this, content.filter(part => part.type === 'image'))
     let next = 0

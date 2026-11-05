@@ -433,9 +433,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async admitPromptContent( content: readonly AttachmentAdmissionPart[], reader?: LocalImageReader, ): Promise<AdmittedPromptContentPart[]>',
-        description: 'Admit one Host prompt: give every uploaded image the reader\'s text, or replace it with its durable reference when the caller supplies no reader. Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.',
-        parameters: [{ name: 'content', description: 'prompt parts in message order after file receipt resolution.' }, { name: 'reader', description: 'local image reader; without one an image is stored as pixels.' }],
-        returns: 'admitted prompt parts in the same order as `content`.',
+        description: 'Admit one Host prompt: store every uploaded image and, when the caller also supplies a reader, keep the text it read beside that image. Text and durable file references pass through unchanged. A prompt without image parts performs no storage operation.',
+        parameters: [{ name: 'content', description: 'prompt parts in message order after file receipt resolution.' }, { name: 'reader', description: 'local image reader; its text travels beside the durable image reference.' }],
+        returns: 'admitted prompt parts in message order, each image followed by its text.',
         throws: ['AttachmentError when the image batch is refused.'],
       },
       {

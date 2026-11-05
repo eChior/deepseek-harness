@@ -142,10 +142,8 @@ describe('AttachmentStore.admitPromptContent', () => {
     ])
   })
 
-  it('keeps the text a local reader reports instead of storing the image', async () => {
-    const store = Object.setPrototypeOf({
-      saveImages: () => { throw new Error('a locally read image must not reach the store') },
-    }, AttachmentStore.prototype) as AttachmentStore
+  it('stores the image and keeps the text a local reader reports beside it', async () => {
+    const { store, mocks } = storeOf()
     await expect(store.admitPromptContent([
       { type: 'text', text: '看这张' },
       { type: 'image', mediaType: 'image/png', data: 'AQ==' },
@@ -154,18 +152,19 @@ describe('AttachmentStore.admitPromptContent', () => {
       recognizeImage: (data: string, mediaType: string) => Promise.resolve(`[图片 ${mediaType} ${data}]`),
     })).resolves.toEqual([
       { type: 'text', text: '看这张' },
+      { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
       { type: 'text', text: '[图片 image/png AQ==]' },
       { type: 'file', attachment: FILE_REF },
     ])
+    expect(mocks.saveImages).toHaveBeenCalledTimes(1)
   })
 
-  it('records a placeholder when the local reader cannot read the image', async () => {
-    const store = Object.setPrototypeOf({
-      saveImages: () => { throw new Error('an unreadable image must not reach the store either') },
-    }, AttachmentStore.prototype) as AttachmentStore
+  it('still stores the image when the local reader cannot read it', async () => {
+    const { store } = storeOf()
     await expect(store.admitPromptContent([
       { type: 'image', mediaType: 'image/png', data: 'AQ==' },
     ], { recognizeImage: () => Promise.resolve(undefined) })).resolves.toEqual([
+      { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
       { type: 'text', text: '[图片-未能识别]' },
     ])
   })
