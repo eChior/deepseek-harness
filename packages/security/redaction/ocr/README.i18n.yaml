@@ -3,14 +3,17 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/security/redaction/ocr/README.md
 /dsh-ocr-the-optional-local-image-reader:
-  en: 370b7014188d6ad2
-  zh: f86eb494dfc643d8
+  en: 8937088318ea719e
+  zh: 5b9772390c797d80
 /dsh-ocr-the-optional-local-image-reader/the-contract:
   en: 4e56960d2b348df0
   zh: cde4d8af5f69a9ce
 /dsh-ocr-the-optional-local-image-reader/building-it:
-  en: 7451e87f4a2a19e1
-  zh: 362dfcae4b27ed19
+  en: 3ac582d1ccc8c846
+  zh: 423182d7a7c23e5d
+/dsh-ocr-the-optional-local-image-reader/which-device-it-runs-on:
+  en: bcbe97c98f0e8abc
+  zh: da1181ebdd36d8b5
 /dsh-ocr-the-optional-local-image-reader/publishing-it:
   en: 39c0ac542f1548a7
   zh: de1e2952fc8a18be

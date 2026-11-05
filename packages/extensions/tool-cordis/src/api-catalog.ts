@@ -8126,7 +8126,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'VisionStatus',
-    declaration: 'export interface VisionStatus {\n    readonly engine: VisionEngine;\n    readonly path: string;\n    readonly present: boolean;\n}',
+    declaration: 'export interface VisionStatus {\n    readonly engine: VisionEngine;\n    readonly path: string;\n    readonly present: boolean;\n    readonly download: string;\n    readonly directory: string;\n}',
   },
   {
     name: 'WebBootBatch',

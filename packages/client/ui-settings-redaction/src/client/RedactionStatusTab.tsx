@@ -160,7 +160,7 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
         <dt className={css.term}>{t('checkedLabel')}</dt>
         <dd className={css.value}>{view.lastChecked ?? t('never')}</dd>
         <dt className={css.term}>{t('imageToolLabel')}</dt>
-        <dd className={css.value}>{view.imageTool ? t('toggleOn') : t('imageToolDenied')}</dd>
+        <dd className={css.value}>{view.imageTool ? t('toggleOn') : t('imageToolLocal')}</dd>
         <dt className={css.term}>{t('ocrLabel')}</dt>
         <dd className={css.value}>
           {engineLabel(view.ocr, t)}
@@ -184,6 +184,7 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
           <Button disabled={savingPath || draftPath === view.ocr.path} onClick={savePath}>
             {t('save')}
           </Button>
+          <p className={css.hint}>{t('ocrDirectoryHint', { directory: view.ocr.directory })}</p>
         </dd>
         <dt className={css.term}>{t('mappingsLabel')}</dt>
         <dd className={css.value}>{view.mappings ? t('toggleOn') : t('toggleOff')}</dd>
@@ -191,7 +192,6 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
       <p className={css.hint}>{t('rulesHint')}</p>
       {view.detail !== null && <p className={css.note}>{t('detailBlocked', { detail: view.detail })}</p>}
       {view.lastError !== null && <p className={css.note}>{t('staleLabel')}: {view.lastError}</p>}
-      {view.ocr.path !== '' && !view.ocr.present && <p className={css.note}>{t('ocrMissing', { path: view.ocr.path })}</p>}
       {view.pending > 0 && <p className={css.hint}>{t('pendingHint')}</p>}
       <div className={css.actions}>
         <Button onClick={refresh}>{t('refresh')}</Button>

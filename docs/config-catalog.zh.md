@@ -2420,7 +2420,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:139`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:141`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**

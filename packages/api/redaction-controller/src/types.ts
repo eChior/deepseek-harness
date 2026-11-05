@@ -53,11 +53,13 @@ export interface RedactionStatusView {
 export interface RedactionVisionView {
   /** Reader in force: the optional binary, or the platform engine. */
   readonly engine: 'paddle' | 'windows' | 'tesseract'
-  /** Path the deployment configured; empty when it configured none. */
+  /** Path of the reader in force; empty when this machine has none. */
   readonly path: string
   /** Whether that path holds a file. */
   readonly present: boolean
   readonly download: string
+  /** Directory a downloaded reader is unpacked into to switch itself on. */
+  readonly directory: string
 }
 
 /** One department list as the settings page lists it. */

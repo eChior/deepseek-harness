@@ -9,17 +9,19 @@ or a printed page can be redacted before anything else sees it.
 It is **not** part of the installer. The binary carries a model and a .NET
 runtime of its own, so shipping it to every machine that never reads an image
 would be waste. It is published on the intranet instead, and a machine that
-wants it downloads the file and points the provider at it:
+wants it unpacks the archive into `%USERPROFILE%\.dsh\redaction\ocr\` — the
+provider looks there on every status read, so downloading and unpacking is the
+whole installation. A deployment that keeps the file elsewhere sets the path:
 
 ```yaml
 # cordis.patch.yml, or the settings form for this plugin
 - id: redaction
   config:
-    ocrPath: C:\Users\<you>\.dsh\redaction\ocr\dsh-ocr.exe
+    ocrPath: D:\tools\dsh-ocr\dsh-ocr.exe
 ```
 
-The settings page shows which reader is in force, so a path that no longer holds
-a file is visible rather than silently falling back.
+The settings page shows which reader is in force and where a download belongs,
+so a machine that has none is visible rather than silently falling back.
 
 ## The contract
 
@@ -42,7 +44,8 @@ makes the binary debuggable by hand.
 
 ## Building it
 
-Needs the .NET 8 SDK.
+Needs the .NET 10 SDK. The GPU backends only exist in the `net10.0` build; the
+`netstandard2.0` one is CPU only.
 
 ```powershell
 # Windows x64
@@ -67,6 +70,23 @@ holding both files:
 tar -a -c -f dsh-ocr-win-x64.zip -C out/win-x64 dsh-ocr.exe libSkiaSharp.dll
 tar -a -c -f dsh-ocr-linux-arm64.zip -C out/linux-arm64 dsh-ocr libSkiaSharp.so
 ```
+
+## Which device it runs on
+
+The kernels run on the CPU by default and on a GPU when the machine has one that
+is actually faster. The first image this tool ever reads is measured both ways —
+CPU against Vulkan — the winner is written to `%TEMP%\dsh-ocr-backend.txt`, and
+every later call loads one model only. A measurement beats a device name: an
+integrated GPU is often the slower choice, and the numbers differ per machine.
+
+On the machine this was written on (AMD Radeon 780M integrated) Vulkan measured
+708 ms against the CPU's 422 ms, so it chose the CPU. A discrete card is the other
+way round by a factor of several. A Kylin machine with a Mali GPU is measured the
+same way, and one without a Vulkan loader stays on the CPU without a word on
+stdout.
+
+`DSH_OCR_BACKEND=cpu|vulkan|metal` skips the measurement. The chosen backend is
+reported on stderr, never on stdout, so the Host's contract is unchanged.
 
 ## Publishing it
 

@@ -21,6 +21,7 @@
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** Script a Windows client runs; it reads base64 on stdin and writes text on stdout. */
@@ -32,6 +33,9 @@ export const DEFAULT_VISION_TIMEOUT_MS = 20_000
 /** Which local reader produces the text. */
 export type VisionEngine = 'paddle' | 'windows' | 'tesseract'
 
+/** File names the optional reader carries, in the order they are looked for. */
+const PADDLE_BINARIES: readonly string[] = ['dsh-ocr.exe', 'dsh-ocr']
+
 /** What the caller can choose about local recognition. */
 export interface VisionOptions {
   /**
@@ -39,8 +43,37 @@ export interface VisionOptions {
    * image; when it is empty or missing the platform engine does.
    */
   paddlePath?: string
+  /**
+   * Directory a downloaded reader was unpacked into. It is looked in only
+   * when no path was configured, so downloading the file and unpacking it
+   * there is enough to switch the reader on — nobody types a path.
+   */
+  paddleDirectory?: string
   /** How long one recognition may take before it is abandoned. */
   timeoutMs?: number
+}
+
+/**
+ * Find the optional reader, if this machine has one.
+ *
+ * A configured path wins, because a deployment that typed one means it. A
+ * machine that downloaded the reader instead leaves the path empty and
+ * unpacks the file into `directory`; finding it there is what makes the
+ * download take effect on its own.
+ * @param configured The path a deployment typed, if any.
+ * @param directory The directory a download is unpacked into, if any.
+ * @returns The path of a file that exists, or an empty string.
+ */
+export function resolvePaddle(configured: string | undefined, directory: string | undefined): string {
+  const explicit = configured?.trim() ?? ''
+  if (explicit !== '') return existsSync(explicit) ? explicit : ''
+  const base = directory?.trim() ?? ''
+  if (base === '') return ''
+  for (const name of PADDLE_BINARIES) {
+    const candidate = join(base, name)
+    if (existsSync(candidate)) return candidate
+  }
+  return ''
 }
 
 /**
@@ -52,8 +85,7 @@ export interface VisionOptions {
  * @returns The engine that would run.
  */
 export function describeVision(options: VisionOptions = {}): VisionEngine {
-  const paddle = options.paddlePath?.trim() ?? ''
-  if (paddle !== '' && existsSync(paddle)) return 'paddle'
+  if (resolvePaddle(options.paddlePath, options.paddleDirectory) !== '') return 'paddle'
   return process.platform === 'win32' ? 'windows' : 'tesseract'
 }
 
@@ -149,10 +181,11 @@ function recognizerCommand(): { command: string; args: string[] } {
  */
 export async function recognizeImageText(bytes: Uint8Array, options: VisionOptions = {}): Promise<string> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_VISION_TIMEOUT_MS
-  if (describeVision(options) === 'paddle') {
+  const paddle = resolvePaddle(options.paddlePath, options.paddleDirectory)
+  if (paddle !== '') {
     // Both readers take base64 on stdin, so the optional one is a drop-in
     // replacement rather than a second code path the caller has to know about.
-    const raw = await run(options.paddlePath?.trim() ?? '', [], Buffer.from(bytes).toString('base64'), timeoutMs)
+    const raw = await run(paddle, [], Buffer.from(bytes).toString('base64'), timeoutMs)
     return normalizeRecognized(raw.trim())
   }
   const { command, args } = recognizerCommand()

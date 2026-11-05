@@ -22,7 +22,6 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
-import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -69,7 +68,7 @@ import {
 } from './source.ts'
 import { compileRules, isUsable, parseTermList, type ParsedTermList, type RedactionCategory, type RedactionRule } from './terms.ts'
 import { redactText as applyRules } from './redact.ts'
-import { DEFAULT_VISION_TIMEOUT_MS, describeVision, recognizeImageText } from './vision.ts'
+import { DEFAULT_VISION_TIMEOUT_MS, describeVision, recognizeImageText, resolvePaddle } from './vision.ts'
 import type { VisionEngine } from './vision.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -247,12 +246,14 @@ export interface RedactionStatus {
 export interface VisionStatus {
   /** The reader in force. */
   readonly engine: VisionEngine
-  /** Path the deployment configured; empty when it configured none. */
+  /** Path of the reader in force; empty when this machine has none. */
   readonly path: string
   /** Whether that path holds a file. */
   readonly present: boolean
   /** Where a deployment downloads the optional reader from. */
   readonly download: string
+  /** Directory a downloaded reader is unpacked into to switch itself on. */
+  readonly directory: string
 }
 
 /**
@@ -787,13 +788,27 @@ export class RedactionService extends Service {
    * @returns The engine, the configured path and whether it holds a file.
    */
   private visionStatus(): VisionStatus {
-    const path = this.config.ocrPath
+    const directory = this.readerDirectory()
+    const path = resolvePaddle(this.config.ocrPath, directory)
     return {
       engine: describeVision({ paddlePath: path }),
       path,
-      present: path !== '' && existsSync(path),
+      present: path !== '',
       download: OCR_RELEASES,
+      directory,
     }
+  }
+
+  /**
+   * Where a downloaded reader is expected to sit.
+   *
+   * A deployment that downloads the optional reader unpacks it here and is
+   * done: the reader is found on the next status read, without anyone
+   * configuring a path that would differ per machine.
+   * @returns The absolute directory, whether or not it exists yet.
+   */
+  private readerDirectory(): string {
+    return dshHomePath('redaction', 'ocr')
   }
 
   /**
@@ -813,6 +828,7 @@ export class RedactionService extends Service {
     try {
       const text = await recognizeImageText(Buffer.from(data, 'base64'), {
         paddlePath: this.config.ocrPath,
+        paddleDirectory: this.readerDirectory(),
         timeoutMs: this.config.visionTimeoutMs,
       })
       return text === '' ? '[图片-无文字]' : this.redactText(text)

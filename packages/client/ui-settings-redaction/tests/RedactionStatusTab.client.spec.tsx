@@ -29,7 +29,7 @@ const READY: RedactionStatusView = {
   roster: 0,
   imageTool: true,
   mappings: true,
-  ocr: { engine: 'windows', path: '', present: false, download: 'http://intranet/releases' },
+  ocr: { engine: 'windows', path: '', present: false, download: 'http://intranet/releases', directory: 'C:/dsh/redaction/ocr' },
 }
 
 const ROSTER: RedactionRosterView = {
@@ -124,7 +124,7 @@ describe('RedactionStatusTab', () => {
     render(<RedactionStatusTab {...props(read, { saveOcrPath })} />)
 
     await waitFor(() => { expect(screen.getByText('2026-10-16')).toBeTruthy() })
-    const field = screen.getByPlaceholderText('留空则用系统自带识别')
+    const field = screen.getByPlaceholderText('留空则自动使用下载目录里的读图器')
     fireEvent.change(field, { target: { value: 'D:/tools/dsh-ocr.exe' } })
     fireEvent.click(screen.getByText('保存'))
 

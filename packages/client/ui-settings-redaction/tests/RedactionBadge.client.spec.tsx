@@ -29,7 +29,7 @@ const STATUS: RedactionStatusView = {
   roster: 0,
   imageTool: false,
   mappings: true,
-  ocr: { engine: 'windows', path: '', present: false, download: 'http://intranet/releases' },
+  ocr: { engine: 'windows', path: '', present: false, download: 'http://intranet/releases', directory: 'C:/dsh/redaction/ocr' },
 }
 
 /** Translate a key the way the composer slot renderer's locale binding does. */
@@ -90,7 +90,7 @@ describe('RedactionBadge', () => {
     expect(screen.getByText('脱敏状态')).toBeTruthy()
     expect(screen.getAllByText('脱敏常开').length).toBeGreaterThan(0)
     expect(screen.getAllByText('已开启').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('已关闭').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('本地 OCR').length).toBeGreaterThan(0)
     expect(screen.getByText('2026-10-22')).toBeTruthy()
     expect(screen.getByText('190 个词条 · 32 条正则')).toBeTruthy()
   })

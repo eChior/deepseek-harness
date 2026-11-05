@@ -1,5 +1,39 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { normalizeRecognized } from '../src/vision.ts'
+import { describeVision, normalizeRecognized, resolvePaddle } from '../src/vision.ts'
+
+/**
+ * A downloaded reader has to switch itself on.
+ *
+ * The download is an archive a person unpacks, so the only thing they can be
+ * asked to do is put the file somewhere known: a directory that already holds
+ * the binary must therefore be enough, and a typed path must still win.
+ */
+describe('resolvePaddle', () => {
+  it('finds a binary that was unpacked into the download directory', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-ocr-'))
+    const binary = join(directory, 'dsh-ocr.exe')
+    writeFileSync(binary, '')
+    expect(resolvePaddle('', directory)).toBe(binary)
+    expect(describeVision({ paddleDirectory: directory })).toBe('paddle')
+  })
+
+  it('prefers the path a deployment typed', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-ocr-'))
+    writeFileSync(join(directory, 'dsh-ocr.exe'), '')
+    const typed = join(directory, 'typed.exe')
+    writeFileSync(typed, '')
+    expect(resolvePaddle(typed, directory)).toBe(typed)
+  })
+
+  it('reports nothing when the directory holds no reader', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-ocr-'))
+    expect(resolvePaddle('', directory)).toBe('')
+    expect(resolvePaddle(undefined, '')).toBe('')
+  })
+})
 
 /**
  * A recognizer reports one token per visual run, so the spaces it inserts carry

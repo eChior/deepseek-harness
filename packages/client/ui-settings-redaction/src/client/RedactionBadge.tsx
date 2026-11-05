@@ -205,8 +205,8 @@ export function RedactionBadge({
             <dd><span className={css.on}>{t('badgeOn')}</span></dd>
             <dt>{t('badgeImageTool')}</dt>
             <dd>
-              <span className={state?.imageTool === false ? css.off : css.on}>
-                {state?.imageTool === false ? t('badgeOff') : t('badgeOn')}
+              <span className={css.on}>
+                {state?.imageTool === false ? t('badgeImageLocal') : t('badgeOn')}
               </span>
             </dd>
             <dt>{t('badgeOcr')}</dt>

@@ -7,18 +7,19 @@
 之前先过一遍脱敏。
 
 它**不在安装包里**。这个二进制自带模型和一份 .NET 运行时，把它发给每一台从
-不读图的机器是浪费。所以它发布在内网上，需要的机器下载文件，再把读图器指向
-这个文件：
+不读图的机器是浪费。所以它发布在内网上，需要的机器把压缩包解开到
+`%USERPROFILE%\.dsh\redaction\ocr\`——插件每次读状态都会看这个目录，所以下载
+并解压就是全部安装步骤。把文件放在别处的部署再填路径：
 
 ```yaml
 # cordis.patch.yml, or the settings form for this plugin
 - id: redaction
   config:
-    ocrPath: C:\Users\<you>\.dsh\redaction\ocr\dsh-ocr.exe
+    ocrPath: D:\tools\dsh-ocr\dsh-ocr.exe
 ```
 
-设置页会显示当前生效的是哪一个读图器，所以指向了一个已经不存在的位置是看得见
-的，而不是悄悄回退到别的引擎。
+设置页会显示当前生效的是哪一个读图器、下载物该放到哪里，所以一台没有读图器的
+机器是看得见的，而不是悄悄回退到别的引擎。
 
 ## 契约
 
@@ -38,7 +39,8 @@ stdout 显式用 UTF-8，而不是控制台代码页：Windows 进程若按 ANSI
 
 ## 构建
 
-需要 .NET 8 SDK。
+需要 .NET 10 SDK。GPU 后端只存在于 `net10.0` 的构建里，`netstandard2.0` 那份
+只有 CPU。
 
 ```powershell
 # Windows x64
@@ -62,6 +64,20 @@ dotnet publish -c Release -r linux-arm64 --self-contained true `
 tar -a -c -f dsh-ocr-win-x64.zip -C out/win-x64 dsh-ocr.exe libSkiaSharp.dll
 tar -a -c -f dsh-ocr-linux-arm64.zip -C out/linux-arm64 dsh-ocr libSkiaSharp.so
 ```
+
+## 跑在哪块设备上
+
+默认在 CPU 上跑，机器上有一块确实更快的 GPU 时就用 GPU。这个工具读到的第一张
+图会两种都测一遍——CPU 对 Vulkan——把更快的那个写进
+`%TEMP%\dsh-ocr-backend.txt`，之后每次调用只加载一次模型。实测比设备名可靠：
+核显经常是更慢的那一个，而且每台机器的数字都不一样。
+
+写这份文档的那台机器（AMD Radeon 780M 核显）上 Vulkan 是 708 ms，CPU 是
+422 ms，所以它选了 CPU。独显则相反，快好几倍。带 Mali GPU 的麒麟机器同样按
+实测决定；没有 Vulkan 加载器的机器留在 CPU 上，stdout 上不会多一个字。
+
+`DSH_OCR_BACKEND=cpu|vulkan|metal` 可以跳过实测。选中的后端只报到 stderr，
+从不写 stdout，所以对宿主机的契约没有变化。
 
 ## 发布
 
