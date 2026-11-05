@@ -79,6 +79,7 @@ export function apply(ctx: ClientContext): void {
     departments: async () => unwrap('departments', await remote.departments()),
     setDepartment: async request => unwrap('setDepartment', await remote.setDepartment(request)),
     example: async () => unwrap('example', await remote.example()),
+    saveOcrPath: async path => ctx.configForms.get<{ ocrPath?: string }>('redaction').set('ocrPath', path),
   }
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({

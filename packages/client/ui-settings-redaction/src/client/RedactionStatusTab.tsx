@@ -41,6 +41,8 @@ export interface RedactionStatusTabInjected {
   setDepartment: (request: { readonly name: string; readonly enabled: boolean }) => Promise<RedactionDepartmentView>
   /** Read the example a department starts from. */
   example: () => Promise<{ readonly name: string; readonly text: string }>
+  /** Point the provider at an optional reader, or at nothing. */
+  saveOcrPath: (path: string) => Promise<boolean>
 }
 
 /** Full component props assembled by the Settings slot renderer. */
@@ -105,6 +107,28 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
     return () => { live = false }
   }, [read])
 
+  // The path is the one setting on this page a person edits, so it starts
+  // from what the provider holds and follows it until someone types.
+  const [draftPath, setDraftPath] = useState('')
+  const [pathTyped, setPathTyped] = useState(false)
+  const [savingPath, setSavingPath] = useState(false)
+
+  useEffect(() => {
+    if (state.status === 'ready' && !pathTyped) setDraftPath(state.view.ocr.path)
+  }, [state, pathTyped])
+
+  const savePath = useCallback((): void => {
+    setSavingPath(true)
+    void props.saveOcrPath(draftPath).then(
+      (saved) => {
+        setSavingPath(false)
+        setPathTyped(false)
+        if (saved) refresh()
+      },
+      () => { setSavingPath(false) },
+    )
+  }, [props.saveOcrPath, draftPath, refresh])
+
   if (state.status === 'loading') return <p className={css.status}>{t('loading')}</p>
   if (state.status === 'error') {
     return (
@@ -148,6 +172,18 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
               </a>
             </>
           )}
+        </dd>
+        <dt className={css.term}>{t('ocrPathLabel')}</dt>
+        <dd className={`${css.value} ${css.pathRow}`}>
+          <input
+            className={css.pathInput}
+            value={draftPath}
+            placeholder={t('ocrPathPlaceholder')}
+            onChange={(event) => { setPathTyped(true); setDraftPath(event.target.value) }}
+          />
+          <Button disabled={savingPath || draftPath === view.ocr.path} onClick={savePath}>
+            {t('save')}
+          </Button>
         </dd>
         <dt className={css.term}>{t('mappingsLabel')}</dt>
         <dd className={css.value}>{view.mappings ? t('toggleOn') : t('toggleOff')}</dd>

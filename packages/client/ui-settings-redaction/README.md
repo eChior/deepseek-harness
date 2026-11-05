@@ -33,6 +33,8 @@ The status half carries no control beyond that refresh. The provider has no off 
 
 **Term list revision** is the revision the loaded list declares, or a dash when nothing loaded. **Term list source** names the copy the compiled rules came from — shipped with the client, the local cache, or the intranet publisher. **Compiled rules** counts the terms and the patterns separately, because a term matches literally while a pattern compiles as a JavaScript subset. **Replacements in this process** counts matches the provider has rewritten since the Host started, which includes every prompt and every tool result that carried a term. **Queued term requests** counts terms waiting on this machine for a delivery target. **Last publisher check** shows when the provider last asked the publisher, and reads as never before the first attempt.
 
+**Image reader** names the engine local OCR uses — the optional PaddleOCR binary when one is configured and present, the system reader otherwise — and links the intranet download for it. **Reader path** is the one field on this page a person edits: paste the binary's location and press **Save**, or empty it to fall back to the system reader. A path that no longer resolves is reported rather than silently ignored, because images would otherwise stop being read at all.
+
 Two notes appear only when they apply. A blocked term list names the reason nothing is being replaced — an unreadable file, an unparsable list, or a compile failure. A refresh that kept the rules already loaded names why, so a stale revision is visible rather than silent.
 
 ### Uploading a department term list

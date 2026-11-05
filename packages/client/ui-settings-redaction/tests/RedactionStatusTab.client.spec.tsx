@@ -84,6 +84,7 @@ function face(overrides: Partial<RedactionStatusTabInjected> = {}): RedactionSta
     setDepartment: async () => DEPARTMENT,
     example: async () => ({ name: 'terms-local.example.yaml', text: 'version: 1\n' }),
     ...overrides,
+    saveOcrPath: overrides.saveOcrPath ?? (async () => true),
   }
 }
 
@@ -115,6 +116,20 @@ describe('RedactionStatusTab', () => {
     await waitFor(() => { expect(screen.getByText('本机缓存')).toBeTruthy() })
     expect(screen.getAllByText('从未')).toHaveLength(1)
     expect(screen.getByText('这些词条在本机排队，等待交付通道。')).toBeTruthy()
+  })
+
+  it('saves the reader path the page holds and re-reads the status', async () => {
+    const saveOcrPath = vi.fn(async () => true)
+    const read = vi.fn(async () => READY)
+    render(<RedactionStatusTab {...props(read, { saveOcrPath })} />)
+
+    await waitFor(() => { expect(screen.getByText('2026-10-16')).toBeTruthy() })
+    const field = screen.getByPlaceholderText('留空则用系统自带识别')
+    fireEvent.change(field, { target: { value: 'D:/tools/dsh-ocr.exe' } })
+    fireEvent.click(screen.getByText('保存'))
+
+    await waitFor(() => { expect(saveOcrPath).toHaveBeenCalledWith('D:/tools/dsh-ocr.exe') })
+    await waitFor(() => { expect(read).toHaveBeenCalledTimes(2) })
   })
 
   it('names a blocked term list and a refresh that kept the loaded rules', async () => {

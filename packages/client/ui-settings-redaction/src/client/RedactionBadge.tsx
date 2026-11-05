@@ -147,6 +147,18 @@ export function RedactionBadge({
   const replacements = state?.replacements ?? 0
   const mappings = state?.mappings ?? true
   const rules = state === null ? null : t('rulesValue', { terms: state.terms, patterns: state.patterns })
+  // The reader is the one thing on this badge a person has to act on: a
+  // configured binary that is not there means images fall back to the
+  // system reader, and the download has to be repeated.
+  const ocr = state?.ocr
+  const ocrName = ocr === undefined
+    ? null
+    : ocr.engine === 'paddle'
+      ? t('badgeOcrPaddle')
+      : ocr.engine === 'windows'
+        ? t('badgeOcrWindows')
+        : t('badgeOcrTesseract')
+  const ocrMissing = ocr !== undefined && ocr.path !== '' && !ocr.present
 
   return (
     <span className={css.wrap} ref={rootRef}>
@@ -171,6 +183,12 @@ export function RedactionBadge({
         <span className={`${css.viewChip}${mappings ? '' : ` ${css.viewChipPlaceholder}`}`}>
           {mappings ? t('badgeMappingsShort') : t('badgeMappingsOff')}
         </span>
+        <span
+          className={`${css.viewChip}${ocrMissing ? ` ${css.viewChipPlaceholder}` : ''}`}
+          title={t('badgeOcr')}
+        >
+          {ocrMissing ? t('badgeOcrMissing') : ocrName ?? t('loading')}
+        </span>
         <span className={css.swatch} style={{ background: color }} aria-hidden />
       </button>
       {open && (
@@ -186,7 +204,16 @@ export function RedactionBadge({
             <dt>{t('badgeGuard')}</dt>
             <dd><span className={css.on}>{t('badgeOn')}</span></dd>
             <dt>{t('badgeImageTool')}</dt>
-            <dd><span className={css.off}>{t('badgeOff')}</span></dd>
+            <dd>
+              <span className={state?.imageTool === false ? css.off : css.on}>
+                {state?.imageTool === false ? t('badgeOff') : t('badgeOn')}
+              </span>
+            </dd>
+            <dt>{t('badgeOcr')}</dt>
+            <dd>
+              {ocrName ?? t('loading')}
+              {ocrMissing && <span className={css.off}> · {t('badgeOcrMissing')}</span>}
+            </dd>
             <dt>{t('badgeRevision')}</dt>
             <dd>{state?.revision ?? t('never')}</dd>
             <dt>{t('badgeRules')}</dt>
