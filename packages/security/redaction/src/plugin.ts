@@ -187,6 +187,17 @@ export interface Config {
   mappings?: boolean
   /** Deny the read-image tool to every agent of this deployment. Defaults to true: images go through local OCR, not the model. */
   readImage?: boolean
+  /**
+   * Whether a picture the user attaches is read on arrival or on demand.
+   *
+   * `tool` keeps the image in the session and leaves reading it to the model,
+   * which calls the reader tool when it wants the text; `prompt` reads every
+   * image as the prompt arrives and appends the text beside it, which is what a
+   * deployment whose model has no tools needs.
+   */
+  ocrMode?: 'tool' | 'prompt'
+  /** Which device the optional reader uses: measured on first run, or pinned. */
+  ocrBackend?: 'auto' | 'cpu' | 'gpu'
 }
 
 export const Config: z<Config> = z.object({
@@ -204,6 +215,8 @@ export const Config: z<Config> = z.object({
   rosterPath: z.string().default(ROSTER_PATH),
   mappings: z.boolean().default(true),
   readImage: z.boolean().default(true),
+  ocrMode: z.union(['tool', 'prompt']).default('tool'),
+  ocrBackend: z.union(['auto', 'cpu', 'gpu']).default('auto'),
 })
 
 /** What the provider has loaded and how much it has replaced so far. */
@@ -240,6 +253,8 @@ export interface RedactionStatus {
   readonly imageTool: boolean
   /** Which local reader reads an image, and whether the optional one is installed. */
   readonly ocr: VisionStatus
+  /** Whether an attached picture is read on arrival or only when the model asks. */
+  readonly ocrMode: 'tool' | 'prompt'
 }
 
 /** Which reader an image goes through, and where the optional one lives. */
@@ -254,6 +269,8 @@ export interface VisionStatus {
   readonly download: string
   /** Directory a downloaded reader is unpacked into to switch itself on. */
   readonly directory: string
+  /** Which device the optional reader uses: measured on first run, or pinned. */
+  readonly backend: 'auto' | 'cpu' | 'gpu'
 }
 
 /**
@@ -350,6 +367,8 @@ export class RedactionService extends Service {
       rosterPath: config.rosterPath ?? ROSTER_PATH,
       mappings: config.mappings ?? true,
       readImage: config.readImage ?? true,
+      ocrMode: config.ocrMode ?? 'tool',
+      ocrBackend: config.ocrBackend ?? 'auto',
     }
     this.mappingsOn = this.config.mappings
     this.readImageOn = this.config.readImage
@@ -373,6 +392,7 @@ export class RedactionService extends Service {
       mappings: this.config.mappings,
       imageTool: this.config.readImage,
       ocr: this.visionStatus(),
+      ocrMode: this.config.ocrMode,
     }
     ctx.effect(() => {
       void this.load()
@@ -500,6 +520,18 @@ export class RedactionService extends Service {
     this.mappingsOn = on
     this.current = { ...this.current, mappings: on }
     return this.mappingsOn
+  }
+
+  /**
+   * Whether a picture attached to a prompt is read as it arrives.
+   *
+   * The prompt path asks this before it decides whether to hand a reader to the
+   * attachment store: `tool` keeps the picture and lets the model ask for the
+   * text, `prompt` reads it immediately and appends the text beside it.
+   * @returns The configured mode.
+   */
+  get ocrMode(): 'tool' | 'prompt' {
+    return this.config.ocrMode
   }
 
   /** What the term list declares and how many replacements this process has made. */
@@ -796,6 +828,7 @@ export class RedactionService extends Service {
       present: path !== '',
       download: OCR_RELEASES,
       directory,
+      backend: this.config.ocrBackend,
     }
   }
 
@@ -830,6 +863,7 @@ export class RedactionService extends Service {
         paddlePath: this.config.ocrPath,
         paddleDirectory: this.readerDirectory(),
         timeoutMs: this.config.visionTimeoutMs,
+        backend: this.config.ocrBackend,
       })
       return text === '' ? '[图片-无文字]' : this.redactText(text)
     } catch (error) {

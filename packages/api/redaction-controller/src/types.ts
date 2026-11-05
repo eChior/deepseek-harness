@@ -47,6 +47,8 @@ export interface RedactionStatusView {
   readonly imageTool: boolean
   /** Which local reader reads an image, and whether the optional one is installed. */
   readonly ocr: RedactionVisionView
+  /** Whether an attached picture is read as it arrives or only when the model asks. */
+  readonly ocrMode: 'tool' | 'prompt'
 }
 
 /** Which local reader reads an image. */
@@ -60,6 +62,8 @@ export interface RedactionVisionView {
   readonly download: string
   /** Directory a downloaded reader is unpacked into to switch itself on. */
   readonly directory: string
+  /** Which device the optional reader uses: measured on first run, or pinned. */
+  readonly backend: 'auto' | 'cpu' | 'gpu'
 }
 
 /** One department list as the settings page lists it. */

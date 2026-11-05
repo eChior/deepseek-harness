@@ -29,7 +29,15 @@ const READY: RedactionStatusView = {
   roster: 0,
   imageTool: true,
   mappings: true,
-  ocr: { engine: 'windows', path: '', present: false, download: 'http://intranet/releases', directory: 'C:/dsh/redaction/ocr' },
+  ocr: {
+    engine: 'windows',
+    path: '',
+    present: false,
+    download: 'http://intranet/releases',
+    directory: 'C:/dsh/redaction/ocr',
+    backend: 'auto',
+  },
+  ocrMode: 'tool',
 }
 
 const ROSTER: RedactionRosterView = {
@@ -85,6 +93,8 @@ function face(overrides: Partial<RedactionStatusTabInjected> = {}): RedactionSta
     example: async () => ({ name: 'terms-local.example.yaml', text: 'version: 1\n' }),
     ...overrides,
     saveOcrPath: overrides.saveOcrPath ?? (async () => true),
+    saveOcrMode: overrides.saveOcrMode ?? (async () => true),
+    saveOcrBackend: overrides.saveOcrBackend ?? (async () => true),
   }
 }
 
@@ -130,6 +140,23 @@ describe('RedactionStatusTab', () => {
 
     await waitFor(() => { expect(saveOcrPath).toHaveBeenCalledWith('D:/tools/dsh-ocr.exe') })
     await waitFor(() => { expect(read).toHaveBeenCalledTimes(2) })
+  })
+
+  it('saves the reading mode and the device as they change', async () => {
+    const saveOcrMode = vi.fn(async () => true)
+    const saveOcrBackend = vi.fn(async () => true)
+    const read = vi.fn(async () => READY)
+    render(<RedactionStatusTab {...props(read, { saveOcrMode, saveOcrBackend })} />)
+
+    await waitFor(() => { expect(screen.getByText('2026-10-16')).toBeTruthy() })
+    const mode = screen.getByDisplayValue('模型按需读取（图片留在会话里）')
+    fireEvent.change(mode, { target: { value: 'prompt' } })
+    await waitFor(() => { expect(saveOcrMode).toHaveBeenCalledWith('prompt') })
+
+    const device = screen.getByDisplayValue('自动（首次实测 CPU 与 GPU）')
+    fireEvent.change(device, { target: { value: 'cpu' } })
+    await waitFor(() => { expect(saveOcrBackend).toHaveBeenCalledWith('cpu') })
+    await waitFor(() => { expect(read).toHaveBeenCalledTimes(3) })
   })
 
   it('names a blocked term list and a refresh that kept the loaded rules', async () => {

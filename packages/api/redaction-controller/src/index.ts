@@ -99,6 +99,7 @@ export class RedactionController extends TypertRemoteService {
       mappings: view.mappings,
       imageTool: view.imageTool,
       ocr: view.ocr,
+      ocrMode: view.ocrMode,
     })
   }
 

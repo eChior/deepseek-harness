@@ -12,6 +12,7 @@ import { applyReadTool, READ_LIMIT, STREAM_MIN_SIZE } from './read.ts'
 import { applyWriteTool } from './write.ts'
 import { applyEditTool } from './edit.ts'
 import { applyReadImageTool } from './read-image.ts'
+import { applyReadImageTextTool } from './read-image-text.ts'
 import { READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from './read-render.ts'
 import { FsSandboxController } from './sandbox.ts'
 
@@ -37,6 +38,13 @@ export interface Config {
    * that would hand raw image pixels to the model. Off by default.
    */
   readImage?: boolean
+  /**
+   * Whether the model gets the `read_image_text` tool, which reads the text out
+   * of an image file with this machine's local recognizer. On by default where a
+   * local reader is mounted: it is how a text-only model sees an attached
+   * picture without the pixels ever leaving the machine.
+   */
+  readImageText?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -45,6 +53,7 @@ export const Config: z<Config> = z.object({
   readMaxBytes: z.number().default(READ_MAX_BYTES),
   readStreamMinSize: z.number().default(STREAM_MIN_SIZE),
   readImage: z.boolean().default(false),
+  readImageText: z.boolean().default(true),
 })
 
 /** The shape after schemastery applied the defaults. */
@@ -79,6 +88,15 @@ export function apply(ctx: Context, config: Config): void {
   if (resolved.readImage) {
     ctx.inject(['attachments'], (imageCtx) => {
       applyReadImageTool(imageCtx)
+    })
+  }
+  // read_image_text is the text-only counterpart: it exists only while a plugin
+  // that can read images locally is mounted, and it never depends on a model
+  // accepting pixels. `ctx.inject` keeps the registration and the service
+  // lifetime in step, so unmounting the reader unmounts the tool.
+  if (resolved.readImageText) {
+    ctx.inject(['redaction'], (readerCtx) => {
+      applyReadImageTextTool(readerCtx)
     })
   }
   // One escalation API shared by both mutating tools: advertisement gating,

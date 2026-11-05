@@ -334,11 +334,14 @@ export class SessionCommandController {
       ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
     }
     const hasImage = request.content.some(part => part.type === 'image')
-    // A deployment with a local image reader keeps the picture in the session but
-    // hands every model the text it read, so a text-only model is no reason to
-    // refuse the prompt. The modality check is for images sent as images.
-    const imageReader = this.ctx.get('redaction') as LocalImageReader | undefined
-    const sendsImages = hasImage && imageReader === undefined
+    // A deployment with a local reader keeps the picture in the session no matter
+    // which mode it runs in, so a text-only model is never a reason to refuse the
+    // prompt. `prompt` mode additionally reads the text as the image arrives and
+    // appends it; `tool` mode leaves the reading to the model, so no reader is
+    // handed to the attachment store and no text is appended.
+    const redaction = this.ctx.get('redaction') as (LocalImageReader & { ocrMode?: 'tool' | 'prompt' }) | undefined
+    const imageReader = redaction?.ocrMode === 'prompt' ? redaction : undefined
+    const sendsImages = hasImage && redaction === undefined
     const admit = async (): Promise<SessionPromptValue> => {
       try {
         if (sendsImages) {

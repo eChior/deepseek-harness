@@ -80,6 +80,9 @@ export function apply(ctx: ClientContext): void {
     setDepartment: async request => unwrap('setDepartment', await remote.setDepartment(request)),
     example: async () => unwrap('example', await remote.example()),
     saveOcrPath: async path => ctx.configForms.get<{ ocrPath?: string }>('redaction').set('ocrPath', path),
+    saveOcrMode: async mode => ctx.configForms.get<{ ocrMode?: 'tool' | 'prompt' }>('redaction').set('ocrMode', mode),
+    saveOcrBackend: async backend => ctx.configForms.get<{ ocrBackend?: 'auto' | 'cpu' | 'gpu' }>('redaction')
+      .set('ocrBackend', backend),
   }
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({

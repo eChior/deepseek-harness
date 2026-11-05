@@ -43,6 +43,10 @@ export interface RedactionStatusTabInjected {
   example: () => Promise<{ readonly name: string; readonly text: string }>
   /** Point the provider at an optional reader, or at nothing. */
   saveOcrPath: (path: string) => Promise<boolean>
+  /** Choose whether an attached picture is read on arrival or on demand. */
+  saveOcrMode: (mode: 'tool' | 'prompt') => Promise<boolean>
+  /** Choose which device the optional reader uses. */
+  saveOcrBackend: (backend: 'auto' | 'cpu' | 'gpu') => Promise<boolean>
 }
 
 /** Full component props assembled by the Settings slot renderer. */
@@ -117,6 +121,26 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
     if (state.status === 'ready' && !pathTyped) setDraftPath(state.view.ocr.path)
   }, [state, pathTyped])
 
+  // The two choices are one field each and change on a click, so they save as
+  // they change; the page re-reads the status afterwards to show what is in force.
+  const [savingReader, setSavingReader] = useState(false)
+  const saveReader = useCallback((
+    kind: 'mode' | 'backend',
+    value: 'tool' | 'prompt' | 'auto' | 'cpu' | 'gpu',
+  ): void => {
+    setSavingReader(true)
+    const written = kind === 'mode'
+      ? props.saveOcrMode(value as 'tool' | 'prompt')
+      : props.saveOcrBackend(value as 'auto' | 'cpu' | 'gpu')
+    void written.then(
+      (saved) => {
+        setSavingReader(false)
+        if (saved) refresh()
+      },
+      () => { setSavingReader(false) },
+    )
+  }, [props.saveOcrMode, props.saveOcrBackend, refresh])
+
   const savePath = useCallback((): void => {
     setSavingPath(true)
     void props.saveOcrPath(draftPath).then(
@@ -185,6 +209,31 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
             {t('save')}
           </Button>
           <p className={css.hint}>{t('ocrDirectoryHint', { directory: view.ocr.directory })}</p>
+        </dd>
+        <dt className={css.term}>{t('ocrModeLabel')}</dt>
+        <dd className={css.value}>
+          <select
+            className={css.pathInput}
+            value={view.ocrMode}
+            disabled={savingReader}
+            onChange={(event) => { saveReader('mode', event.target.value as 'tool' | 'prompt') }}
+          >
+            <option value="tool">{t('ocrModeTool')}</option>
+            <option value="prompt">{t('ocrModePrompt')}</option>
+          </select>
+        </dd>
+        <dt className={css.term}>{t('ocrBackendLabel')}</dt>
+        <dd className={css.value}>
+          <select
+            className={css.pathInput}
+            value={view.ocr.backend}
+            disabled={savingReader}
+            onChange={(event) => { saveReader('backend', event.target.value as 'auto' | 'cpu' | 'gpu') }}
+          >
+            <option value="auto">{t('ocrBackendAuto')}</option>
+            <option value="cpu">{t('ocrBackendCpu')}</option>
+            <option value="gpu">{t('ocrBackendGpu')}</option>
+          </select>
         </dd>
         <dt className={css.term}>{t('mappingsLabel')}</dt>
         <dd className={css.value}>{view.mappings ? t('toggleOn') : t('toggleOff')}</dd>

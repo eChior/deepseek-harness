@@ -2482,6 +2482,17 @@ export interface Config {
   mappings?: boolean
   /** Deny the read-image tool to every agent of this deployment. Defaults to true: images go through local OCR, not the model. */
   readImage?: boolean
+  /**
+   * Whether a picture the user attaches is read on arrival or on demand.
+   *
+   * `tool` keeps the image in the session and leaves reading it to the model,
+   * which calls the reader tool when it wants the text; `prompt` reads every
+   * image as the prompt arrives and appends the text beside it, which is what a
+   * deployment whose model has no tools needs.
+   */
+  ocrMode?: 'tool' | 'prompt'
+  /** Which device the optional reader uses: measured on first run, or pinned. */
+  ocrBackend?: 'auto' | 'cpu' | 'gpu'
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->
@@ -3671,7 +3682,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-fs`
 
 - `inject`: `tools` · `fs` · `systemPrompt`
-- `source`: [`packages/fs/tool-fs/src/index.ts:25`](../packages/fs/tool-fs/src/index.ts)
+- `source`: [`packages/fs/tool-fs/src/index.ts:26`](../packages/fs/tool-fs/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — `Config` supplies the defaults). */
@@ -3690,6 +3701,13 @@ export interface Config {
    * that would hand raw image pixels to the model. Off by default.
    */
   readImage?: boolean
+  /**
+   * Whether the model gets the `read_image_text` tool, which reads the text out
+   * of an image file with this machine's local recognizer. On by default where a
+   * local reader is mounted: it is how a text-only model sees an attached
+   * picture without the pixels ever leaving the machine.
+   */
+  readImageText?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-fs -->

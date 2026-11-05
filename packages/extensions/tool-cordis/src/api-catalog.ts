@@ -6402,7 +6402,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n    readonly ocrMode: \'tool\' | \'prompt\';\n}',
   },
   {
     name: 'Registry',
@@ -8126,7 +8126,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'VisionStatus',
-    declaration: 'export interface VisionStatus {\n    readonly engine: VisionEngine;\n    readonly path: string;\n    readonly present: boolean;\n    readonly download: string;\n    readonly directory: string;\n}',
+    declaration: 'export interface VisionStatus {\n    readonly engine: VisionEngine;\n    readonly path: string;\n    readonly present: boolean;\n    readonly download: string;\n    readonly directory: string;\n    readonly backend: \'auto\' | \'cpu\' | \'gpu\';\n}',
   },
   {
     name: 'WebBootBatch',

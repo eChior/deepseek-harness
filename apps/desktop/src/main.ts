@@ -39,6 +39,16 @@ import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import { DesktopCommandManager } from './command-management.ts'
 import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
 import { DesktopFatalRecovery } from './fatal-recovery.ts'
+import {
+  bumpFallback,
+  clearFallback,
+  FALLBACK_STABLE_MS,
+  fallbackArguments,
+  readFallback,
+  sandboxDisabled,
+  shouldFallBack,
+  writeFallback,
+} from './sandbox-fallback.ts'
 import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
 import { openWelcomeWindow } from './welcome-window.ts'
 import { WELCOME_IPC, needsWelcome, type WelcomeNotice } from './welcome-api.ts'
@@ -185,6 +195,47 @@ function reportFatal(error: unknown, source: CrashReportSource): void {
     return
   }
   void recovery.report(error, source).catch((failure: unknown) => { console.error(failure); app.exit(1) })
+}
+
+/**
+ * A machine whose Chromium sandbox cannot start crashes the graphics process on
+ * every launch, and the renderer follows it. The second such crash restarts the
+ * application once without the sandbox instead of leaving the user to read the
+ * crash dialog and pass the flag by hand.
+ *
+ * The count lives on disk so it survives the restart it triggers; a launch that
+ * stays up for {@link FALLBACK_STABLE_MS} clears it, so an occasional driver
+ * reset never accumulates into a permanent downgrade. A process already running
+ * without the sandbox never records another crash, which is what stops the two
+ * states from restarting each other.
+ */
+if (process.platform === 'win32' || process.platform === 'linux') {
+  app.on('child-process-gone', (_event, details) => {
+    if (details.type !== 'GPU' || details.reason === 'clean-exit' || sandboxDisabled(process.argv)) return
+    let directory: string
+    try {
+      directory = app.getPath('userData')
+    } catch {
+      return
+    }
+    const record = bumpFallback(readFallback(directory), new Date())
+    writeFallback(directory, record)
+    if (!shouldFallBack(record)) return
+    console.warn('Desktop graphics process crashed again; restarting without the sandbox', details)
+    app.relaunch({ args: fallbackArguments(process.argv) })
+    quitWithoutConfirmation()
+  })
+  app.whenReady().then(() => {
+    setTimeout(() => {
+      try {
+        clearFallback(app.getPath('userData'))
+      } catch {
+        // A profile directory that moved is not a reason to keep the count.
+      }
+    }, FALLBACK_STABLE_MS).unref()
+  }).catch(() => {
+    // The ready rejection is reported by the startup path that awaits it.
+  })
 }
 
 protocol.registerSchemesAsPrivileged([{

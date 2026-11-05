@@ -29,7 +29,15 @@ const STATUS: RedactionStatusView = {
   roster: 0,
   imageTool: false,
   mappings: true,
-  ocr: { engine: 'windows', path: '', present: false, download: 'http://intranet/releases', directory: 'C:/dsh/redaction/ocr' },
+  ocrMode: 'tool',
+  ocr: {
+    engine: 'windows',
+    path: '',
+    present: false,
+    download: 'http://intranet/releases',
+    directory: 'C:/dsh/redaction/ocr',
+    backend: 'auto',
+  },
 }
 
 /** Translate a key the way the composer slot renderer's locale binding does. */

@@ -51,6 +51,14 @@ export interface VisionOptions {
   paddleDirectory?: string
   /** How long one recognition may take before it is abandoned. */
   timeoutMs?: number
+  /**
+   * Which device the optional reader should use.
+   *
+   * `auto` lets the reader measure itself the first time and remember what it
+   * found; `cpu` and `gpu` skip that measurement and are for a machine whose
+   * answer is known or whose measurement picked the slower one.
+   */
+  backend?: 'auto' | 'cpu' | 'gpu'
 }
 
 /**
@@ -111,9 +119,19 @@ export function normalizeRecognized(text: string): string {
 }
 
 /** Run one recognizer to completion, bounded by the caller's timeout. */
-function run(command: string, args: readonly string[], input: string | Uint8Array, timeoutMs: number): Promise<string> {
+function run(
+  command: string,
+  args: readonly string[],
+  input: string | Uint8Array,
+  timeoutMs: number,
+  env?: NodeJS.ProcessEnv,
+): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    const child = spawn(command, [...args], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(command, [...args], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      ...env === undefined ? {} : { env },
+    })
     const { stdin, stdout, stderr } = child
     stdout.setEncoding('utf8')
     stderr.setEncoding('utf8')
@@ -185,7 +203,17 @@ export async function recognizeImageText(bytes: Uint8Array, options: VisionOptio
   if (paddle !== '') {
     // Both readers take base64 on stdin, so the optional one is a drop-in
     // replacement rather than a second code path the caller has to know about.
-    const raw = await run(paddle, [], Buffer.from(bytes).toString('base64'), timeoutMs)
+    // The device choice rides an environment variable rather than an argument,
+    // because the reader was published before it had one and a machine with an
+    // older download must keep working.
+    const backend = options.backend ?? 'auto'
+    const raw = await run(
+      paddle,
+      [],
+      Buffer.from(bytes).toString('base64'),
+      timeoutMs,
+      backend === 'auto' ? undefined : { ...process.env, DSH_OCR_BACKEND: backend },
+    )
     return normalizeRecognized(raw.trim())
   }
   const { command, args } = recognizerCommand()
