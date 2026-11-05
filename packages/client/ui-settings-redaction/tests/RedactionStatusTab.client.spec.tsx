@@ -29,6 +29,7 @@ const READY: RedactionStatusView = {
   roster: 0,
   imageTool: true,
   mappings: true,
+  ocr: { engine: 'windows', path: '', present: false, download: 'http://intranet/releases' },
 }
 
 const ROSTER: RedactionRosterView = {

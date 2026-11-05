@@ -22,6 +22,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
+import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -68,7 +69,8 @@ import {
 } from './source.ts'
 import { compileRules, isUsable, parseTermList, type ParsedTermList, type RedactionCategory, type RedactionRule } from './terms.ts'
 import { redactText as applyRules } from './redact.ts'
-import { DEFAULT_VISION_TIMEOUT_MS, recognizeImageText } from './vision.ts'
+import { DEFAULT_VISION_TIMEOUT_MS, describeVision, recognizeImageText } from './vision.ts'
+import type { VisionEngine } from './vision.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -86,6 +88,9 @@ const LOCAL_EXAMPLE_PATH = fileURLToPath(new URL('../assets/terms-local.example.
 
 /** Repository a deployment publishes the list in, read at start and every few minutes. */
 const PUBLISHED_TERMS = 'http://10.151.5.175:3000/ITPublic/dsh-redaction-terms'
+
+/** Where the optional reader is published, so the settings page can point at it. */
+export const OCR_RELEASES = 'http://10.151.5.175:3000/ITPublic/dsh-ocr/releases'
 
 /** The one mapping file this machine appends to, under the mappings directory. */
 const MAPPING_FILE = 'mappings.jsonl'
@@ -154,6 +159,14 @@ export interface Config {
   /** How long one local recognition may take, in milliseconds. */
   visionTimeoutMs?: number
   /**
+   * Path to the optional `dsh-ocr` binary, which reads images with PaddleOCR.
+   *
+   * That binary carries a model and a runtime of its own, so it is published on
+   * the intranet rather than bundled; an empty path keeps the platform reader,
+   * and a machine that downloaded it points this at the file.
+   */
+  ocrPath?: string
+  /**
    * Add every colleague and department from the shipped staff directory to the
    * rules, and let an upload inherit its department from it.
    *
@@ -187,6 +200,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().default(3000),
   vision: z.boolean().default(true),
   visionTimeoutMs: z.number().default(DEFAULT_VISION_TIMEOUT_MS),
+  ocrPath: z.string().default(''),
   includeRoster: z.boolean().default(true),
   rosterPath: z.string().default(ROSTER_PATH),
   mappings: z.boolean().default(true),
@@ -225,6 +239,20 @@ export interface RedactionStatus {
   readonly mappings: boolean
   /** Whether the read-image tool is denied for every agent of this deployment. */
   readonly imageTool: boolean
+  /** Which local reader reads an image, and whether the optional one is installed. */
+  readonly ocr: VisionStatus
+}
+
+/** Which reader an image goes through, and where the optional one lives. */
+export interface VisionStatus {
+  /** The reader in force. */
+  readonly engine: VisionEngine
+  /** Path the deployment configured; empty when it configured none. */
+  readonly path: string
+  /** Whether that path holds a file. */
+  readonly present: boolean
+  /** Where a deployment downloads the optional reader from. */
+  readonly download: string
 }
 
 /**
@@ -316,6 +344,7 @@ export class RedactionService extends Service {
       timeoutMs: config.timeoutMs ?? 3000,
       vision: config.vision ?? true,
       visionTimeoutMs: config.visionTimeoutMs ?? DEFAULT_VISION_TIMEOUT_MS,
+      ocrPath: config.ocrPath ?? '',
       includeRoster: config.includeRoster ?? true,
       rosterPath: config.rosterPath ?? ROSTER_PATH,
       mappings: config.mappings ?? true,
@@ -342,6 +371,7 @@ export class RedactionService extends Service {
       roster: 0,
       mappings: this.config.mappings,
       imageTool: this.config.readImage,
+      ocr: this.visionStatus(),
     }
     ctx.effect(() => {
       void this.load()
@@ -749,6 +779,24 @@ export class RedactionService extends Service {
   }
 
   /**
+   * Which reader an image would go through on this machine.
+   *
+   * The optional binary is a file the deployment downloaded, so this reports
+   * whether it is actually there: a path that no longer holds a file falls back
+   * to the platform reader instead of failing at the first screenshot.
+   * @returns The engine, the configured path and whether it holds a file.
+   */
+  private visionStatus(): VisionStatus {
+    const path = this.config.ocrPath
+    return {
+      engine: describeVision({ paddlePath: path }),
+      path,
+      present: path !== '' && existsSync(path),
+      download: OCR_RELEASES,
+    }
+  }
+
+  /**
    * Read the text out of one encoded image on this machine and redact it.
    *
    * The image is decoded in memory and read by a local recognizer: it is never
@@ -763,7 +811,10 @@ export class RedactionService extends Service {
   async recognizeImage(data: string, mediaType: string): Promise<string | undefined> {
     if (!this.config.vision || this.rules.length === 0) return undefined
     try {
-      const text = await recognizeImageText(Buffer.from(data, 'base64'), this.config.visionTimeoutMs)
+      const text = await recognizeImageText(Buffer.from(data, 'base64'), {
+        paddlePath: this.config.ocrPath,
+        timeoutMs: this.config.visionTimeoutMs,
+      })
       return text === '' ? '[图片-无文字]' : this.redactText(text)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)

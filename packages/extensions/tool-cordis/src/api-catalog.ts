@@ -6402,7 +6402,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n}',
   },
   {
     name: 'Registry',
@@ -8119,6 +8119,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'VerifiedWebhookDelivery',
     declaration: 'export interface VerifiedWebhookDelivery<K extends string = string> {\n    readonly kind: K;\n    readonly source: WebhookSourceId;\n    readonly deliveryId: WebhookDeliveryId;\n    readonly event: WebhookEventOf<K>;\n    readonly receivedAt: number;\n}',
+  },
+  {
+    name: 'VisionEngine',
+    declaration: 'export type VisionEngine = \'paddle\' | \'windows\' | \'tesseract\';',
+  },
+  {
+    name: 'VisionStatus',
+    declaration: 'export interface VisionStatus {\n    readonly engine: VisionEngine;\n    readonly path: string;\n    readonly present: boolean;\n}',
   },
   {
     name: 'WebBootBatch',

@@ -2418,7 +2418,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:137`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:139`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**
@@ -2450,6 +2450,14 @@ export interface Config {
   vision?: boolean
   /** How long one local recognition may take, in milliseconds. */
   visionTimeoutMs?: number
+  /**
+   * Path to the optional `dsh-ocr` binary, which reads images with PaddleOCR.
+   *
+   * That binary carries a model and a runtime of its own, so it is published on
+   * the intranet rather than bundled; an empty path keeps the platform reader,
+   * and a machine that downloaded it points this at the file.
+   */
+  ocrPath?: string
   /**
    * Add every colleague and department from the shipped staff directory to the
    * rules, and let an upload inherit its department from it.

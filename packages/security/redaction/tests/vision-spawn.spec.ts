@@ -44,7 +44,7 @@ describe('recognizeImageText pipe failures', () => {
   it('survives an input pipe that closed before the image was written', async () => {
     const child = new FakeChild()
     spawnMock.mockReturnValue(child)
-    const pending = recognizeImageText(Uint8Array.of(0x89, 0x50, 0x4e, 0x47), 5_000)
+    const pending = recognizeImageText(Uint8Array.of(0x89, 0x50, 0x4e, 0x47), { timeoutMs: 5_000 })
     child.stdin.emit('error', Object.assign(new Error('write EOF'), { code: 'EOF', errno: -4095, syscall: 'write' }))
     child.emit('close', 1)
     await expect(pending).rejects.toThrow(/exited with 1/u)
@@ -53,7 +53,7 @@ describe('recognizeImageText pipe failures', () => {
   it('survives a closed read pipe as well', async () => {
     const child = new FakeChild()
     spawnMock.mockReturnValue(child)
-    const pending = recognizeImageText(Uint8Array.of(1, 2, 3), 5_000)
+    const pending = recognizeImageText(Uint8Array.of(1, 2, 3), { timeoutMs: 5_000 })
     child.stdout.emit('error', Object.assign(new Error('read EPIPE'), { code: 'EPIPE', errno: -4047 }))
     child.stderr.emit('error', new Error('nobody is reading'))
     child.emit('close', 1)
@@ -63,7 +63,7 @@ describe('recognizeImageText pipe failures', () => {
   it('reports the recognizer diagnostic when the pipe stayed healthy', async () => {
     const child = new FakeChild()
     spawnMock.mockReturnValue(child)
-    const pending = recognizeImageText(Uint8Array.of(4, 5, 6), 5_000)
+    const pending = recognizeImageText(Uint8Array.of(4, 5, 6), { timeoutMs: 5_000 })
     child.stderr.emit('data', 'powershell: cannot find vision.ps1')
     child.emit('close', 1)
     await expect(pending).rejects.toThrow(/cannot find vision\.ps1/u)

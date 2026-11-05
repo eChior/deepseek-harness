@@ -11,9 +11,16 @@
  * composition engine, or `tesseract` on a Linux host that has it. A machine with
  * neither reports a failure and the caller decides what the session sees instead
  * — it never falls back to sending the image.
+ *
+ * An optional `dsh-ocr` binary adds a third reader. It is built from
+ * PaddleOCR and published on the intranet rather than bundled, because it
+ * carries a model and a runtime of its own; a machine that has downloaded it
+ * points {@link VisionOptions.paddlePath} at the file and reads images with it
+ * instead. Nothing else changes: same stdin, same stdout, same normalization.
  */
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /** Script a Windows client runs; it reads base64 on stdin and writes text on stdout. */
@@ -21,6 +28,34 @@ const WINDOWS_SCRIPT = fileURLToPath(new URL('../assets/vision.ps1', import.meta
 
 /** How long one recognition may take before it is abandoned. */
 export const DEFAULT_VISION_TIMEOUT_MS = 20_000
+
+/** Which local reader produces the text. */
+export type VisionEngine = 'paddle' | 'windows' | 'tesseract'
+
+/** What the caller can choose about local recognition. */
+export interface VisionOptions {
+  /**
+   * Path to the optional `dsh-ocr` binary. When the file exists it reads the
+   * image; when it is empty or missing the platform engine does.
+   */
+  paddlePath?: string
+  /** How long one recognition may take before it is abandoned. */
+  timeoutMs?: number
+}
+
+/**
+ * Say which reader an image would go through, without running one.
+ *
+ * The status panel shows this, so a machine that downloaded the optional
+ * reader can see it is being used and a machine that did not sees what it has.
+ * @param options The caller's choices.
+ * @returns The engine that would run.
+ */
+export function describeVision(options: VisionOptions = {}): VisionEngine {
+  const paddle = options.paddlePath?.trim() ?? ''
+  if (paddle !== '' && existsSync(paddle)) return 'paddle'
+  return process.platform === 'win32' ? 'windows' : 'tesseract'
+}
 
 /**
  * Join what a recognizer reported into the text a person would have typed.
@@ -91,14 +126,13 @@ function run(command: string, args: readonly string[], input: string | Uint8Arra
 }
 
 /** The command and arguments this platform reads images with. */
-function recognizerCommand(timeoutMs: number): { command: string; args: string[] } {
+function recognizerCommand(): { command: string; args: string[] } {
   if (process.platform === 'win32') {
     return {
       command: 'powershell.exe',
       args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', WINDOWS_SCRIPT],
     }
   }
-  void timeoutMs
   return { command: 'tesseract', args: ['stdin', 'stdout', '-l', 'chi_sim+eng'] }
 }
 
@@ -108,12 +142,20 @@ function recognizerCommand(timeoutMs: number): { command: string; args: string[]
  * Takes the bytes, not a path: a caller that has only a path has already put the
  * image on disk, which is the state this function exists to avoid.
  * @param bytes The image as decoded bytes.
- * @param timeoutMs How long to wait before abandoning the attempt.
+ * @param options The caller's choices; the timeout defaults, the optional reader
+ * is used only when the file is there.
  * @returns The recognized text, normalized, empty when the image held no text.
  * @throws When no recognizer is available, or when it fails or times out.
  */
-export async function recognizeImageText(bytes: Uint8Array, timeoutMs = DEFAULT_VISION_TIMEOUT_MS): Promise<string> {
-  const { command, args } = recognizerCommand(timeoutMs)
+export async function recognizeImageText(bytes: Uint8Array, options: VisionOptions = {}): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_VISION_TIMEOUT_MS
+  if (describeVision(options) === 'paddle') {
+    // Both readers take base64 on stdin, so the optional one is a drop-in
+    // replacement rather than a second code path the caller has to know about.
+    const raw = await run(options.paddlePath?.trim() ?? '', [], Buffer.from(bytes).toString('base64'), timeoutMs)
+    return normalizeRecognized(raw.trim())
+  }
+  const { command, args } = recognizerCommand()
   // The Windows script reads base64 because a text stream is what it decodes;
   // tesseract reads the container itself, so it gets the bytes unchanged.
   const input = command === 'powershell.exe' ? Buffer.from(bytes).toString('base64') : bytes

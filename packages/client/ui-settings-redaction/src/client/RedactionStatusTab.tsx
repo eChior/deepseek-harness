@@ -15,6 +15,7 @@ import type {
   RedactionRosterView,
   RedactionStatusView,
   RedactionUploadView,
+  RedactionVisionView,
 } from '@deepseek-ai/dsh-api-redaction-controller/types'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -57,6 +58,20 @@ type ViewState =
 
 /** Largest upload the page will read from disk, matching the provider's own ceiling. */
 const MAX_UPLOAD_BYTES = 256 * 1024
+
+/**
+ * Name the reader an image goes through.
+ *
+ * The optional binary is a separate download, so the page says which one is in
+ * force rather than leaving a machine to guess why recognition reads differently.
+ * @param ocr The provider's reader description.
+ * @param t Translator for this page.
+ * @returns The label shown beside the row.
+ */
+function engineLabel(ocr: RedactionVisionView, t: Translate): string {
+  if (ocr.engine === 'paddle') return t('ocrPaddle')
+  return ocr.engine === 'windows' ? t('ocrWindows') : t('ocrTesseract')
+}
 
 /** Display name of the copy of the term list the loaded rules came from. */
 function sourceLabel(view: RedactionStatusView, t: Translate): string {
@@ -122,12 +137,25 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
         <dd className={css.value}>{view.lastChecked ?? t('never')}</dd>
         <dt className={css.term}>{t('imageToolLabel')}</dt>
         <dd className={css.value}>{view.imageTool ? t('toggleOn') : t('imageToolDenied')}</dd>
+        <dt className={css.term}>{t('ocrLabel')}</dt>
+        <dd className={css.value}>
+          {engineLabel(view.ocr, t)}
+          {view.ocr.engine !== 'paddle' && (
+            <>
+              {' '}
+              <a href={view.ocr.download} target="_blank" rel="noreferrer">
+                {t('ocrDownload')}
+              </a>
+            </>
+          )}
+        </dd>
         <dt className={css.term}>{t('mappingsLabel')}</dt>
         <dd className={css.value}>{view.mappings ? t('toggleOn') : t('toggleOff')}</dd>
       </dl>
       <p className={css.hint}>{t('rulesHint')}</p>
       {view.detail !== null && <p className={css.note}>{t('detailBlocked', { detail: view.detail })}</p>}
       {view.lastError !== null && <p className={css.note}>{t('staleLabel')}: {view.lastError}</p>}
+      {view.ocr.path !== '' && !view.ocr.present && <p className={css.note}>{t('ocrMissing', { path: view.ocr.path })}</p>}
       {view.pending > 0 && <p className={css.hint}>{t('pendingHint')}</p>}
       <div className={css.actions}>
         <Button onClick={refresh}>{t('refresh')}</Button>

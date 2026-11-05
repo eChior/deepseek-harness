@@ -45,6 +45,19 @@ export interface RedactionStatusView {
   readonly mappings: boolean
   /** Whether the read-image tool is denied for every agent of this deployment. */
   readonly imageTool: boolean
+  /** Which local reader reads an image, and whether the optional one is installed. */
+  readonly ocr: RedactionVisionView
+}
+
+/** Which local reader reads an image. */
+export interface RedactionVisionView {
+  /** Reader in force: the optional binary, or the platform engine. */
+  readonly engine: 'paddle' | 'windows' | 'tesseract'
+  /** Path the deployment configured; empty when it configured none. */
+  readonly path: string
+  /** Whether that path holds a file. */
+  readonly present: boolean
+  readonly download: string
 }
 
 /** One department list as the settings page lists it. */
