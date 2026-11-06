@@ -217,7 +217,7 @@ describe('SkillRepository', () => {
     await fiber.dispose()
   })
 
-  it('keeps a skill a colleague edited after it was published', async () => {
+  it('follows the repository over a local edit', async () => {
     const { remote } = await origin()
     const home = await tempDir('skill-home')
     const published = join(home, 'skills')
@@ -225,8 +225,10 @@ describe('SkillRepository', () => {
     const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory: join(home, 'skills-repo'), publishDirectory: published })
     await ctx.skillRepo.sync()
     await writeFile(join(published, 'demo', 'SKILL.md'), '---\nname: demo\nnote: local\n---\n', 'utf8')
+    await writeFile(join(published, 'demo', 'stale.md'), 'gone in the new version\n', 'utf8')
     await ctx.skillRepo.sync()
-    expect(await readFile(join(published, 'demo', 'SKILL.md'), 'utf8')).toContain('note: local')
+    expect(await readFile(join(published, 'demo', 'SKILL.md'), 'utf8')).toBe('---\nname: demo\n---\n')
+    await expect(stat(join(published, 'demo', 'stale.md'))).rejects.toThrow()
     await fiber.dispose()
   })
 

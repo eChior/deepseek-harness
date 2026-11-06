@@ -46,34 +46,6 @@ const STAGING_SUFFIX = '.staging'
 /** The archive wraps everything in one `<repository>-<branch>` directory. */
 const ARCHIVE_ROOT_COMPONENTS = 1
 
-/**
- * True when two directories hold the same names and the same bytes.
- *
- * Skills are small, so reading both sides is cheaper than the mistake this
- * guards against: replacing a skill a colleague edited by hand.
- * @param left - directory holding the repository copy.
- * @param right - directory holding the installed copy.
- * @returns whether every file matches.
- */
-async function sameTree(left: string, right: string): Promise<boolean> {
-  const mine = (await readdir(left)).sort()
-  const yours = (await readdir(right)).sort()
-  if (mine.length !== yours.length) return false
-  for (const [index, name] of mine.entries()) {
-    if (name !== yours[index]) return false
-    const leftInfo = await stat(join(left, name))
-    const rightInfo = await stat(join(right, name))
-    if (leftInfo.isDirectory() !== rightInfo.isDirectory()) return false
-    if (leftInfo.isDirectory()) {
-      if (!await sameTree(join(left, name), join(right, name))) return false
-      continue
-    }
-    const [a, b] = await Promise.all([readFile(join(left, name)), readFile(join(right, name))])
-    if (!a.equals(b)) return false
-  }
-  return true
-}
-
 /** File beside the mirror that names the skills this provider published. */
 const PUBLISH_MANIFEST = '.dsh-skill-repo-published.json'
 
@@ -624,14 +596,12 @@ export class SkillRepository extends Service {
   /**
    * Copy every skill the archive carries into the user skill root.
    *
-   * Three cases, in order of who wins: a directory this provider never
-   * published is left alone (a hand-written skill that shares a name survives
-   * the sync); a published directory whose bytes match the archive is left
-   * alone (nothing to do); a published directory that differs is also left
-   * alone, because the difference is a local edit. Taking the repository copy
-   * would silently throw that work away, so the sync says so in the log and
-   * keeps the machine's version — deleting the directory is how a colleague
-   * asks for the repository one.
+   * Two cases: a directory this provider never published is left alone, because
+   * a hand-written skill that happens to share a name is not ours to replace;
+   * a directory this provider published is replaced by the archive every time.
+   * The repository is the single source of truth for a published skill — an
+   * older local copy, however it came to differ, must not pin a colleague to a
+   * version the repository has moved past.
    */
   private async publish(source: string): Promise<string[]> {
     const target = this.current.publishDirectory
@@ -642,19 +612,13 @@ export class SkillRepository extends Service {
     const published: string[] = []
     for (const name of names) {
       const destination = join(target, name)
-      if (await exists(destination)) {
-        if (!owned.includes(name)) {
-          this.ctx.logger.warn(`skill-repo: keeping ${destination}, which this provider never published`)
-          continue
-        }
-        if (!await sameTree(join(source, name), destination)) {
-          this.ctx.logger.warn(`skill-repo: keeping the edited ${destination}; delete it to take the repository copy`)
-          published.push(name)
-          continue
-        }
-        published.push(name)
+      if (await exists(destination) && !owned.includes(name)) {
+        this.ctx.logger.warn(`skill-repo: keeping ${destination}, which this provider never published`)
         continue
       }
+      // Replace rather than merge: a file the new version dropped must not stay
+      // behind, and a local edit must not survive a repository update.
+      await rm(destination, { recursive: true, force: true })
       await cp(join(source, name), destination, { recursive: true })
       published.push(name)
     }
