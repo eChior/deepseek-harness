@@ -122,7 +122,7 @@ export function apply(ctx: ClientContext): void {
   // The table is asked for by session: a mapping file belongs to one task, and
   // two conversations may hand the same placeholder to different values.
   const badgeInjected = (): RedactionBadgeInjected => ({
-    restoreSession: async () => unwrap('restoreSession', await remote.restoreSession()),
+    restoreSession: async () => unwrap('restoreSession', await remote.restoreSession({})),
     entries: async () => unwrap('entries', await remote.entries()),
     status: async () => unwrap('status', await remote.status()),
     highlightColor: chatHighlight(),

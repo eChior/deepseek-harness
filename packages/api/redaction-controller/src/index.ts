@@ -13,6 +13,7 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import type {} from '@deepseek-ai/dsh-redaction'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
@@ -63,7 +64,7 @@ const EXAMPLE_FILE = 'terms-local.example.yaml'
  */
 export class RedactionController extends TypertRemoteService {
   /** Required services: the provider to republish, and the account to attribute an upload to. */
-  static inject = ['redaction', 'deepseekAccount']
+  static inject = ['redaction', 'deepseekAccount', 'agents']
 
   /**
    * @param ctx - Host with the redaction provider and the account service mounted.
@@ -111,12 +112,14 @@ export class RedactionController extends TypertRemoteService {
    * The automatic pass only hears about files a tool argument named. A model that
    * buries the output path inside a script leaves placeholders on disk with no
    * argument pointing at them, so the badge carries a button; this is what it
-   * calls. The directory is the one the last tool call ran in.
+   * calls. The directory is the session that asked for it, or the first live one
+   * when the caller names none.
+   * @param request - which session to sweep; an empty object takes the first live one.
    * @returns how many placeholders came back, per document.
    */
   @Remote
-  async restoreSession(): Promise<RedactionRestorePassView> {
-    const outcome = await this.ctx.redaction.restoreSession()
+  async restoreSession(request: { readonly sessionId?: string }): Promise<RedactionRestorePassView> {
+    const outcome = await this.ctx.redaction.restoreSession(this.sessionDirectory(request.sessionId))
     const view: RedactionRestorePassView = {
       restored: outcome.restored,
       files: outcome.files,
@@ -297,6 +300,23 @@ export class RedactionController extends TypertRemoteService {
    * carries no department.
    * @returns the display name, or null.
    */
+  /**
+   * The working directory of one session, or of any live one.
+   *
+   * A Remote reply carries no Agent, so the directory has to be looked up by
+   * session id. Without an id the first live session answers, which is what the
+   * badge wants: it points at the conversation the reader is looking at.
+   * @param sessionId - the session the badge names, when it names one.
+   * @returns the directory, or undefined when no session is live.
+   */
+  private sessionDirectory(sessionId: string | undefined): string | undefined {
+    const live = this.ctx.agents.list()
+    const agent = sessionId === undefined
+      ? live[0]
+      : live.find(candidate => String(candidate.session.header.id) === sessionId)
+    return agent?.session.header.cwd
+  }
+
   private async accountName(): Promise<string | null> {
     try {
       const profile = await this.ctx.deepseekAccount.getProfile({
