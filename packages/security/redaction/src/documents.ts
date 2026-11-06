@@ -246,6 +246,24 @@ function absent(candidate: string): boolean {
   return (candidate.includes('/') || candidate.includes('\\')) && !existsSync(candidate)
 }
 
+/** How much interpreter stderr a report keeps. */
+const DIAGNOSTIC_CHARS = 400
+
+/**
+ * Attach what the interpreter said on stderr to a pass that restored nothing.
+ *
+ * A denied write is the one failure the pass cannot describe from its own
+ * JSON, because the interpreter caught the error before it reached stdout.
+ * @param outcome - what the pass reported on stdout.
+ * @param diagnostics - whatever the interpreter wrote on stderr.
+ * @returns the same outcome, carrying the diagnostics when nothing applied.
+ */
+function withDiagnostics(outcome: RestoreOutcome, diagnostics: string): RestoreOutcome {
+  const text = diagnostics.trim()
+  if (text === '' || outcome.restored > 0) return outcome
+  return { ...outcome, error: outcome.error ?? text.split(String.fromCharCode(10)).slice(-3).join(' ').trim() }
+}
+
 /**
  * Run one candidate to see whether it starts.
  * @param candidate - the interpreter to try.
@@ -346,12 +364,18 @@ function restoreOutcome(output: string): RestoreOutcome {
  * @param paths Documents this call named, absolute or relative to the session.
  * @param mappings Placeholder-to-original pairs in force right now.
  * @param cwd - the session's working directory, used to resolve a relative path.
+ * @param confine - wraps the argv so the host grants the directory before the
+ *   interpreter runs; without it the interpreter keeps the caller's own access.
  * @returns how many files were rewritten; zero when nothing applied.
  */
+/** Wraps the interpreter argv in whatever the host confines commands with. */
+export type Confine = (argv: readonly string[]) => Promise<readonly string[]>
+
 export async function restoreDocuments(
   paths: readonly string[],
   mappings: readonly DocumentMapping[],
   cwd?: string,
+  confine?: Confine,
 ): Promise<RestoreOutcome> {
   if (paths.length === 0 || mappings.length === 0) return NOTHING_RESTORED
   const command = await interpreter()
@@ -363,6 +387,15 @@ export async function restoreDocuments(
     entries: mappings,
     ...cwd === undefined || cwd === '' ? {} : { cwd },
   })
+  const plain = [command.command, SCRIPT_PATH]
+  let argv: readonly string[] = plain
+  if (confine !== undefined) {
+    try {
+      argv = await confine(plain)
+    } catch (error: unknown) {
+      return { ...NOTHING_RESTORED, error: `could not confine ${command.command}: ${String(error)}` }
+    }
+  }
   return new Promise<RestoreOutcome>((resolve) => {
     let settled = false
     const finish = (value: RestoreOutcome): void => {
@@ -372,10 +405,12 @@ export async function restoreDocuments(
     }
     let child
     try {
-      child = spawn(command.command, [SCRIPT_PATH], {
-        stdio: ['pipe', 'pipe', 'ignore'],
+      const program = argv[0] ?? command.command
+      // A wrapped argv is already exact; only an unwrapped `.cmd` shim needs a shell.
+      child = spawn(program, argv.slice(1), {
+        stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
-        shell: command.shell,
+        shell: confine === undefined && command.shell,
       })
     } catch (error: unknown) {
       finish({ ...NOTHING_RESTORED, error: `could not start ${command.command}: ${String(error)}` })
@@ -386,19 +421,26 @@ export async function restoreDocuments(
       finish(NOTHING_RESTORED)
     }, RESTORE_TIMEOUT_MS)
     timer.unref()
-    const { stdin, stdout } = child
+    const { stdin, stdout, stderr } = child
     let output = ''
+    let diagnostics = ''
     stdout.setEncoding('utf8')
     stdout.on('data', (chunk: string) => {
       output += chunk
     })
+    if (stderr !== null) stderr.setEncoding('utf8')
+    if (stderr !== null) {
+      stderr.on('data', (chunk: string) => {
+        diagnostics = (diagnostics + chunk).slice(-DIAGNOSTIC_CHARS)
+      })
+    }
     child.on('error', () => {
       clearTimeout(timer)
       finish(NOTHING_RESTORED)
     })
     child.on('close', () => {
       clearTimeout(timer)
-      finish(restoreOutcome(output))
+      finish(withDiagnostics(restoreOutcome(output), diagnostics))
     })
     stdin.on('error', () => {
       // The interpreter may exit before reading its whole request; that is a

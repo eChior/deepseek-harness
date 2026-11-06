@@ -40,6 +40,7 @@ import {
   DOCUMENT_EXTENSIONS,
   documentsInDirectory,
   documentPaths,
+  type Confine,
   restoreDocuments,
   type DocumentMapping,
   type RestoreOutcome,
@@ -499,6 +500,7 @@ export class RedactionService extends Service {
     // normal text unless the reader turns on the original-text view.
     const mappingsOf = (): readonly DocumentMapping[] => this.documentMappings()
     const directoryOf = (agent: Agent | undefined): string | undefined => this.sessionDirectory(agent)
+    const confinerOf = (directory: string | undefined): Confine | undefined => this.confiner(directory)
     ctx.on('agent/created', ({ agent }: { agent: Agent }) => {
       agent.ctx.tools.register(defineTool({
         name: 'restore_redacted_files',
@@ -538,7 +540,8 @@ export class RedactionService extends Service {
           render: (_args, value) => [{ type: 'text', text: `Restored ${value.restored} placeholder(s) across ${value.files.length} file(s)` }],
         },
         async execute(args) {
-          const outcome = await restoreDocuments(args.paths, mappingsOf(), directoryOf(agent))
+          const directory = directoryOf(agent)
+          const outcome = await restoreDocuments(args.paths, mappingsOf(), directory, confinerOf(directory))
             .catch(() => undefined)
           return {
             restored: outcome?.restored ?? 0,
@@ -1041,7 +1044,7 @@ export class RedactionService extends Service {
     }
     const paths = await documentsInDirectory(root)
     if (paths.length === 0) return { restored: 0, files: [], skipped: [] }
-    const outcome = await restoreDocuments(paths, this.documentMappings(), root)
+    const outcome = await restoreDocuments(paths, this.documentMappings(), root, this.confiner(root))
       .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
     const blocked = outcome.skipped[0]
     this.current = {
@@ -1056,11 +1059,39 @@ export class RedactionService extends Service {
     return outcome
   }
 
+  /**
+   * Wraps the interpreter argv in the sandbox's own confinement so the host
+   * grants the document's directory first: a file the model wrote is only
+   * writable by the identity the seam provisioned for that directory.
+   */
+  private confiner(directory: string | undefined): Confine | undefined {
+    if (directory === undefined) return undefined
+    const sandbox = this.ctx.get('sandbox') as
+      | {
+        confine(
+          argv: readonly string[],
+          policy: { mode: 'workspace-write'; workspaceRoot: string },
+          signal?: AbortSignal,
+        ): Promise<{ argv: readonly string[] }>
+      }
+      | undefined
+    if (sandbox === undefined) return undefined
+    return async (argv) => {
+      try {
+        const confined = await sandbox.confine(argv, { mode: 'workspace-write', workspaceRoot: directory })
+        return confined.argv
+      } catch (error: unknown) {
+        this.ctx.logger('redaction').warn('could not confine the write-back, running as the caller: %s', String(error))
+        return argv
+      }
+    }
+  }
+
   private async restoreWrittenDocuments(seeded: unknown, cwd?: string): Promise<void> {
     if (!this.mappingsOn || !this.restoreOnWrite) return
     const paths = documentPaths(seeded)
     if (paths.length === 0) return
-    const outcome = await restoreDocuments(paths, this.documentMappings(), cwd)
+    const outcome = await restoreDocuments(paths, this.documentMappings(), cwd, this.confiner(cwd))
       .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
     // A machine with no interpreter, or a file the interpreter refused, used to
     // vanish into a swallowed promise. The status surface needs the reason: the

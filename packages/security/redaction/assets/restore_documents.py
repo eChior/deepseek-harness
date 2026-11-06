@@ -177,8 +177,11 @@ def restore_file(path, pairs):
         return 0, unmapped_note(payload if suffix not in ARCHIVE_EXTENSIONS else b'')
     try:
         path.write_bytes(replaced)
-    except OSError:
-        return 0, 'unwritable'
+    except OSError as error:
+        # The read side works and the write side is denied, so say what the
+        # caller could not: the errno and the path it applied to.
+        print('restore: %r' % error, file=sys.stderr)
+        return 0, 'unwritable: %s' % error
     return hits, 'restored'
 
 
