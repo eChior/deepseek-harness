@@ -181,13 +181,13 @@
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
     "@deepseek-ai/dsh-host-product-telemetry-otel": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings-session-log": "workspace:*",
-    "@michengai/dsh-archive-manager": "1.2.5",
-    "@michengai/dsh-skills-manager": "1.2.29",
+    "@michengai/dsh-archive-manager": "1.2.8",
+    "@michengai/dsh-skills-manager": "1.2.33",
     "dsh-better-sidebar": "0.26.1",
     "dsh-notify-me": "1.17.0",
     "dsh-rewind-plugin": "0.15.3",
     "dsh-zh-thinking": "git+https://github.com/yingjian666/dsh-zh-thinking.git#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe",
-    "dshmarket": "1.73.10",
+    "dshmarket": "1.73.12",
     "superpowers-dsh": "0.4.0"
   },
   "peerDependencies": {
