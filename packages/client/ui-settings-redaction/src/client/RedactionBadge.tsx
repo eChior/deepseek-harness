@@ -25,6 +25,13 @@ export type RedactionUserView = 'original' | 'placeholder'
 export interface RedactionBadgeInjected {
   /** Read the placeholders this machine has issued, freshest at call time. */
   entries: () => Promise<readonly RedactionEntryView[]>
+  /**
+   * Rewrite every document under this session's directory, now.
+   *
+   * The automatic pass only hears about files a tool argument named; a model that
+   * buries the output path inside a script leaves the file full of placeholders.
+   */
+  restoreSession: () => Promise<{ readonly restored: number; readonly error?: string }>
   /** Read the guard state, the rule counts, and the running replacement counter. */
   status: () => Promise<RedactionStatusView>
   /** Publish the user's transcript view choice. */
@@ -64,6 +71,7 @@ const DEFAULT_COLOR = '#d92d20'
 /** The composer redaction badge. */
 export function RedactionBadge({
   entries, status, setUserView, userView, readUserView, subscribeUserView,
+  restoreSession,
   setMappings, highlightColor, setHighlightColor, t,
 }: RedactionBadgeProps) {
   const [items, setItems] = useState<readonly RedactionEntryView[]>([])
@@ -97,6 +105,8 @@ export function RedactionBadge({
     aliveRef.current = true
     return () => { aliveRef.current = false }
   }, [])
+
+  const [restoring, setRestoring] = useState(false)
 
   const read = useCallback(async (): Promise<void> => {
     const [rows, fresh] = await Promise.all([
@@ -234,6 +244,22 @@ export function RedactionBadge({
                 : <span className={css.off} title={restoreError}>{t('badgeRestoreFailed')}</span>}
             </dd>
           </dl>
+
+          <button
+            type="button"
+            className={css.restoreButton}
+            disabled={restoring}
+            onClick={() => {
+              setRestoring(true)
+              restoreSession()
+                .catch(() => null)
+                .then(async () => { await read() })
+                .catch(() => undefined)
+                .finally(() => { setRestoring(false) })
+            }}
+          >
+            {restoring ? t('badgeRestoreRunning') : t('badgeRestoreNow')}
+          </button>
 
           <div className={css.switches}>
             <div className={css.switchRow}>

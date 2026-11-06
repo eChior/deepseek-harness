@@ -38,9 +38,11 @@ import {
 } from './local.ts'
 import {
   DOCUMENT_EXTENSIONS,
+  documentsInDirectory,
   documentPaths,
   restoreDocuments,
   type DocumentMapping,
+  type RestoreOutcome,
 } from './documents.ts'
 import {
   departmentNamesOf,
@@ -366,6 +368,15 @@ export class RedactionService extends Service {
   private mappingsOn: boolean
   private readImageOn: boolean
   private restoreOnWrite: boolean
+
+  /**
+   * The directory of the last call this process ran a tool for.
+   *
+   * A Remote reply has no Agent behind it, so a manual pass cannot ask one
+   * where the session writes. The automatic pass already saw the answer, so it
+   * is kept here for the button to reuse.
+   */
+  private lastDirectory: string | undefined
   /** How many entries have already reached a mapping file on this machine. */
   private written = 0
   private flushTimer: ReturnType<typeof setTimeout> | undefined
@@ -445,7 +456,9 @@ export class RedactionService extends Service {
       // A document the call wrote holds the placeholders the model saw, not the
       // values they stand for, so the originals go back into the file itself.
       // A model cannot do this: it never has the map.
-      await this.restoreWrittenDocuments(exec.arguments, this.sessionDirectory(exec.agent))
+      const directory = this.sessionDirectory(exec.agent)
+      if (directory !== undefined) this.lastDirectory = directory
+      await this.restoreWrittenDocuments(exec.arguments, directory)
       if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
       if (decision.value !== undefined) return decision
       const content = this.redact(decision.content ?? result.content)
@@ -1005,6 +1018,44 @@ export class RedactionService extends Service {
    * @param seeded The call's parsed arguments.
    * @param cwd - the session's working directory, which is where a relative write landed.
    */
+  /**
+   * Restore every document under a session directory, because the user asked.
+   *
+   * The automatic pass only hears about files an argument named. A model that
+   * buries the output path inside a script leaves the file full of placeholders
+   * and no argument to point at it, so the badge offers a button instead — this
+   * is what it calls.
+   * @param directory The session's working directory.
+   * @returns how the pass went, for the badge to show.
+   */
+  async restoreSession(directory?: string): Promise<RestoreOutcome> {
+    if (!this.mappingsOn || !this.restoreOnWrite) return { restored: 0, files: [], skipped: [] }
+    const root = directory === undefined || directory === '' ? this.lastDirectory : directory
+    if (root === undefined) {
+      return {
+        restored: 0,
+        files: [],
+        skipped: [],
+        error: 'no tool has run in a session yet, so there is no directory to scan',
+      }
+    }
+    const paths = await documentsInDirectory(root)
+    if (paths.length === 0) return { restored: 0, files: [], skipped: [] }
+    const outcome = await restoreDocuments(paths, this.documentMappings(), root)
+      .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
+    const blocked = outcome.skipped[0]
+    this.current = {
+      ...this.current,
+      restore: {
+        onWrite: this.restoreOnWrite,
+        lastError: outcome.error
+          ?? (blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`),
+        files: this.current.restore.files + outcome.restored,
+      },
+    }
+    return outcome
+  }
+
   private async restoreWrittenDocuments(seeded: unknown, cwd?: string): Promise<void> {
     if (!this.mappingsOn || !this.restoreOnWrite) return
     const paths = documentPaths(seeded)

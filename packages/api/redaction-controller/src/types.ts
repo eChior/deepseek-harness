@@ -63,6 +63,23 @@ export interface RedactionRestoreView {
   readonly files: number
 }
 
+/**
+ * What one on-demand write-back did.
+ *
+ * Paths are absolute and originals never appear: a row names a file the user
+ * already owns and the reason it was left alone, both display-safe.
+ */
+export interface RedactionRestorePassView {
+  /** How many placeholders the pass replaced in total. */
+  readonly restored: number
+  /** One row per document the pass rewrote. */
+  readonly files: readonly { readonly path: string; readonly hits: number }[]
+  /** One row per document it looked at and left alone, with the reason. */
+  readonly skipped: readonly { readonly path: string; readonly reason: string }[]
+  /** Set when no interpreter could run or the pass failed outright. */
+  readonly error?: string
+}
+
 /** Which local reader reads an image. */
 export interface RedactionVisionView {
   /** Reader in force: the optional binary, or the platform engine. */

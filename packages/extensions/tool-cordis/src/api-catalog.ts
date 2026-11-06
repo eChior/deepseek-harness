@@ -1894,6 +1894,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'What the attempt did with the queue.',
       },
       {
+        signature: 'async restoreSession(directory?: string): Promise<RestoreOutcome>',
+        description: 'Restore every document under a session directory, because the user asked.\n\nThe automatic pass only hears about files an argument named. A model that buries the output path inside a script leaves the file full of placeholders and no argument to point at it, so the badge offers a button instead — this is what it calls.',
+        parameters: [{ name: 'directory', description: 'The session\'s working directory.' }],
+        returns: 'how the pass went, for the badge to show.',
+      },
+      {
         signature: 'async noteAccount(account: string | null): Promise<void>',
         description: 'Tell the provider which department the signed-in colleague belongs to.\n\nCalled whenever the account is read, so a list that belongs to this reader\'s department takes part without them ticking anything; a no-op when the answer has not changed, because recompiling on every status read would be wasteful.',
         parameters: [{ name: 'account', description: 'Account name the roster knows, or null while signed out.' }],
@@ -6491,6 +6497,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RestoredSessionOptions',
     declaration: 'export interface RestoredSessionOptions {\n    readonly seed: SessionEvent[];\n    readonly meta: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    readonly eventState: SessionSeedEventState;\n}',
+  },
+  {
+    name: 'RestoreOutcome',
+    declaration: 'export interface RestoreOutcome {\n    readonly restored: number;\n    readonly files: readonly {\n        readonly path: string;\n        readonly hits: number;\n    }[];\n    readonly skipped: readonly {\n        readonly path: string;\n        readonly reason: string;\n    }[];\n    readonly error?: string;\n}',
   },
   {
     name: 'RestoreStatus',

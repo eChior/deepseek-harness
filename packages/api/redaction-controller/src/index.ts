@@ -21,6 +21,7 @@ import type {
   RedactionDepartmentView,
   RedactionEntryView,
   RedactionExampleView,
+  RedactionRestorePassView,
   RedactionRosterView,
   RedactionStatusView,
   RedactionUploadView,
@@ -102,6 +103,26 @@ export class RedactionController extends TypertRemoteService {
       ocrMode: view.ocrMode,
       restore: view.restore,
     })
+  }
+
+  /**
+   * Rewrite every document under the session directory, because the user asked.
+   *
+   * The automatic pass only hears about files a tool argument named. A model that
+   * buries the output path inside a script leaves placeholders on disk with no
+   * argument pointing at them, so the badge carries a button; this is what it
+   * calls. The directory is the one the last tool call ran in.
+   * @returns how many placeholders came back, per document.
+   */
+  @Remote
+  async restoreSession(): Promise<RedactionRestorePassView> {
+    const outcome = await this.ctx.redaction.restoreSession()
+    const view: RedactionRestorePassView = {
+      restored: outcome.restored,
+      files: outcome.files,
+      skipped: outcome.skipped,
+    }
+    return Promise.resolve(outcome.error === undefined ? view : { ...view, error: outcome.error })
   }
 
   /**

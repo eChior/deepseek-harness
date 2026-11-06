@@ -889,6 +889,18 @@ async pendingRequests(): Promise<TermRequest[]>
 async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
 
 /**
+ * Restore every document under a session directory, because the user asked.
+ *
+ * The automatic pass only hears about files an argument named. A model that
+ * buries the output path inside a script leaves the file full of placeholders
+ * and no argument to point at it, so the badge offers a button instead — this
+ * is what it calls.
+ * @param directory The session's working directory.
+ * @returns how the pass went, for the badge to show.
+ */
+async restoreSession(directory?: string): Promise<RestoreOutcome>
+
+/**
  * Tell the provider which department the signed-in colleague belongs to.
  *
  * Called whenever the account is read, so a list that belongs to this reader's

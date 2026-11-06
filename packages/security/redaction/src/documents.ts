@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { readdir, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -76,6 +77,64 @@ export interface RestoreOutcome {
 
 /** A pass that changed nothing, used when the interpreter is unavailable. */
 const NOTHING_RESTORED: RestoreOutcome = { restored: 0, files: [], skipped: [] }
+
+/** How deep a manual pass walks the session directory. */
+const SCAN_DEPTH = 2
+
+/** How many documents one manual pass takes on. */
+const SCAN_LIMIT = 200
+
+/** Folders a manual pass never walks into. */
+const SKIPPED_DIRECTORIES: ReadonlySet<string> = new Set(['node_modules'])
+
+/** One document a scan found, and when it was last touched. */
+interface ScannedDocument {
+  readonly path: string
+  readonly modified: number
+}
+
+/**
+ * The documents under a session directory, newest first.
+ *
+ * A model can put the output path somewhere no argument carries — inside a
+ * script it wrote, or behind a shell variable — and then the automatic pass
+ * never hears about the file. The file still sits there holding placeholders,
+ * so the user gets a button; this is what that button reads.
+ * @param directory The session's working directory.
+ * @returns document paths, the most recently written first, capped.
+ */
+export async function documentsInDirectory(directory: string): Promise<string[]> {
+  const found: ScannedDocument[] = []
+  await walk(directory, 0, found)
+  found.sort((left, right) => right.modified - left.modified)
+  return found.slice(0, SCAN_LIMIT).map(document => document.path)
+}
+
+async function walk(directory: string, depth: number, into: ScannedDocument[]): Promise<void> {
+  if (depth > SCAN_DEPTH || into.length >= SCAN_LIMIT * 4) return
+  let entries
+  try {
+    entries = await readdir(directory, { withFileTypes: true })
+  } catch {
+    // A directory this process may not list, or one that just went away.
+    return
+  }
+  for (const entry of entries) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      if (SKIPPED_DIRECTORIES.has(entry.name) || entry.name.startsWith('.')) continue
+      await walk(path, depth + 1, into)
+      continue
+    }
+    if (!entry.isFile() || !isDocumentPath(entry.name)) continue
+    try {
+      const info = await stat(path)
+      into.push({ path, modified: info.mtimeMs })
+    } catch {
+      // Named by the listing, gone by the stat.
+    }
+  }
+}
 
 /**
  * Whether a path names a document the restore pass handles.
