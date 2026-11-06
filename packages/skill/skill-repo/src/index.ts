@@ -78,6 +78,12 @@ export interface Config {
   /** Per-request timeout for the archive download and the branch lookup. */
   timeoutMs?: number
   /**
+   * Minutes between mirrors once the client is up. Defaults to 10; set 0 to
+   * mirror only at startup. A colleague who updates a skill in the repository
+   * should not have to restart the client to receive it.
+   */
+  refreshMinutes?: number
+  /**
    * Token the publishing seam presents to the repository host. Empty falls back
    * to `DSH_SKILLS_TOKEN`, so a deployment can keep it out of the config file.
    */
@@ -148,6 +154,7 @@ export const Config: z<Config> = z.object({
   publishDirectory: z.string().default(dshHomePath('skills')),
   bundledDirectory: z.string().default(BUNDLED_SKILLS),
   timeoutMs: z.number().default(120_000),
+  refreshMinutes: z.number().default(10),
   token: z.string().default(''),
 })
 
@@ -233,6 +240,7 @@ export class SkillRepository extends Service {
       publishDirectory: config.publishDirectory ?? dshHomePath('skills'),
       bundledDirectory: config.bundledDirectory ?? BUNDLED_SKILLS,
       timeoutMs: config.timeoutMs ?? 120_000,
+      refreshMinutes: config.refreshMinutes ?? 10,
       token: config.token ?? '',
     }
     const directory = this.config.directory
@@ -255,8 +263,16 @@ export class SkillRepository extends Service {
     if (this.config.enabled) {
       ctx.effect(() => {
         void this.sync()
-        return () => {}
-      }, 'skill-repo: mirror the skills repository on startup')
+        const minutes = this.config.refreshMinutes
+        if (minutes <= 0) return () => undefined
+        /* A colleague who publishes a fix expects the installed copy to follow
+         * without a restart, so the mirror keeps running on a timer. sync() is
+         * single-flight: an occurrence that lands mid-download joins that
+         * download instead of starting a second one. */
+        const timer = setInterval(() => { void this.sync() }, minutes * 60_000)
+        timer.unref()
+        return () => { clearInterval(timer) }
+      }, 'skill-repo: mirror the skills repository on startup and on a timer')
     }
   }
 

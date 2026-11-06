@@ -3053,6 +3053,12 @@ export interface Config {
   /** Per-request timeout for the archive download and the branch lookup. */
   timeoutMs?: number
   /**
+   * Minutes between mirrors once the client is up. Defaults to 10; set 0 to
+   * mirror only at startup. A colleague who updates a skill in the repository
+   * should not have to restart the client to receive it.
+   */
+  refreshMinutes?: number
+  /**
    * Token the publishing seam presents to the repository host. Empty falls back
    * to `DSH_SKILLS_TOKEN`, so a deployment can keep it out of the config file.
    */
