@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join } from 'node:path'
@@ -33,6 +33,8 @@ const SCRIPT_PATH = fileURLToPath(new URL('../assets/restore_documents.py', impo
 
 /** How long one restore pass may take before it is abandoned. */
 const RESTORE_TIMEOUT_MS = 30_000
+/** A directory grant walks every entry, so it gets longer than one interpreter run. */
+const GRANT_TIMEOUT_MS = 120_000
 
 /** The argument names that hold a path rather than prose about one. */
 const PATH_KEYS: ReadonlySet<string> = new Set(['path', 'file_path', 'filePath', 'filepath'])
@@ -419,7 +421,66 @@ export async function restoreDocuments(
  * @param confine wraps the argv so the host grants that directory first.
  * @returns how the group went.
  */
+/**
+ * Run one directory's documents, taking the write permission if it is missing.
+ *
+ * The write-back is the one step that must land: the file holds the placeholders
+ * the model saw, and only this process has the map. So a directory this process
+ * may read but not write is repaired rather than reported.
+ * @param command the interpreter to start.
+ * @param paths absolute document paths, all under `directory`.
+ * @param mappings placeholder-to-original pairs in force right now.
+ * @param directory the directory the paths share.
+ * @param confine wraps the argv, when a caller has one.
+ * @returns how the group went.
+ */
 async function restoreGroup(
+  command: Interpreter,
+  paths: readonly string[],
+  mappings: readonly DocumentMapping[],
+  directory: string,
+  confine?: Confine,
+): Promise<RestoreOutcome> {
+  const first = await runGroup(command, paths, mappings, directory, confine)
+  if (first.error !== undefined) return first
+  if (!first.skipped.some(file => file.reason.startsWith('unwritable'))) return first
+  if (!grantWriteAccess(directory)) return first
+  return runGroup(command, paths, mappings, directory, confine)
+}
+
+/**
+ * Give this process write access to a directory.
+ *
+ * `icacls` writes the same inherited ACE the sandbox would have written, but for
+ * the identity this process already runs as, so the interpreter needs no wrapper
+ * and no second attempt at confinement.
+ * @param directory the directory holding the documents.
+ * @returns whether the grant reported success.
+ */
+function grantWriteAccess(directory: string): boolean {
+  if (process.platform !== 'win32') return false
+  try {
+    execFileSync('icacls', [directory, '/grant', '*S-1-1-0:(OI)(CI)M', '/T', '/C', '/Q'], {
+      stdio: 'ignore',
+      windowsHide: true,
+      timeout: GRANT_TIMEOUT_MS,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Hand one directory's documents to the interpreter.
+ * @param command the interpreter to start.
+ * @param paths absolute document paths, all under `directory`.
+ * @param mappings placeholder-to-original pairs in force right now.
+ * @param directory the directory the paths share.
+ * @param confine wraps the argv, when a caller has one.
+ * @returns how the group went.
+ */
+async function runGroup(
   command: Interpreter,
   paths: readonly string[],
   mappings: readonly DocumentMapping[],

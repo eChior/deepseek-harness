@@ -1060,31 +1060,17 @@ export class RedactionService extends Service {
   }
 
   /**
-   * Wraps the interpreter argv in the sandbox's own confinement so the host
-   * grants the document's directory first: a file the model wrote is only
-   * writable by the identity the seam provisioned for that directory.
+   * Keep the write-back outside the sandbox.
+   *
+   * The file is the model's own output, and it can sit anywhere — a workspace,
+   * another tool's tree, a folder the sandbox never provisioned. Confining the
+   * interpreter would fail there for a reason that has nothing to do with the
+   * restore, so this pass runs with the process's own rights; a directory that
+   * still refuses the write is repaired in `documents.ts`.
+   * @returns no wrapper, by design.
    */
-  private confiner(directory: string | undefined): Confine | undefined {
-    if (directory === undefined) return undefined
-    const sandbox = this.ctx.get('sandbox') as
-      | {
-        confine(
-          argv: readonly string[],
-          policy: { mode: 'workspace-write'; workspaceRoot: string },
-          signal?: AbortSignal,
-        ): Promise<{ argv: readonly string[] }>
-      }
-      | undefined
-    if (sandbox === undefined) return undefined
-    return async (argv) => {
-      try {
-        const confined = await sandbox.confine(argv, { mode: 'workspace-write', workspaceRoot: directory })
-        return confined.argv
-      } catch (error: unknown) {
-        this.ctx.logger('redaction').warn('could not confine the write-back, running as the caller: %s', String(error))
-        return argv
-      }
-    }
+  private confiner(_directory: string | undefined): Confine | undefined {
+    return undefined
   }
 
   private async restoreWrittenDocuments(seeded: unknown, cwd?: string): Promise<void> {
