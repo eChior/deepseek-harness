@@ -6402,7 +6402,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n    readonly ocrMode: \'tool\' | \'prompt\';\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n    readonly ocrMode: \'tool\' | \'prompt\';\n    readonly restore: RestoreStatus;\n}',
   },
   {
     name: 'Registry',
@@ -6491,6 +6491,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RestoredSessionOptions',
     declaration: 'export interface RestoredSessionOptions {\n    readonly seed: SessionEvent[];\n    readonly meta: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    readonly eventState: SessionSeedEventState;\n}',
+  },
+  {
+    name: 'RestoreStatus',
+    declaration: 'export interface RestoreStatus {\n    readonly onWrite: boolean;\n    readonly lastError: string | null;\n    readonly files: number;\n}',
   },
   {
     name: 'ResumeAgentOptions',

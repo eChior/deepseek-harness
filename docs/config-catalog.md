@@ -2418,7 +2418,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:141`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:142`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**
@@ -2491,6 +2491,14 @@ export interface Config {
   ocrMode?: 'tool' | 'prompt'
   /** Which device the optional reader uses: measured on first run, or pinned. */
   ocrBackend?: 'auto' | 'cpu' | 'gpu'
+  /**
+   * Whether a file the model writes has its placeholders replaced by the originals.
+   *
+   * On by default: a document a model authors carries placeholders, and leaving
+   * them in a file the user opens is the failure this switch exists to prevent.
+   * Off means the reader decides per file, with the restore tool.
+   */
+  restoreOnWrite?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->

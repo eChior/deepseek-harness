@@ -22,7 +22,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
-import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -54,6 +54,7 @@ import {
   type DepartmentSelection,
 } from './departments.ts'
 import { RedactionMap, type RedactionEntry } from './map.ts'
+import { mappingKey, openLine, sealEntry } from './mapping-file.ts'
 import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import { findPerson, ROSTER_PATH, readRoster, type Roster, type RosterPerson } from './roster.ts'
 import { queueTermRequest, readTermRequests, settleTermRequest, type TermRequest } from './queue.ts'
@@ -198,6 +199,14 @@ export interface Config {
   ocrMode?: 'tool' | 'prompt'
   /** Which device the optional reader uses: measured on first run, or pinned. */
   ocrBackend?: 'auto' | 'cpu' | 'gpu'
+  /**
+   * Whether a file the model writes has its placeholders replaced by the originals.
+   *
+   * On by default: a document a model authors carries placeholders, and leaving
+   * them in a file the user opens is the failure this switch exists to prevent.
+   * Off means the reader decides per file, with the restore tool.
+   */
+  restoreOnWrite?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -217,6 +226,7 @@ export const Config: z<Config> = z.object({
   readImage: z.boolean().default(true),
   ocrMode: z.union(['tool', 'prompt']).default('tool'),
   ocrBackend: z.union(['auto', 'cpu', 'gpu']).default('auto'),
+  restoreOnWrite: z.boolean().default(true),
 })
 
 /** What the provider has loaded and how much it has replaced so far. */
@@ -255,6 +265,18 @@ export interface RedactionStatus {
   readonly ocr: VisionStatus
   /** Whether an attached picture is read on arrival or only when the model asks. */
   readonly ocrMode: 'tool' | 'prompt'
+  /** Whether a written document gets its placeholders replaced, and what went wrong. */
+  readonly restore: RestoreStatus
+}
+
+/** How the document write-back stands on this machine. */
+export interface RestoreStatus {
+  /** Whether a file the model writes is repaired without asking. */
+  readonly onWrite: boolean
+  /** Why the last write-back changed nothing, or null when the last one worked. */
+  readonly lastError: string | null
+  /** Files repaired since this process started. */
+  readonly files: number
 }
 
 /** Which reader an image goes through, and where the optional one lives. */
@@ -343,6 +365,7 @@ export class RedactionService extends Service {
    */
   private mappingsOn: boolean
   private readImageOn: boolean
+  private restoreOnWrite: boolean
   /** How many entries have already reached a mapping file on this machine. */
   private written = 0
   private flushTimer: ReturnType<typeof setTimeout> | undefined
@@ -369,9 +392,11 @@ export class RedactionService extends Service {
       readImage: config.readImage ?? true,
       ocrMode: config.ocrMode ?? 'tool',
       ocrBackend: config.ocrBackend ?? 'auto',
+      restoreOnWrite: config.restoreOnWrite ?? true,
     }
     this.mappingsOn = this.config.mappings
     this.readImageOn = this.config.readImage
+    this.restoreOnWrite = this.config.restoreOnWrite
     // Started here rather than in an effect: a session can end before an effect
     // runs, and a write must never outrun the read it depends on.
     this.ready = this.loadMappings()
@@ -393,6 +418,7 @@ export class RedactionService extends Service {
       imageTool: this.config.readImage,
       ocr: this.visionStatus(),
       ocrMode: this.config.ocrMode,
+      restore: { onWrite: this.config.restoreOnWrite, lastError: null, files: 0 },
     }
     ctx.effect(() => {
       void this.load()
@@ -419,7 +445,7 @@ export class RedactionService extends Service {
       // A document the call wrote holds the placeholders the model saw, not the
       // values they stand for, so the originals go back into the file itself.
       // A model cannot do this: it never has the map.
-      await this.restoreWrittenDocuments(exec.arguments)
+      await this.restoreWrittenDocuments(exec.arguments, this.sessionDirectory(exec.agent))
       if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
       if (decision.value !== undefined) return decision
       const content = this.redact(decision.content ?? result.content)
@@ -459,12 +485,15 @@ export class RedactionService extends Service {
     // disk and leaves the conversation alone, where a placeholder stays the
     // normal text unless the reader turns on the original-text view.
     const mappingsOf = (): readonly DocumentMapping[] => this.documentMappings()
+    const directoryOf = (agent: Agent | undefined): string | undefined => this.sessionDirectory(agent)
     ctx.on('agent/created', ({ agent }: { agent: Agent }) => {
       agent.ctx.tools.register(defineTool({
         name: 'restore_redacted_files',
         description: 'Write the original values back into files on disk that this deployment redacted. '
           + 'A model only ever sees placeholders, so a document it authored or edited holds placeholders '
-          + 'instead of the real names; this tool replaces them inside the file. It never changes the '
+          + 'instead of the real names; this tool replaces them inside the file. It works on a file the '
+          + 'model just created as well as one that already existed — the file only has to hold a '
+          + 'placeholder this machine handed out. It never changes the '
           + 'conversation, where the placeholders remain the text the reader sees. '
           + `Supported files: ${[...DOCUMENT_EXTENSIONS].join(' ')}. `
           + 'The rewrite runs in the whitelisted Python interpreter, because document encryption admits only that one. '
@@ -496,7 +525,8 @@ export class RedactionService extends Service {
           render: (_args, value) => [{ type: 'text', text: `Restored ${value.restored} placeholder(s) across ${value.files.length} file(s)` }],
         },
         async execute(args) {
-          const outcome = await restoreDocuments(args.paths, mappingsOf()).catch(() => undefined)
+          const outcome = await restoreDocuments(args.paths, mappingsOf(), directoryOf(agent))
+            .catch(() => undefined)
           return {
             restored: outcome?.restored ?? 0,
             files: (outcome?.files ?? []).map(file => ({ path: file.path, hits: file.hits })),
@@ -973,12 +1003,38 @@ export class RedactionService extends Service {
    * off, because that switch is what says the originals may reach this
    * machine's disk at all.
    * @param seeded The call's parsed arguments.
+   * @param cwd - the session's working directory, which is where a relative write landed.
    */
-  private async restoreWrittenDocuments(seeded: unknown): Promise<void> {
-    if (!this.mappingsOn) return
+  private async restoreWrittenDocuments(seeded: unknown, cwd?: string): Promise<void> {
+    if (!this.mappingsOn || !this.restoreOnWrite) return
     const paths = documentPaths(seeded)
     if (paths.length === 0) return
-    await restoreDocuments(paths, this.documentMappings()).catch(() => undefined)
+    const outcome = await restoreDocuments(paths, this.documentMappings(), cwd)
+      .catch((error: unknown) => ({ restored: 0, files: [], error: String(error) }))
+    // A machine with no interpreter, or a file the interpreter refused, used to
+    // vanish into a swallowed promise. The status surface needs the reason: the
+    // user sees a file still holding placeholders and asks why.
+    this.current = {
+      ...this.current,
+      restore: {
+        onWrite: this.restoreOnWrite,
+        lastError: outcome.error ?? null,
+        files: this.current.restore.files + outcome.restored,
+      },
+    }
+  }
+
+  /**
+   * The working directory of the session a call runs for.
+   *
+   * A model may name a document relatively; the file then sits under the
+   * session directory, not under wherever this process happens to run.
+   * @param agent - the agent the call runs on behalf of.
+   * @returns the absolute directory, or undefined when it cannot be read.
+   */
+  private sessionDirectory(agent: Agent | undefined): string | undefined {
+    const cwd = agent?.session.header.cwd
+    return cwd === undefined || cwd === '' ? undefined : cwd
   }
 
   /** The placeholder/original pairs a document rewrite needs. */
@@ -1103,7 +1159,11 @@ export class RedactionService extends Service {
     const directory = join(this.config.cacheDirectory, 'mappings')
     try {
       await mkdir(directory, { recursive: true })
-      const body = fresh.map(entry => JSON.stringify({ placeholder: entry.placeholder, category: entry.category, original: entry.original })).join('\n') + '\n'
+      const key = mappingKey(directory)
+      // Without a key nothing is written: a plaintext mapping on disk is the
+      // hole this sealing exists to close.
+      if (key === undefined) return
+      const body = fresh.map(entry => sealEntry(entry, key)).join('')
       await appendFile(join(directory, MAPPING_FILE), body, 'utf8')
     } catch {
       // A mapping that cannot be written only costs the restore step; the
@@ -1122,12 +1182,17 @@ export class RedactionService extends Service {
    */
   private async loadMappings(): Promise<void> {
     const directory = join(this.config.cacheDirectory, 'mappings')
+    await mkdir(directory, { recursive: true }).catch(() => undefined)
+    const key = mappingKey(directory)
     // Every file is folded into the one table, including the per-session files an
-    // earlier release wrote: their pairings are just as valid today.
+    // earlier release wrote: their pairings are just as valid today. A file still
+    // in the old plaintext form is rewritten sealed as soon as it is read, so the
+    // first launch after this upgrade closes the hole on every machine.
     for (const name of await mappingFiles(directory)) {
-      const entries = await readMappingFile(directory, name)
+      const { entries, plain } = await readMappingFile(directory, name, key)
       if (entries.length === 0) continue
       this.map.adopt(entries)
+      if (plain && key !== undefined) await sealMappingFile(directory, name, key, entries)
     }
     this.written = this.map.liveEntries().length
   }
@@ -1303,35 +1368,45 @@ async function mappingFiles(directory: string): Promise<string[]> {
  * @param name File name to read.
  * @returns The entries it records; empty when it is missing or empty.
  */
-async function readMappingFile(directory: string, name: string): Promise<RedactionEntry[]> {
+async function readMappingFile(
+  directory: string,
+  name: string,
+  key: Buffer | undefined,
+): Promise<{ entries: RedactionEntry[]; plain: boolean }> {
   let body: string
   try {
     body = await readFile(join(directory, name), 'utf8')
   } catch {
-    return []
+    return { entries: [], plain: false }
   }
   const entries: RedactionEntry[] = []
+  let plain = false
   for (const line of body.split('\n')) {
-    const entry = parseMappingLine(line)
+    if (line.trim() === '') continue
+    if (!line.includes('"e"')) plain = true
+    const entry = openLine(line, key)
     if (entry !== undefined) entries.push(entry)
   }
-  return entries
+  return { entries, plain }
 }
 
 /**
- * One line of a mapping file, or undefined when it is blank or malformed.
- * @param line Raw line from a `.jsonl` mapping file.
- * @returns The entry it records, when it records a complete one.
+ * Rewrite one mapping file with every entry sealed.
+ * @param directory - the directory holding the file.
+ * @param name - the file to rewrite.
+ * @param key - the machine key.
+ * @param entries - the pairings the file records.
  */
-function parseMappingLine(line: string): RedactionEntry | undefined {
-  if (line.trim() === '') return undefined
+async function sealMappingFile(
+  directory: string,
+  name: string,
+  key: Buffer,
+  entries: readonly RedactionEntry[],
+): Promise<void> {
   try {
-    const parsed: unknown = JSON.parse(line)
-    if (typeof parsed !== 'object' || parsed === null) return undefined
-    const { placeholder, category, original } = parsed as Partial<RedactionEntry>
-    if (typeof placeholder !== 'string' || typeof category !== 'string' || typeof original !== 'string') return undefined
-    return { placeholder, category, original }
+    await writeFile(join(directory, name), entries.map(entry => sealEntry(entry, key)).join(''), 'utf8')
   } catch {
-    return undefined
+    // A file that cannot be rewritten stays as it is; the entries are already in
+    // the map, so the session is unaffected and the next launch tries again.
   }
 }

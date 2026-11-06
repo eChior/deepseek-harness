@@ -173,12 +173,65 @@ export function resolveOverlaps(
  * @param priority Categories that win when two hits have the same length.
  * @returns The rewritten text, the accepted hits, and the placeholders it used.
  */
+/**
+ * A run of hex digits, with or without the separators a dump puts between
+ * bytes (`e5 8d 8e`, `e5:8d:8e`, `e58d8e`). Four bytes is the shortest run a
+ * hex view of a name produces.
+ */
+const HEX_RUN = /(?:[0-9a-fA-F]{2}[ \t:,-]?){4,}/gu
+
+/**
+ * Read a byte dump as the text it stands for.
+ *
+ * Every rule matches text, and a value handed over as bytes is not text: `xxd`,
+ * a hex view in a file reader, or a script printing `bytes.hex()` delivers the
+ * same characters in a form no rule recognises, so the value reaches the model
+ * unchanged. Decoding such a run before the rules run closes that path — the
+ * dump is read as what it stands for, and a protected value inside it becomes
+ * its placeholder like any other occurrence.
+ *
+ * A run that does not decode to readable UTF-8 is left alone: a hash, a colour,
+ * or a binary blob is not a dump of text, and rewriting one would corrupt the
+ * caller's answer for no gain.
+ * @param text - the text a tool returned.
+ * @returns the text with readable hex runs spelled out.
+ */
+function expandHexRuns(text: string): string {
+  if (!HEX_RUN.test(text)) return text
+  HEX_RUN.lastIndex = 0
+  return text.replace(HEX_RUN, (run: string) => {
+    const digits = run.replace(/[^0-9a-fA-F]/gu, '')
+    if (digits.length < 8 || digits.length % 2 !== 0) return run
+    const decoded = Buffer.from(digits, 'hex').toString('utf8')
+    // U+FFFD means the bytes are not UTF-8 text; requiring letters or digits
+    // keeps a dump of control characters from replacing a real answer.
+    if (decoded.includes('\uFFFD') || !/[\p{L}\p{N}]/u.test(decoded)) return run
+    // The run's last separator belongs to the text that follows it.
+    const trailing = /[ \t:,-]$/u.test(run) ? run.slice(-1) : ''
+    return decoded + trailing
+  })
+}
+
+/**
+ * Replace every term the rules cover with the placeholder the map issues.
+ *
+ * Runs of hex bytes are decoded first, so a value a tool printed as a hex
+ * dump is matched by the same rules as the text it stands for. Spans a
+ * protected pattern claims — a file path, a quoted location — are left
+ * verbatim, because replacing one breaks the tool that reads it back.
+ * @param text - the text a tool returned.
+ * @param rules - compiled rules, highest priority first.
+ * @param map - the process-wide placeholder map.
+ * @param priority - category ids in the order a tie is broken.
+ * @returns the redacted text with the hits and the protected spans.
+ */
 export function redactText(
   text: string,
   rules: readonly RedactionRule[],
   map: RedactionMap,
   priority: readonly string[] = DEFAULT_PRIORITY,
 ): RedactionResult {
+  text = expandHexRuns(text)
   const spans = protectedSpans(text)
   const accepted = resolveOverlaps(findHits(text, rules), priority)
   // A hit inside a path or a `<path>` envelope is dropped, not clipped: half a

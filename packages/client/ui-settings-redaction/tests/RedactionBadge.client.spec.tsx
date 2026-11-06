@@ -30,6 +30,7 @@ const STATUS: RedactionStatusView = {
   imageTool: false,
   mappings: true,
   ocrMode: 'tool',
+  restore: { onWrite: true, lastError: null, files: 0 },
   ocr: {
     engine: 'windows',
     path: '',
@@ -127,7 +128,7 @@ describe('RedactionBadge', () => {
     render(<RedactionBadge {...props({ setMappings })} />)
     await waitFor(() => { expect(screen.getByRole('button', { name: '脱敏状态' }).textContent).toContain('7') })
     fireEvent.click(screen.getByRole('button', { name: '脱敏状态' }))
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('switch'))
     expect(setMappings.mock.calls).toEqual([[false]])
   })
 
@@ -153,6 +154,6 @@ describe('RedactionBadge', () => {
     await waitFor(() => { expect(entries).toHaveBeenCalledOnce() })
     fireEvent.click(screen.getByRole('button', { name: '脱敏状态' }))
     expect(screen.getByRole('button', { name: '原文' })).toBeTruthy()
-    expect(screen.getByRole('checkbox')).toBeTruthy()
+    expect(screen.getByRole('switch')).toBeTruthy()
   })
 })

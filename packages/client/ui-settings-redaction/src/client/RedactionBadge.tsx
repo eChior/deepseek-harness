@@ -14,6 +14,7 @@ import type {
   RedactionEntryView,
   RedactionStatusView,
 } from '@deepseek-ai/dsh-api-redaction-controller/types'
+import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './RedactionBadge.module.css'
 
@@ -223,14 +224,14 @@ export function RedactionBadge({
           </dl>
 
           <div className={css.switches}>
-            <label className={css.switchRow}>
-              <input
-                type="checkbox"
+            <div className={css.switchRow}>
+              <Switch
                 checked={mappings}
-                onChange={(event) => { setMappings(event.currentTarget.checked) }}
+                label={t('badgeMappings')}
+                onChange={(enabled) => { setMappings(enabled) }}
               />
               <span className={css.switchLabel}>{t('badgeMappings')}</span>
-            </label>
+            </div>
             <p className={css.hint}>{t('badgeMappingsHint')}</p>
             <p className={css.hint}>{t('badgeRestoreFormats')}</p>
 

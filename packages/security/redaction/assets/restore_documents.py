@@ -10,7 +10,11 @@ ciphertext. Everything therefore happens here.
 It reads one JSON request from stdin::
 
     {"paths": ["D:/work/report.docx", "notes.md"],
+     "cwd": "D:/work",
      "entries": [{"placeholder": "[产品-1]", "original": "红霉素肠溶胶囊"}]}
+
+A relative path resolves against `cwd` — the session's working directory, which
+is where a model's relative write actually landed.
 
 and rewrites every listed file that holds a placeholder. A file with no
 placeholder is left untouched, so its modification time does not move. One
@@ -141,10 +145,17 @@ def main():
         return 0
     restored = []
     skipped = []
+    base = request.get('cwd')
+    root = Path(base) if isinstance(base, str) and base else None
     for raw in request.get('paths') or []:
         if not isinstance(raw, str) or not raw:
             continue
-        hits, note = restore_file(Path(raw), pairs)
+        path = Path(raw)
+        # A model rarely spells the session directory out; a relative write
+        # landed under `cwd`, so that is what resolves it.
+        if root is not None and not path.is_absolute():
+            path = root / path
+        hits, note = restore_file(path, pairs)
         if hits:
             restored.append({'path': raw, 'hits': hits})
         elif note != 'missing':

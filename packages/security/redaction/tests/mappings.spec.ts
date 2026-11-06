@@ -8,6 +8,9 @@
 import { Context } from '@deepseek-ai/cordis'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import { mappingKey, openLine } from '../src/mapping-file.ts'
+import type { RedactionEntry } from '../src/index.ts'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -62,9 +65,24 @@ async function endSession(ctx: Context, cache: string, id: string, original: str
   ctx.emit('session/disposed', session)
   const file = join(cache, 'mappings', 'mappings.jsonl')
   await vi.waitFor(async () => {
-    await expect(readFile(file, 'utf8')).resolves.toContain(original)
+    await expect(entriesOf(file)).resolves.toContainEqual(expect.objectContaining({ original }))
   })
   return file
+}
+
+/**
+ * The pairings one mapping file records, opened with the machine key.
+ * @param file - the mapping file.
+ * @returns every entry it holds, in file order.
+ */
+async function entriesOf(file: string): Promise<RedactionEntry[]> {
+  const body = await readFile(file, 'utf8')
+  const key = mappingKey(dirname(file))
+  return body
+    .split('\n')
+    .filter(line => line.trim() !== '')
+    .map(line => openLine(line, key))
+    .filter((entry): entry is RedactionEntry => entry !== undefined)
 }
 
 describe('redaction mapping files', () => {
@@ -74,9 +92,10 @@ describe('redaction mapping files', () => {
     ctx.redaction.redactText('结晶温度偏高')
     const file = await endSession(ctx, cache, 'task-a', '结晶温度')
     expect(file.endsWith(join('mappings', 'mappings.jsonl'))).toBe(true)
-    expect(await readFile(file, 'utf8')).toBe(
-      `${JSON.stringify({ placeholder: '[工艺-1]', category: 'craft', original: '结晶温度' })}\n`,
-    )
+    // The originals never sit on disk in the clear: a tool result, a hex view or
+    // a copied file must not be enough to read them back.
+    expect(await readFile(file, 'utf8')).not.toContain('结晶温度')
+    await expect(entriesOf(file)).resolves.toEqual([{ placeholder: '[工艺-1]', category: 'craft', original: '结晶温度' }])
   })
 
   it('writes while the process is alive, without waiting for the session to end', async () => {
@@ -88,8 +107,9 @@ describe('redaction mapping files', () => {
     // shows placeholders it can no longer read.
     const file = join(cache, 'mappings', 'mappings.jsonl')
     await vi.waitFor(async () => {
-      await expect(readFile(file, 'utf8')).resolves.toContain('结晶温度')
+      await expect(entriesOf(file)).resolves.toContainEqual(expect.objectContaining({ original: '结晶温度' }))
     })
+    expect(await readFile(file, 'utf8')).not.toContain('结晶温度')
   })
 
   it('appends every task to the same file', async () => {
@@ -101,12 +121,14 @@ describe('redaction mapping files', () => {
     await endSession(ctx, cache, 'task-b', '热封温度')
     // Not one file per task: a placeholder means the same value wherever it is
     // read, so every task appends to the machine's table instead.
+    // The key that opens the file lives elsewhere, under a name that gives
+    // nothing away, so a listing of the mappings is all a reader gets.
     const names = (await readdir(join(cache, 'mappings'))).sort()
     expect(names).toEqual(['mappings.jsonl'])
-    const body = await readFile(join(cache, 'mappings', 'mappings.jsonl'), 'utf8')
-    expect(body.split('\n').filter(line => line !== '')).toEqual([
-      JSON.stringify({ placeholder: '[工艺-1]', category: 'craft', original: '结晶温度' }),
-      JSON.stringify({ placeholder: '[工艺-2]', category: 'craft', original: '热封温度' }),
+    expect(await readdir(join(cache, 'state'))).toEqual(['index.dat'])
+    await expect(entriesOf(join(cache, 'mappings', 'mappings.jsonl'))).resolves.toEqual([
+      { placeholder: '[工艺-1]', category: 'craft', original: '结晶温度' },
+      { placeholder: '[工艺-2]', category: 'craft', original: '热封温度' },
     ])
   })
 
@@ -118,7 +140,9 @@ describe('redaction mapping files', () => {
     const session = Session.create(SessionId('task-off'))
     ctx.emit('session/disposed', session)
     await new Promise(resolve => setTimeout(resolve, 50))
-    await expect(readdir(join(cache, 'mappings'))).rejects.toThrow()
+    // Nothing that opens a file is written either: the directory may hold the
+    // key from an earlier run, but no pairing ever reaches the disk.
+    await expect(readdir(join(cache, 'mappings'))).resolves.not.toContain('mappings.jsonl')
     // The map is still in memory, so the reader of this process keeps restoring.
     expect(ctx.redaction.restore('[工艺-1] 偏高')).toBe('结晶温度 偏高')
   })

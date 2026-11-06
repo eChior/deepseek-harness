@@ -49,6 +49,18 @@ export interface RedactionStatusView {
   readonly ocr: RedactionVisionView
   /** Whether an attached picture is read as it arrives or only when the model asks. */
   readonly ocrMode: 'tool' | 'prompt'
+  /** Whether a document the model writes gets its placeholders replaced, and how that went. */
+  readonly restore: RedactionRestoreView
+}
+
+/** How the document write-back stands on this machine. */
+export interface RedactionRestoreView {
+  /** Whether a written document is repaired without asking. */
+  readonly onWrite: boolean
+  /** Why the last write-back changed nothing, or null when the last one worked. */
+  readonly lastError: string | null
+  /** Placeholders replaced in files on disk since this process started. */
+  readonly files: number
 }
 
 /** Which local reader reads an image. */

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { extname } from 'node:path'
+import { existsSync } from 'node:fs'
+import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
@@ -56,10 +57,12 @@ interface RestoreReport {
   readonly files?: readonly { readonly path?: unknown; readonly hits?: unknown }[]
 }
 
-/** How one restore pass went: the total hits and the per-file breakdown. */
+/** How one restore pass went: the total hits, the per-file breakdown, and why it stopped. */
 export interface RestoreOutcome {
   readonly restored: number
   readonly files: readonly { readonly path: string; readonly hits: number }[]
+  /** Set when no interpreter could run or the pass failed outright. */
+  readonly error?: string
 }
 
 /** A pass that changed nothing, used when the interpreter is unavailable. */
@@ -132,11 +135,114 @@ function addCandidate(candidate: string, into: Set<string>): void {
   into.add(trimmed)
 }
 
-/** The interpreter a deployment whitelists for document access. */
-function pythonCommand(): string {
+/** One interpreter invocation the restore pass may use. */
+interface Interpreter {
+  readonly command: string
+  /** Windows needs a shell for a `.cmd` shim, which `spawn` refuses otherwise. */
+  readonly shell: boolean
+}
+
+/** Where the interpreter sits inside the runtime a desktop build ships. */
+const RUNTIME_PYTHON = process.platform === 'win32'
+  ? ['dependencies', 'python', 'python.exe']
+  : ['dependencies', 'python', 'bin', 'python3']
+
+/** How long a probe may take before that candidate is abandoned. */
+const PROBE_TIMEOUT_MS = 10_000
+
+/**
+ * The interpreters this machine may hold, best first.
+ *
+ * A bare `python` is the last resort, not the first: the desktop build puts a
+ * `python.cmd` shim on PATH, and `spawn` cannot start a `.cmd` without a shell.
+ * The interpreter the build ships is an `.exe` and always starts.
+ * @returns absolute-or-PATH candidates, de-duplicated, in preference order.
+ */
+function pythonCandidates(): string[] {
+  const found: string[] = []
   const configured = process.env.DSH_REDACTION_PYTHON
-  if (configured !== undefined && configured !== '') return configured
-  return process.platform === 'win32' ? 'python' : 'python3'
+  if (configured !== undefined && configured !== '') found.push(configured)
+  const runtime = process.env.DSH_DESKTOP_PRIMARY_RUNTIME_DIR
+  if (runtime !== undefined && runtime !== '') found.push(join(runtime, ...RUNTIME_PYTHON))
+  const home = process.env.DSH_HOME
+  if (home !== undefined && home !== '') {
+    found.push(join(home, 'dsh-runtimes', 'dsh-primary-runtime', ...RUNTIME_PYTHON))
+  }
+  found.push(process.platform === 'win32' ? 'python.exe' : 'python3')
+  found.push(process.platform === 'win32' ? 'python' : 'python3')
+  return found.filter((candidate, index) => found.indexOf(candidate) === index)
+}
+
+/** Whether a candidate is an absolute path that is missing on disk. */
+function absent(candidate: string): boolean {
+  return (candidate.includes('/') || candidate.includes('\\')) && !existsSync(candidate)
+}
+
+/**
+ * Run one candidate to see whether it starts.
+ * @param candidate - the interpreter to try.
+ * @param shell - whether to go through a shell (required for a `.cmd` shim).
+ * @returns true when the process started and exited cleanly.
+ */
+function probeOnce(candidate: string, shell: boolean): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    let settled = false
+    const finish = (ok: boolean): void => {
+      if (settled) return
+      settled = true
+      resolve(ok)
+    }
+    let child
+    try {
+      child = spawn(candidate, ['-c', 'pass'], { stdio: 'ignore', windowsHide: true, shell })
+    } catch {
+      finish(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      child.kill()
+      finish(false)
+    }, PROBE_TIMEOUT_MS)
+    timer.unref()
+    child.on('error', () => {
+      clearTimeout(timer)
+      finish(false)
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      finish(code === 0)
+    })
+  })
+}
+
+let settledInterpreter: Interpreter | undefined
+let interpreterProbe: Promise<Interpreter | undefined> | undefined
+
+/**
+ * The interpreter this machine will actually run, probed once per process.
+ *
+ * Resolving it lazily matters: a machine without any interpreter must still
+ * start the harness, and the answer only changes when the process restarts.
+ * @returns the working interpreter, or undefined when none starts.
+ */
+function interpreter(): Promise<Interpreter | undefined> {
+  if (settledInterpreter !== undefined) return Promise.resolve(settledInterpreter)
+  if (interpreterProbe !== undefined) return interpreterProbe
+  interpreterProbe = (async () => {
+    for (const candidate of pythonCandidates()) {
+      if (absent(candidate)) continue
+      if (await probeOnce(candidate, false)) {
+        settledInterpreter = { command: candidate, shell: false }
+        return settledInterpreter
+      }
+      if (process.platform === 'win32' && await probeOnce(candidate, true)) {
+        settledInterpreter = { command: candidate, shell: true }
+        return settledInterpreter
+      }
+    }
+    return undefined
+  })()
+  return interpreterProbe
 }
 
 function restoreOutcome(output: string): RestoreOutcome {
@@ -163,16 +269,26 @@ function restoreOutcome(output: string): RestoreOutcome {
  *
  * Failures are swallowed on purpose: a machine without Python, or a document
  * that refuses the rewrite, must not fail the tool call that produced it.
- * @param paths Documents this call named.
+ * @param paths Documents this call named, absolute or relative to the session.
  * @param mappings Placeholder-to-original pairs in force right now.
+ * @param cwd - the session's working directory, used to resolve a relative path.
  * @returns how many files were rewritten; zero when nothing applied.
  */
 export async function restoreDocuments(
   paths: readonly string[],
   mappings: readonly DocumentMapping[],
+  cwd?: string,
 ): Promise<RestoreOutcome> {
   if (paths.length === 0 || mappings.length === 0) return NOTHING_RESTORED
-  const request = JSON.stringify({ paths, entries: mappings })
+  const command = await interpreter()
+  if (command === undefined) {
+    return { ...NOTHING_RESTORED, error: 'no Python interpreter could be started' }
+  }
+  const request = JSON.stringify({
+    paths,
+    entries: mappings,
+    ...cwd === undefined || cwd === '' ? {} : { cwd },
+  })
   return new Promise<RestoreOutcome>((resolve) => {
     let settled = false
     const finish = (value: RestoreOutcome): void => {
@@ -182,12 +298,13 @@ export async function restoreDocuments(
     }
     let child
     try {
-      child = spawn(pythonCommand(), [SCRIPT_PATH], {
+      child = spawn(command.command, [SCRIPT_PATH], {
         stdio: ['pipe', 'pipe', 'ignore'],
         windowsHide: true,
+        shell: command.shell,
       })
-    } catch {
-      finish(NOTHING_RESTORED)
+    } catch (error: unknown) {
+      finish({ ...NOTHING_RESTORED, error: `could not start ${command.command}: ${String(error)}` })
       return
     }
     const timer = setTimeout(() => {
