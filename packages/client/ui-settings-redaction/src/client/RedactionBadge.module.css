@@ -84,6 +84,7 @@
   box-sizing: border-box;
   width: 360px;
   max-height: min(480px, 60vh);
+  overflow: hidden;
   padding: 14px;
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
@@ -124,6 +125,7 @@
 /* Guard state and counters: two columns, label dim, value on the right. */
 .facts {
   display: grid;
+  flex: none;
   grid-template-columns: auto 1fr;
   gap: 4px 12px;
   margin: 0;
@@ -256,6 +258,7 @@
 
 .entriesHead {
   display: flex;
+  flex: none;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
@@ -275,9 +278,11 @@
 
 .list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 4px;
   margin: 0;
+  min-height: 0;
   padding: 0;
   overflow-y: auto;
   list-style: none;
@@ -289,6 +294,7 @@
   gap: 6px;
   font-size: 12px;
   line-height: 18px;
+  min-height: 18px;
 }
 
 .placeholder {
