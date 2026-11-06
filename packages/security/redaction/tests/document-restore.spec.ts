@@ -121,4 +121,22 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
 
     await expect(call(ctx, { path: join(directory, 'absent.docx') })).resolves.toBeUndefined()
   })
+
+  it('puts the original back into the bare shape an older build wrote', async () => {
+    const { directory, cache, termsPath } = await scratch()
+    onTestFinished(() => rm(directory, { recursive: true, force: true }))
+    const ctx = await mount(cache, termsPath)
+
+    // Before the brackets, a placeholder reached the text as a bare code
+    // between two word joiners. Those files are still on disk and still have
+    // to come back, so both older shapes are read the same way.
+    const path = join(directory, 'legacy.md')
+    await writeFile(path, '产品是 ⁠产品-1⁠ 和 产品-1。', 'utf8')
+    ctx.redaction.redactText('红霉素肠溶胶囊')
+
+    await call(ctx, { path })
+
+    const restored = await readFile(path, 'utf8')
+    expect(restored).toContain('产品是 红霉素肠溶胶囊 和 红霉素肠溶胶囊。')
+  })
 })

@@ -35,6 +35,8 @@ TEXT_EXTENSIONS = {'.md', '.markdown', '.txt', '.csv', '.tsv'}
 
 MAX_BYTES = 256 * 1024 * 1024
 
+WORD_JOINER = '\u2060'
+
 
 def build_pairs(entries):
     """Longest placeholder first, so `[公司1-1]` is not eaten by a shorter prefix."""
@@ -53,8 +55,15 @@ def build_pairs(entries):
     return pairs
 
 
+BARE_LEFT = '(?<![0-9A-Za-z\u4e00-\u9fff])'
+BARE_RIGHT = '(?![0-9])'
+
 def swap(text, pairs):
     """Replace every placeholder; return the text and how many sightings it held."""
+    # An older build wrapped a bare code in word joiners instead of brackets.
+    # The joiner carries no meaning, and leaving it in place would keep those
+    # files unreadable for good, so it goes before anything is matched.
+    text = text.replace(WORD_JOINER, '')
     hits = 0
     for placeholder, original in pairs:
         # Eat a copy-and-paste doubling first: replacing the inner placeholder
@@ -68,6 +77,12 @@ def swap(text, pairs):
         if placeholder in text:
             hits += text.count(placeholder)
             text = text.replace(placeholder, original)
+            continue
+        # The bare shape a build before the brackets wrote. The lookarounds keep
+        # it from eating a longer code that merely starts the same way.
+        pattern = BARE_LEFT + re.escape(inner) + BARE_RIGHT
+        text, count = re.subn(pattern, original, text)
+        hits += count
     return text, hits
 
 
