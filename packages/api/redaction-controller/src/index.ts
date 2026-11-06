@@ -119,7 +119,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   async restoreSession(request: { readonly sessionId?: string }): Promise<RedactionRestorePassView> {
-    const outcome = await this.ctx.redaction.restoreSession(this.sessionDirectory(request.sessionId))
+    const outcome = await this.ctx.redaction.restoreSession(this.sessionDirectory(request.sessionId), request.sessionId)
     const view: RedactionRestorePassView = {
       restored: outcome.restored,
       files: outcome.files,

@@ -23,7 +23,7 @@ import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   listLocalTermFiles,
@@ -378,6 +378,9 @@ export class RedactionService extends Service {
    * is kept here for the button to reuse.
    */
   private lastDirectory: string | undefined
+
+  /** The documents each session wrote, so the button knows what to restore. */
+  private readonly touched = new Map<string, Set<string>>()
   /** How many entries have already reached a mapping file on this machine. */
   private written = 0
   private flushTimer: ReturnType<typeof setTimeout> | undefined
@@ -459,7 +462,7 @@ export class RedactionService extends Service {
       // A model cannot do this: it never has the map.
       const directory = this.sessionDirectory(exec.agent)
       if (directory !== undefined) this.lastDirectory = directory
-      await this.restoreWrittenDocuments(exec.arguments, directory)
+      await this.restoreWrittenDocuments(exec.arguments, directory, exec.agent?.session.header.id)
       if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
       if (decision.value !== undefined) return decision
       const content = this.redact(decision.content ?? result.content)
@@ -1031,21 +1034,16 @@ export class RedactionService extends Service {
    * @param directory The session's working directory.
    * @returns how the pass went, for the badge to show.
    */
-  async restoreSession(directory?: string): Promise<RestoreOutcome> {
+  async restoreSession(directory?: string, sessionId?: string): Promise<RestoreOutcome> {
     if (!this.mappingsOn || !this.restoreOnWrite) return { restored: 0, files: [], skipped: [] }
-    const root = directory === undefined || directory === '' ? this.lastDirectory : directory
-    if (root === undefined) {
-      return {
-        restored: 0,
-        files: [],
-        skipped: [],
-        error: 'no tool has run in a session yet, so there is no directory to scan',
-      }
-    }
-    const paths = await documentsInDirectory(root)
+    const remembered = sessionId === undefined ? undefined : this.touched.get(sessionId)
+    const paths = remembered === undefined || remembered.size === 0
+      ? await this.documentsToRestore(directory)
+      : [...remembered]
     if (paths.length === 0) return { restored: 0, files: [], skipped: [] }
-    const outcome = await restoreDocuments(paths, this.documentMappings(), root, target => this.confiner(target))
-      .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
+    const outcome = await this.restorePaths(paths).catch((error: unknown) => ({
+      restored: 0, files: [], skipped: [], error: String(error),
+    }))
     const blocked = outcome.skipped[0]
     this.current = {
       ...this.current,
@@ -1057,6 +1055,45 @@ export class RedactionService extends Service {
       },
     }
     return outcome
+  }
+
+  /**
+   * The documents a manual pass should touch when the session recorded none.
+   * @param directory - the session directory to scan, if the caller named one.
+   * @returns document paths to restore.
+   */
+  private async documentsToRestore(directory: string | undefined): Promise<string[]> {
+    const root = directory === undefined || directory === '' ? this.lastDirectory : directory
+    if (root === undefined) return []
+    return [...(await documentsInDirectory(root))]
+  }
+
+  /**
+   * Restore a set of documents, one directory at a time.
+   * @param paths - absolute document paths, possibly spread over directories.
+   * @returns the summed outcome.
+   */
+  private async restorePaths(paths: readonly string[]): Promise<RestoreOutcome> {
+    const byDirectory = new Map<string, string[]>()
+    for (const path of paths) {
+      const directory = dirname(path)
+      const group = byDirectory.get(directory) ?? []
+      group.push(path)
+      byDirectory.set(directory, group)
+    }
+    let total: RestoreOutcome = { restored: 0, files: [], skipped: [] }
+    for (const [directory, group] of byDirectory) {
+      const outcome = await restoreDocuments(
+        group, this.documentMappings(), directory, target => this.confiner(target),
+      )
+      total = {
+        restored: total.restored + outcome.restored,
+        files: [...total.files, ...outcome.files],
+        skipped: [...total.skipped, ...outcome.skipped],
+        ...(outcome.error === undefined && total.error === undefined ? {} : { error: total.error ?? outcome.error }),
+      }
+    }
+    return total
   }
 
   /**
@@ -1073,10 +1110,11 @@ export class RedactionService extends Service {
     return undefined
   }
 
-  private async restoreWrittenDocuments(seeded: unknown, cwd?: string): Promise<void> {
+  private async restoreWrittenDocuments(seeded: unknown, cwd?: string, sessionId?: string): Promise<void> {
     if (!this.mappingsOn || !this.restoreOnWrite) return
     const paths = documentPaths(seeded)
     if (paths.length === 0) return
+    if (sessionId !== undefined && cwd !== undefined) this.remember(sessionId, paths, cwd)
     const outcome = await restoreDocuments(paths, this.documentMappings(), cwd, target => this.confiner(target))
       .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
     // A machine with no interpreter, or a file the interpreter refused, used to
@@ -1104,6 +1142,18 @@ export class RedactionService extends Service {
    * @param agent - the agent the call runs on behalf of.
    * @returns the absolute directory, or undefined when it cannot be read.
    */
+  /**
+   * Record the documents a tool just wrote.
+   * @param sessionId - the session the call ran for.
+   * @param paths - the paths the call named.
+   * @param directory - the directory relative paths resolve against.
+   */
+  private remember(sessionId: string, paths: readonly string[], directory: string): void {
+    const known = this.touched.get(sessionId) ?? new Set<string>()
+    for (const path of paths) known.add(isAbsolute(path) ? path : resolve(directory, path))
+    this.touched.set(sessionId, known)
+  }
+
   private sessionDirectory(agent: Agent | undefined): string | undefined {
     const cwd = agent?.session.header.cwd
     return cwd === undefined || cwd === '' ? undefined : cwd
