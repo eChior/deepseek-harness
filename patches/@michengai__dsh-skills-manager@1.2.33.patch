@@ -1,5 +1,5 @@
 diff --git a/lib/repositories.js b/lib/repositories.js
-index 0c9f057473ace4dd4fcf05aab01e06ea8ac31cc0..73bbb0759b92e107508f8762e86f939e0e769e50 100644
+index 0c9f057473ace4dd4fcf05aab01e06ea8ac31cc0..44c1b55e0f8e3c8ba8906e37a785772532b0e189 100644
 --- a/lib/repositories.js
 +++ b/lib/repositories.js
 @@ -9,6 +9,18 @@ const LIMIT = 32 << 20;
@@ -38,16 +38,20 @@ index 0c9f057473ace4dd4fcf05aab01e06ea8ac31cc0..73bbb0759b92e107508f8762e86f939e
      if ((await fs.lstat(managerHomePath())).isSymbolicLink()) throw failure("\u7F13\u5B58\u76EE\u5F55\u4E0D\u80FD\u662F\u94FE\u63A5");
      await fs.mkdir(dir, { recursive: true });
      if ((await fs.lstat(dir)).isSymbolicLink()) throw failure("\u7F13\u5B58\u76EE\u5F55\u4E0D\u80FD\u662F\u94FE\u63A5");
-@@ -319,7 +332,7 @@ function createRepositoryManager({
+@@ -318,10 +331,8 @@ function createRepositoryManager({
+     } catch (e) {
        if (e.code && e.code.startsWith("error.repo.")) throw e;
      }
-     if (/^[a-f0-9]{40}$/.test(repo.commit || "")) {
+-    if (/^[a-f0-9]{40}$/.test(repo.commit || "")) {
 -      return decodeRepositoryArchive(await request(`https://codeload.github.com/${repo.owner}/${repo.name}/zip/${repo.commit}`));
-+      return decodeRepositoryArchive(await request(archiveUrl(repo.owner, repo.name, repo.commit)));
-     }
-     throw failure("\u626B\u63CF\u7F13\u5B58\u7F3A\u5931\u6216\u635F\u574F\uFF0C\u8BF7\u91CD\u65B0\u68C0\u67E5\u66F4\u65B0\u540E\u64CD\u4F5C");
+-    }
+-    throw failure("\u626B\u63CF\u7F13\u5B58\u7F3A\u5931\u6216\u635F\u574F\uFF0C\u8BF7\u91CD\u65B0\u68C0\u67E5\u66F4\u65B0\u540E\u64CD\u4F5C");
++    const ref = repo.ref || "main";
++    return decodeRepositoryArchive(await request(archiveUrl(repo.owner, repo.name, ref)));
    }
-@@ -383,7 +396,7 @@ function createRepositoryManager({
+   async function scanSkillsFromDirectory(dir, subdirectory = "", repoName = "") {
+     const skills = [];
+@@ -383,7 +394,7 @@ function createRepositoryManager({
      const refs = repo.ref && repo.ref !== "HEAD" ? [`refs/heads/${repo.ref}`, `refs/tags/${repo.ref}`] : ["HEAD", "refs/heads/main", "refs/heads/master"];
      for (let i = 0; i < refs.length; i++) {
        try {
