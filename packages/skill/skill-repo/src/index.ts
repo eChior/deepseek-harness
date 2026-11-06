@@ -46,6 +46,34 @@ const STAGING_SUFFIX = '.staging'
 /** The archive wraps everything in one `<repository>-<branch>` directory. */
 const ARCHIVE_ROOT_COMPONENTS = 1
 
+/**
+ * True when two directories hold the same names and the same bytes.
+ *
+ * Skills are small, so reading both sides is cheaper than the mistake this
+ * guards against: replacing a skill a colleague edited by hand.
+ * @param left - directory holding the repository copy.
+ * @param right - directory holding the installed copy.
+ * @returns whether every file matches.
+ */
+async function sameTree(left: string, right: string): Promise<boolean> {
+  const mine = (await readdir(left)).sort()
+  const yours = (await readdir(right)).sort()
+  if (mine.length !== yours.length) return false
+  for (const [index, name] of mine.entries()) {
+    if (name !== yours[index]) return false
+    const leftInfo = await stat(join(left, name))
+    const rightInfo = await stat(join(right, name))
+    if (leftInfo.isDirectory() !== rightInfo.isDirectory()) return false
+    if (leftInfo.isDirectory()) {
+      if (!await sameTree(join(left, name), join(right, name))) return false
+      continue
+    }
+    const [a, b] = await Promise.all([readFile(join(left, name)), readFile(join(right, name))])
+    if (!a.equals(b)) return false
+  }
+  return true
+}
+
 /** File beside the mirror that names the skills this provider published. */
 const PUBLISH_MANIFEST = '.dsh-skill-repo-published.json'
 
@@ -77,12 +105,6 @@ export interface Config {
   bundledDirectory?: string
   /** Per-request timeout for the archive download and the branch lookup. */
   timeoutMs?: number
-  /**
-   * Minutes between mirrors once the client is up. Defaults to 10; set 0 to
-   * mirror only at startup. A colleague who updates a skill in the repository
-   * should not have to restart the client to receive it.
-   */
-  refreshMinutes?: number
   /**
    * Token the publishing seam presents to the repository host. Empty falls back
    * to `DSH_SKILLS_TOKEN`, so a deployment can keep it out of the config file.
@@ -154,7 +176,6 @@ export const Config: z<Config> = z.object({
   publishDirectory: z.string().default(dshHomePath('skills')),
   bundledDirectory: z.string().default(BUNDLED_SKILLS),
   timeoutMs: z.number().default(120_000),
-  refreshMinutes: z.number().default(10),
   token: z.string().default(''),
 })
 
@@ -240,7 +261,6 @@ export class SkillRepository extends Service {
       publishDirectory: config.publishDirectory ?? dshHomePath('skills'),
       bundledDirectory: config.bundledDirectory ?? BUNDLED_SKILLS,
       timeoutMs: config.timeoutMs ?? 120_000,
-      refreshMinutes: config.refreshMinutes ?? 10,
       token: config.token ?? '',
     }
     const directory = this.config.directory
@@ -263,16 +283,8 @@ export class SkillRepository extends Service {
     if (this.config.enabled) {
       ctx.effect(() => {
         void this.sync()
-        const minutes = this.config.refreshMinutes
-        if (minutes <= 0) return () => undefined
-        /* A colleague who publishes a fix expects the installed copy to follow
-         * without a restart, so the mirror keeps running on a timer. sync() is
-         * single-flight: an occurrence that lands mid-download joins that
-         * download instead of starting a second one. */
-        const timer = setInterval(() => { void this.sync() }, minutes * 60_000)
-        timer.unref()
-        return () => { clearInterval(timer) }
-      }, 'skill-repo: mirror the skills repository on startup and on a timer')
+        return () => {}
+      }, 'skill-repo: mirror the skills repository on startup')
     }
   }
 
@@ -610,9 +622,16 @@ export class SkillRepository extends Service {
   }
 
   /**
-   * Copy every skill the archive carries into the user skill root. A directory
-   * this provider published before is replaced; one it never published is left
-   * alone, so a hand-written skill that shares a name survives the sync.
+   * Copy every skill the archive carries into the user skill root.
+   *
+   * Three cases, in order of who wins: a directory this provider never
+   * published is left alone (a hand-written skill that shares a name survives
+   * the sync); a published directory whose bytes match the archive is left
+   * alone (nothing to do); a published directory that differs is also left
+   * alone, because the difference is a local edit. Taking the repository copy
+   * would silently throw that work away, so the sync says so in the log and
+   * keeps the machine's version — deleting the directory is how a colleague
+   * asks for the repository one.
    */
   private async publish(source: string): Promise<string[]> {
     const target = this.current.publishDirectory
@@ -623,11 +642,19 @@ export class SkillRepository extends Service {
     const published: string[] = []
     for (const name of names) {
       const destination = join(target, name)
-      if (!owned.includes(name) && await exists(destination)) {
-        this.ctx.logger.warn(`skill-repo: keeping ${destination}, which this provider never published`)
+      if (await exists(destination)) {
+        if (!owned.includes(name)) {
+          this.ctx.logger.warn(`skill-repo: keeping ${destination}, which this provider never published`)
+          continue
+        }
+        if (!await sameTree(join(source, name), destination)) {
+          this.ctx.logger.warn(`skill-repo: keeping the edited ${destination}; delete it to take the repository copy`)
+          published.push(name)
+          continue
+        }
+        published.push(name)
         continue
       }
-      await rm(destination, { recursive: true, force: true })
       await cp(join(source, name), destination, { recursive: true })
       published.push(name)
     }

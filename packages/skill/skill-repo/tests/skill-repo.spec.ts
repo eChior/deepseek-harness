@@ -217,6 +217,19 @@ describe('SkillRepository', () => {
     await fiber.dispose()
   })
 
+  it('keeps a skill a colleague edited after it was published', async () => {
+    const { remote } = await origin()
+    const home = await tempDir('skill-home')
+    const published = join(home, 'skills')
+    const ctx = new Context()
+    const fiber = await ctx.plugin(SkillRepo.default, { url: remote, directory: join(home, 'skills-repo'), publishDirectory: published })
+    await ctx.skillRepo.sync()
+    await writeFile(join(published, 'demo', 'SKILL.md'), '---\nname: demo\nnote: local\n---\n', 'utf8')
+    await ctx.skillRepo.sync()
+    expect(await readFile(join(published, 'demo', 'SKILL.md'), 'utf8')).toContain('note: local')
+    await fiber.dispose()
+  })
+
   it('replaces an older mirror and leaves no staging directory behind', async () => {
     const { remote } = await origin()
     const home = await tempDir('skill-home')
