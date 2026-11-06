@@ -1013,15 +1013,16 @@ export class RedactionService extends Service {
       .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
     // A machine with no interpreter, or a file the interpreter refused, used to
     // vanish into a swallowed promise. The status surface needs the reason: the
-    // user sees a file still holding placeholders and asks why. A placeholder
-    // the map never recorded is the most common reason, and it needs to say so —
-    // otherwise a faithful pass reads as a broken one.
-    const unmapped = outcome.skipped.find(file => file.reason.startsWith('unmapped: '))
+    // user sees a file still holding placeholders and asks why. Reporting only an
+    // unmapped code was not enough — a pass that ran and found nothing to do read
+    // exactly like a pass that never ran, which is the question it has to answer.
+    const blocked = outcome.skipped[0]
     this.current = {
       ...this.current,
       restore: {
         onWrite: this.restoreOnWrite,
-        lastError: outcome.error ?? (unmapped === undefined ? null : `${basename(unmapped.path)}: ${unmapped.reason}`),
+        lastError: outcome.error
+          ?? (blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`),
         files: this.current.restore.files + outcome.restored,
       },
     }
