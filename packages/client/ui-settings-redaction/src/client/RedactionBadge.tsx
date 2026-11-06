@@ -160,6 +160,10 @@ export function RedactionBadge({
         ? t('badgeOcrWindows')
         : t('badgeOcrTesseract')
   const ocrMissing = ocr !== undefined && ocr.path !== '' && !ocr.present
+  // The interpreter that does the rewriting runs inside the sandbox, so a
+  // machine whose Windows permissions reject it leaves placeholders on disk.
+  // The panel has to say so: a file that still holds them looks like a bug.
+  const restoreError = state?.restore.lastError ?? null
 
   return (
     <span className={css.wrap} ref={rootRef}>
@@ -221,6 +225,14 @@ export function RedactionBadge({
             <dd>{rules ?? t('loading')}</dd>
             <dt>{t('badgeReplacements')}</dt>
             <dd>{replacements}</dd>
+            <dt>{t('badgeRestore')}</dt>
+            <dd>{state?.restore.onWrite === false ? t('badgeOff') : t('badgeOn')}</dd>
+            <dt>{t('badgeRestoreResult')}</dt>
+            <dd>
+              {restoreError === null
+                ? t('badgeRestoreFiles', { count: String(state?.restore.files ?? 0) })
+                : <span className={css.off} title={restoreError}>{t('badgeRestoreFailed')}</span>}
+            </dd>
           </dl>
 
           <div className={css.switches}>
