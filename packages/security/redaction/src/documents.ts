@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readablePath } from './assets.ts'
 
 /**
  * The documents a model can author, and where their text lives.
@@ -29,7 +30,10 @@ export const DOCUMENT_EXTENSIONS: ReadonlySet<string> = new Set([
 ])
 
 /** The script that owns every document read and write. */
-const SCRIPT_PATH = fileURLToPath(new URL('../assets/restore_documents.py', import.meta.url))
+/** The interpreter opens this path itself, so it has to exist on disk. */
+const SCRIPT_PATH = readablePath(
+  fileURLToPath(new URL('../assets/restore_documents.py', import.meta.url)),
+)
 
 /** How long one restore pass may take before it is abandoned. */
 const RESTORE_TIMEOUT_MS = 30_000

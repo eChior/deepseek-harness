@@ -23,9 +23,13 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readablePath } from './assets.ts'
 
 /** Script a Windows client runs; it reads base64 on stdin and writes text on stdout. */
-const WINDOWS_SCRIPT = fileURLToPath(new URL('../assets/vision.ps1', import.meta.url))
+/** PowerShell opens this path itself, so it has to exist on disk. */
+const WINDOWS_SCRIPT = readablePath(
+  fileURLToPath(new URL('../assets/vision.ps1', import.meta.url)),
+)
 
 /** How long one recognition may take before it is abandoned. */
 export const DEFAULT_VISION_TIMEOUT_MS = 20_000
