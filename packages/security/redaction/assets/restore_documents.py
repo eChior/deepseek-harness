@@ -23,6 +23,7 @@ JSON object reporting what happened goes to stdout.
 
 import io
 import json
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -104,6 +105,21 @@ def restore_text(payload, pairs):
     return (replaced.encode('utf-8'), hits) if hits else (None, 0)
 
 
+SHAPE = re.compile(r'\[[^\]\n]{1,32}-\d{1,6}\]')
+
+def unmapped_note(payload):
+    """Name the placeholder the file holds when the map has no pair for it."""
+    if not payload:
+        return 'no placeholder'
+    try:
+        text = payload.decode('utf-8')
+    except UnicodeDecodeError:
+        return 'no placeholder'
+    found = SHAPE.findall(text)
+    if not found:
+        return 'no placeholder'
+    return 'unmapped: ' + ', '.join(sorted(set(found))[:4])
+
 def restore_file(path, pairs):
     """Return how many placeholders this file held, or 0 when it was left alone."""
     if not path.is_file():
@@ -122,7 +138,7 @@ def restore_file(path, pairs):
     else:
         replaced, hits = restore_text(payload, pairs)
     if not hits or replaced is None:
-        return 0, 'no placeholder'
+        return 0, unmapped_note(payload if suffix not in ARCHIVE_EXTENSIONS else b'')
     try:
         path.write_bytes(replaced)
     except OSError:

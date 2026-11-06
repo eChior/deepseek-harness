@@ -55,18 +55,27 @@ export interface DocumentMapping {
 interface RestoreReport {
   readonly restored?: number
   readonly files?: readonly { readonly path?: unknown; readonly hits?: unknown }[]
+  readonly skipped?: readonly { readonly path?: unknown; readonly reason?: unknown }[]
 }
 
 /** How one restore pass went: the total hits, the per-file breakdown, and why it stopped. */
 export interface RestoreOutcome {
   readonly restored: number
   readonly files: readonly { readonly path: string; readonly hits: number }[]
+  /**
+   * Documents the pass looked at and left alone, with the interpreter's reason:
+   * `no placeholder` for a file that held none, `unmapped: [公司-1]` for one whose
+   * placeholders the map cannot resolve, `missing`/`unsupported`/`unreadable` else.
+   * The status surface shows them, because a file still holding placeholders looks
+   * like a broken write-back when it is really a placeholder no mapping recorded.
+   */
+  readonly skipped: readonly { readonly path: string; readonly reason: string }[]
   /** Set when no interpreter could run or the pass failed outright. */
   readonly error?: string
 }
 
 /** A pass that changed nothing, used when the interpreter is unavailable. */
-const NOTHING_RESTORED: RestoreOutcome = { restored: 0, files: [] }
+const NOTHING_RESTORED: RestoreOutcome = { restored: 0, files: [], skipped: [] }
 
 /**
  * Whether a path names a document the restore pass handles.
@@ -256,7 +265,13 @@ function restoreOutcome(output: string): RestoreOutcome {
         if (typeof file.path !== 'string' || typeof file.hits !== 'number') continue
         files.push({ path: file.path, hits: file.hits })
       }
-      return { restored: typeof parsed.restored === 'number' ? parsed.restored : 0, files }
+      const skipped: { path: string; reason: string }[] = []
+      for (const item of parsed.skipped ?? []) {
+        if (typeof item.path !== 'string' || typeof item.reason !== 'string') continue
+        if (item.reason === 'restored') continue
+        skipped.push({ path: item.path, reason: item.reason })
+      }
+      return { restored: typeof parsed.restored === 'number' ? parsed.restored : 0, files, skipped }
     } catch {
       continue
     }

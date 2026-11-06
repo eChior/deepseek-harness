@@ -23,7 +23,7 @@ import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   listLocalTermFiles,
@@ -1010,15 +1010,18 @@ export class RedactionService extends Service {
     const paths = documentPaths(seeded)
     if (paths.length === 0) return
     const outcome = await restoreDocuments(paths, this.documentMappings(), cwd)
-      .catch((error: unknown) => ({ restored: 0, files: [], error: String(error) }))
+      .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
     // A machine with no interpreter, or a file the interpreter refused, used to
     // vanish into a swallowed promise. The status surface needs the reason: the
-    // user sees a file still holding placeholders and asks why.
+    // user sees a file still holding placeholders and asks why. A placeholder
+    // the map never recorded is the most common reason, and it needs to say so —
+    // otherwise a faithful pass reads as a broken one.
+    const unmapped = outcome.skipped.find(file => file.reason.startsWith('unmapped: '))
     this.current = {
       ...this.current,
       restore: {
         onWrite: this.restoreOnWrite,
-        lastError: outcome.error ?? null,
+        lastError: outcome.error ?? (unmapped === undefined ? null : `${basename(unmapped.path)}: ${unmapped.reason}`),
         files: this.current.restore.files + outcome.restored,
       },
     }
@@ -1148,7 +1151,11 @@ export class RedactionService extends Service {
     // Checked before anything is read: with write-back off nothing leaves this
     // process at all.
     if (!this.mappingsOn) return
-    await this.ready
+    // The read of earlier pairings must never gate the write of this one: a
+    // file an earlier release left in a shape this one cannot parse would
+    // otherwise silently stop every mapping this process makes from reaching
+    // the disk, and the write-back would have nothing to restore from.
+    await this.ready.catch(() => undefined)
     const all = this.map.liveEntries()
     // Only what this process added since the last file. The entries read back at
     // startup are not in the live log at all, and the ones already appended must
@@ -1189,7 +1196,10 @@ export class RedactionService extends Service {
     // in the old plaintext form is rewritten sealed as soon as it is read, so the
     // first launch after this upgrade closes the hole on every machine.
     for (const name of await mappingFiles(directory)) {
+      // One unreadable file costs only its own pairings: the rest of the table
+      // still loads, and this process keeps writing new ones.
       const { entries, plain } = await readMappingFile(directory, name, key)
+        .catch(() => ({ entries: [], plain: false }))
       if (entries.length === 0) continue
       this.map.adopt(entries)
       if (plain && key !== undefined) await sealMappingFile(directory, name, key, entries)

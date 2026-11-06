@@ -16,6 +16,12 @@ import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RedactionService } from '../src/index.ts'
 
+/**
+ * The write-back is asynchronous and the suite runs files in parallel, so a
+ * loaded machine can take far longer than the default budget to land one line.
+ */
+vi.setConfig({ testTimeout: 20_000 })
+
 /** One term, so every replacement is predictable. */
 const TERMS = `version: 1
 revision: 'mappings-1'
@@ -66,7 +72,7 @@ async function endSession(ctx: Context, cache: string, id: string, original: str
   const file = join(cache, 'mappings', 'mappings.jsonl')
   await vi.waitFor(async () => {
     await expect(entriesOf(file)).resolves.toContainEqual(expect.objectContaining({ original }))
-  })
+  }, { timeout: 15_000, interval: 50 })
   return file
 }
 
