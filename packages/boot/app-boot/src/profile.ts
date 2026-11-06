@@ -39,6 +39,17 @@ export const PROFILES_DIR = 'profiles'
 /** The user patch layer inside a profile directory (hot-reloaded on long-lived surfaces). */
 export const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
 
+/**
+ * Bundles this fork no longer ships.
+ *
+ * The plugin manager reports a profile as having installed every bundle it
+ * lists, so a profile created before a bundle was dropped keeps advertising it
+ * — the user opens the marketplace and sees a plugin that is gone from the
+ * installation. Removing the name here is what clears that row; nothing else
+ * reads the list for this purpose.
+ */
+const RETIRED_BUNDLES: ReadonlySet<string> = new Set(['dsh-ops', 'billion-context'])
+
 /** Installation-owned defaults used when a shipped profile is first opened. */
 export interface ProfileTemplate {
   /** Ordered bundle layer list. */
@@ -261,7 +272,8 @@ export function initProfile(
 ): void {
   mkdirSync(dir, { recursive: true })
   const manifestPath = join(dir, 'package.json')
-  if (!existsSync(manifestPath)) {
+  if (existsSync(manifestPath)) dropRetiredBundles(manifestPath)
+  else {
     const manifest: ProfileManifest & { private: boolean } = {
       name: `dsh-profile-${basename(dir)}`,
       private: true,
@@ -274,6 +286,40 @@ export function initProfile(
   if (!existsSync(patchPath)) writeFileSync(patchPath, PROFILE_PATCH_TEMPLATE)
   const workspacePath = join(dir, 'pnpm-workspace.yaml')
   if (!existsSync(workspacePath)) writeFileSync(workspacePath, PROFILE_PNPM_WORKSPACE)
+}
+
+/**
+ * Remove a retired bundle name from an existing profile manifest.
+ *
+ * Written as a read-modify-write of one field, so every other setting the user
+ * has made in the file survives. A manifest that cannot be parsed is left
+ * alone: rewriting a file we do not understand would lose their edits.
+ * @param manifestPath - the profile's `package.json`.
+ * @returns the names removed, for the caller's log.
+ */
+export function dropRetiredBundles(manifestPath: string): string[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  } catch {
+    return []
+  }
+  if (typeof parsed !== 'object' || parsed === null) return []
+  const manifest: Record<string, unknown> = { ...parsed }
+  const dsh = manifest.dsh
+  if (typeof dsh !== 'object' || dsh === null) return []
+  const profile = (dsh as Record<string, unknown>).profile
+  if (typeof profile !== 'object' || profile === null) return []
+  const bundles = (profile as Record<string, unknown>).bundles
+  if (!Array.isArray(bundles)) return []
+  const kept = bundles.filter((name: unknown) => typeof name !== 'string' || !RETIRED_BUNDLES.has(name))
+  const dropped = bundles.filter((name: unknown) => typeof name === 'string' && RETIRED_BUNDLES.has(name))
+  if (dropped.length === 0) return []
+  const nextProfile: Record<string, unknown> = { ...(profile as Record<string, unknown>), bundles: kept }
+  const nextDsh: Record<string, unknown> = { ...(dsh as Record<string, unknown>), profile: nextProfile }
+  manifest.dsh = nextDsh
+  writeFileSync(manifestPath, JSON.stringify(manifest, undefined, 2) + '\n')
+  return dropped.map(String)
 }
 
 /** Directory where the link backend of the dsh 0.1.5 releases projected bundle-carried packages into a profile. */

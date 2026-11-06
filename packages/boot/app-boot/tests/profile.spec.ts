@@ -15,6 +15,7 @@ import { afterAll, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   composeEntries,
   createRuntimeResolution,
+  dropRetiredBundles,
   getDshRuntimeVersion,
   initProfile,
   loadProfile,
@@ -792,5 +793,36 @@ describe('removeLinkProjections', () => {
     removeLinkProjections(profile)
     removeLinkProjections(join(home, 'profiles', 'absent'))
     expect(existsSync(join(profile, 'node_modules', 'my-plugin', 'package.json'))).toBe(true)
+  })
+})
+
+describe('a profile an earlier build created', () => {
+  it('drops a bundle this build no longer ships', () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-retired-'))
+    const dir = join(home, 'profiles', 'web')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      name: 'dsh-profile-web',
+      private: true,
+      dependencies: {},
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-ops', 'dshmarket', 'billion-context'] } },
+    }, undefined, 2) + '\n')
+    initProfile(dir, [])
+    const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+      dsh: { profile: { bundles: string[] } }
+    }
+    expect(manifest.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', 'dshmarket'])
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('leaves a manifest it cannot parse untouched', () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-retired-bad-'))
+    const dir = join(home, 'profiles', 'web')
+    mkdirSync(dir, { recursive: true })
+    const path = join(dir, 'package.json')
+    writeFileSync(path, '{ not json')
+    expect(dropRetiredBundles(path)).toEqual([])
+    expect(readFileSync(path, 'utf8')).toBe('{ not json')
+    rmSync(home, { recursive: true, force: true })
   })
 })

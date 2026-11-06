@@ -7,6 +7,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { installBundledReader } from './reader.ts'
+import { grantRuntimeRead } from './runtime-access.ts'
 import { fileURLToPath } from 'node:url'
 import {
   app,
@@ -247,11 +248,19 @@ if (process.platform === 'win32' || process.platform === 'linux') {
  * runs beside the window rather than before it: an image cannot be read until
  * a session exists, and a slow disk must not delay the first paint.
  */
-app.whenReady().then(() => installBundledReader({
-  resources: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'),
-  home: resolveDshHome(),
-  log: (message) => { console.info(message) },
-})).catch((error: unknown) => {
+app.whenReady().then(async () => {
+  const home = resolveDshHome()
+  await installBundledReader({
+    resources: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'),
+    home,
+    log: (message) => { console.info(message) },
+  })
+  // The sandbox child cannot reach a directory that names only the user, so
+  // both trees it has to start a binary from gain the Everyone read grant.
+  for (const directory of [join(home, 'dsh-runtimes'), join(home, 'redaction', 'ocr')]) {
+    grantRuntimeRead(directory, { log: (message) => { console.warn(message) } })
+  }
+}).catch((error: unknown) => {
   console.warn('Could not unpack the bundled reader', error)
 })
 
