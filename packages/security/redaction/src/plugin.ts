@@ -500,7 +500,7 @@ export class RedactionService extends Service {
     // normal text unless the reader turns on the original-text view.
     const mappingsOf = (): readonly DocumentMapping[] => this.documentMappings()
     const directoryOf = (agent: Agent | undefined): string | undefined => this.sessionDirectory(agent)
-    const confinerOf = (directory: string | undefined): Confine | undefined => this.confiner(directory)
+    const confinerOf = (directory: string): Confine | undefined => this.confiner(directory)
     ctx.on('agent/created', ({ agent }: { agent: Agent }) => {
       agent.ctx.tools.register(defineTool({
         name: 'restore_redacted_files',
@@ -541,7 +541,7 @@ export class RedactionService extends Service {
         },
         async execute(args) {
           const directory = directoryOf(agent)
-          const outcome = await restoreDocuments(args.paths, mappingsOf(), directory, confinerOf(directory))
+          const outcome = await restoreDocuments(args.paths, mappingsOf(), directory, confinerOf)
             .catch(() => undefined)
           return {
             restored: outcome?.restored ?? 0,
@@ -1044,7 +1044,7 @@ export class RedactionService extends Service {
     }
     const paths = await documentsInDirectory(root)
     if (paths.length === 0) return { restored: 0, files: [], skipped: [] }
-    const outcome = await restoreDocuments(paths, this.documentMappings(), root, this.confiner(root))
+    const outcome = await restoreDocuments(paths, this.documentMappings(), root, target => this.confiner(target))
       .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
     const blocked = outcome.skipped[0]
     this.current = {
@@ -1091,7 +1091,7 @@ export class RedactionService extends Service {
     if (!this.mappingsOn || !this.restoreOnWrite) return
     const paths = documentPaths(seeded)
     if (paths.length === 0) return
-    const outcome = await restoreDocuments(paths, this.documentMappings(), cwd, this.confiner(cwd))
+    const outcome = await restoreDocuments(paths, this.documentMappings(), cwd, target => this.confiner(target))
       .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
     // A machine with no interpreter, or a file the interpreter refused, used to
     // vanish into a swallowed promise. The status surface needs the reason: the

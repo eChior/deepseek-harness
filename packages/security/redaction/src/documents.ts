@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { dirname, extname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
@@ -371,22 +371,62 @@ function restoreOutcome(output: string): RestoreOutcome {
 /** Wraps the interpreter argv in whatever the host confines commands with. */
 export type Confine = (argv: readonly string[]) => Promise<readonly string[]>
 
+/** Wraps the interpreter argv for one directory the host has to unlock. */
+export type ConfineFor = (directory: string) => Confine | undefined
+
 export async function restoreDocuments(
   paths: readonly string[],
   mappings: readonly DocumentMapping[],
   cwd?: string,
-  confine?: Confine,
+  confineFor?: ConfineFor,
 ): Promise<RestoreOutcome> {
   if (paths.length === 0 || mappings.length === 0) return NOTHING_RESTORED
   const command = await interpreter()
   if (command === undefined) {
     return { ...NOTHING_RESTORED, error: 'no Python interpreter could be started' }
   }
-  const request = JSON.stringify({
-    paths,
-    entries: mappings,
-    ...cwd === undefined || cwd === '' ? {} : { cwd },
-  })
+  /* Group by the directory each document actually lives in: a document does not
+   * have to sit in the session's workspace, and the host can only unlock the
+   * directory it is told about. */
+  const groups = new Map<string, string[]>()
+  for (const path of paths) {
+    const absolute = isAbsolute(path) ? path : join(cwd === undefined || cwd === '' ? '.' : cwd, path)
+    const directory = dirname(absolute)
+    const group = groups.get(directory) ?? []
+    group.push(absolute)
+    groups.set(directory, group)
+  }
+  let merged: RestoreOutcome = { restored: 0, files: [], skipped: [] }
+  for (const [directory, group] of groups) {
+    const outcome = await restoreGroup(command, group, mappings, directory, confineFor?.(directory))
+    const error = merged.error ?? outcome.error
+    merged = {
+      restored: merged.restored + outcome.restored,
+      files: [...merged.files, ...outcome.files],
+      skipped: [...merged.skipped, ...outcome.skipped],
+      ...error === undefined ? {} : { error },
+    }
+  }
+  return merged
+}
+
+/**
+ * Hand one directory's documents to the interpreter.
+ * @param command the interpreter to start.
+ * @param paths absolute document paths, all under `directory`.
+ * @param mappings placeholder-to-original pairs in force right now.
+ * @param directory the directory the paths share, and the one to unlock.
+ * @param confine wraps the argv so the host grants that directory first.
+ * @returns how the group went.
+ */
+async function restoreGroup(
+  command: Interpreter,
+  paths: readonly string[],
+  mappings: readonly DocumentMapping[],
+  directory: string,
+  confine?: Confine,
+): Promise<RestoreOutcome> {
+  const request = JSON.stringify({ paths, entries: mappings, cwd: directory })
   const plain = [command.command, SCRIPT_PATH]
   let argv: readonly string[] = plain
   if (confine !== undefined) {
