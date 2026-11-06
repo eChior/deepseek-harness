@@ -58,12 +58,33 @@ def build_pairs(entries):
 BARE_LEFT = '(?<![0-9A-Za-z\u4e00-\u9fff])'
 BARE_RIGHT = '(?![0-9])'
 
+# A model retyping a placeholder splits it: `[公司 1-3]` instead of
+# `[公司1-3]`. The spacing is the model's, not the map's, so it is collapsed
+# before matching — but only inside something shaped like a placeholder, so a
+# markdown link or a bracketed sentence keeps its text.
+# The dash itself can be lost to the same spacing, so it is optional here.
+LOOSE_PLACEHOLDER = re.compile(r'\[\s*([^\[\]\r\n]{1,40}?)\s*(?:-\s*|\s+)(\d{1,6})\s*\]')
+
+
+def tighten_placeholders(text, pairs):
+    """Collapse spacing inside a placeholder the map actually holds."""
+    known = {placeholder[1:-1] for placeholder, _ in pairs}
+
+    def tighten(match):
+        candidate = re.sub(r'\s+', '', match.group(1)) + '-' + match.group(2)
+        if candidate not in known:
+            return match.group(0)
+        return '[' + candidate + ']'
+
+    return LOOSE_PLACEHOLDER.sub(tighten, text)
+
 def swap(text, pairs):
     """Replace every placeholder; return the text and how many sightings it held."""
     # An older build wrapped a bare code in word joiners instead of brackets.
     # The joiner carries no meaning, and leaving it in place would keep those
     # files unreadable for good, so it goes before anything is matched.
     text = text.replace(WORD_JOINER, '')
+    text = tighten_placeholders(text, pairs)
     hits = 0
     for placeholder, original in pairs:
         # Eat a copy-and-paste doubling first: replacing the inner placeholder

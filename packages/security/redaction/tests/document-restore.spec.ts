@@ -139,4 +139,19 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
     const restored = await readFile(path, 'utf8')
     expect(restored).toContain('产品是 红霉素肠溶胶囊 和 红霉素肠溶胶囊。')
   })
+
+  it('puts the original back when the model spaced a placeholder out', async () => {
+    const { directory, cache, termsPath } = await scratch()
+    onTestFinished(() => rm(directory, { recursive: true, force: true }))
+    const ctx = await mount(cache, termsPath)
+    // A model retyping the placeholder splits it; the spacing is not part
+    // of the code the map holds, so all three spellings have to land.
+    const path = join(directory, 'spaced.md')
+    await writeFile(path, '[产品 1] 和 [产品- 1] 和 [产品 - 1]', 'utf8')
+    ctx.redaction.redactText('红霉素肠溶胶囊')
+
+    await call(ctx, { path })
+
+    expect(await readFile(path, 'utf8')).toBe('红霉素肠溶胶囊 和 红霉素肠溶胶囊 和 红霉素肠溶胶囊')
+  })
 })
