@@ -135,6 +135,11 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/gen-qwen-keys.mjs
+          if [ -z "${DSH_QWEN_KEYS:-}" ]; then
+            echo 'No DSH_QWEN_KEYS secret is set; packaging without department keys.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Wrote the department Qwen keys.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Write the skills publishing token
         shell: bash
         env:
@@ -144,11 +149,6 @@ jobs:
         # publish, and says so when somebody tries.
         run: |
           node scripts/gen-skills-token.mjs
-          if [ -z "${DSH_QWEN_KEYS:-}" ]; then
-            echo 'No DSH_QWEN_KEYS secret is set; packaging without department keys.' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo 'Wrote the department Qwen keys.' >> "$GITHUB_STEP_SUMMARY"
-          fi
 
       - name: Write apps/desktop/.env.linux
         run: |

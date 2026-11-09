@@ -124,6 +124,11 @@ jobs:
         # without the secret still packages: the route then only honours a key the colleague typed.
         run: |
           node scripts/gen-qwen-keys.mjs
+          if ([string]::IsNullOrWhiteSpace($env:DSH_QWEN_KEYS)) {
+            'No DSH_QWEN_KEYS secret is set; packaging without department keys.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          } else {
+            'Wrote the department Qwen keys.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          }
       - name: Write the skills publishing token
         shell: pwsh
         env:
@@ -133,11 +138,6 @@ jobs:
         # publish, and says so when somebody tries.
         run: |
           node scripts/gen-skills-token.mjs
-          if ([string]::IsNullOrWhiteSpace($env:DSH_QWEN_KEYS)) {
-            'No DSH_QWEN_KEYS secret is set; packaging without department keys.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
-          } else {
-            'Wrote the department Qwen keys.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
-          }
 
       - name: Write apps/desktop/.env.windows
         shell: pwsh
