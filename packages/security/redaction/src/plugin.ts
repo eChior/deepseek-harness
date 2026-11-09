@@ -210,6 +210,12 @@ export interface Config {
    * Off means the reader decides per file, with the restore tool.
    */
   restoreOnWrite?: boolean
+  /**
+   * Multiplier applied to every quantity, one-way and marked in the text.
+   * `1` leaves numbers alone; the switch is off by default because a scaled
+   * session cannot answer a question about true magnitudes.
+   */
+  numberScale?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -230,6 +236,7 @@ export const Config: z<Config> = z.object({
   ocrMode: z.union(['tool', 'prompt']).default('tool'),
   ocrBackend: z.union(['auto', 'cpu', 'gpu']).default('auto'),
   restoreOnWrite: z.boolean().default(true),
+  numberScale: z.number().min(0.01).max(100).default(1),
 })
 
 /** What the provider has loaded and how much it has replaced so far. */
@@ -270,6 +277,8 @@ export interface RedactionStatus {
   readonly ocrMode: 'tool' | 'prompt'
   /** Whether a written document gets its placeholders replaced, and what went wrong. */
   readonly restore: RestoreStatus
+  /** Multiplier applied to quantities, one-way; `1` leaves them alone. */
+  readonly numberScale: number
 }
 
 /** How the document write-back stands on this machine. */
@@ -369,6 +378,8 @@ export class RedactionService extends Service {
   private mappingsOn: boolean
   private readImageOn: boolean
   private restoreOnWrite: boolean
+  /** The multiplier in force; `1` leaves numbers alone. */
+  private scaleValue = 1
 
   /**
    * The directory of the last call this process ran a tool for.
@@ -405,6 +416,7 @@ export class RedactionService extends Service {
       rosterPath: config.rosterPath ?? ROSTER_PATH,
       mappings: config.mappings ?? true,
       readImage: config.readImage ?? true,
+      numberScale: config.numberScale ?? 1,
       ocrMode: config.ocrMode ?? 'tool',
       ocrBackend: config.ocrBackend ?? 'auto',
       restoreOnWrite: config.restoreOnWrite ?? true,
@@ -412,6 +424,7 @@ export class RedactionService extends Service {
     this.mappingsOn = this.config.mappings
     this.readImageOn = this.config.readImage
     this.restoreOnWrite = this.config.restoreOnWrite
+    this.scaleValue = this.config.numberScale
     // Started here rather than in an effect: a session can end before an effect
     // runs, and a write must never outrun the read it depends on.
     this.ready = this.loadMappings()
@@ -434,6 +447,7 @@ export class RedactionService extends Service {
       ocr: this.visionStatus(),
       ocrMode: this.config.ocrMode,
       restore: { onWrite: this.config.restoreOnWrite, lastError: null, files: 0 },
+      numberScale: this.config.numberScale,
     }
     ctx.effect(() => {
       void this.load()
@@ -569,6 +583,29 @@ export class RedactionService extends Service {
     this.mappingsOn = on
     this.current = { ...this.current, mappings: on }
     return this.mappingsOn
+  }
+
+  /**
+   * Set the multiplier applied to quantities in what the model reads.
+   *
+   * One-way by design: nothing records the original, so a written file keeps
+   * the scaled figure and no write-back undoes it. `1` turns the scaling off.
+   * @param scale The multiplier, clamped to the range the page offers.
+   * @returns The multiplier in force after the call.
+   */
+  setNumberScale(scale: number): number {
+    const clamped = Number.isFinite(scale) ? Math.min(100, Math.max(0.01, scale)) : 1
+    this.scaleValue = clamped
+    this.current = { ...this.current, numberScale: clamped }
+    return clamped
+  }
+
+  /**
+   * The multiplier currently applied to quantities.
+   * @returns the multiplier, `1` when scaling is off.
+   */
+  get numberScale(): number {
+    return this.scaleValue
   }
 
   /**
@@ -832,7 +869,7 @@ export class RedactionService extends Service {
    */
   redactText(text: string): string {
     if (this.rules.length === 0) return text
-    const result = applyRules(text, this.rules, this.map)
+    const result = applyRules(text, this.rules, this.map, undefined, this.scaleValue)
     if (result.hits.length > 0) {
       this.current = { ...this.current, replacements: this.current.replacements + result.hits.length }
       this.scheduleMappings()

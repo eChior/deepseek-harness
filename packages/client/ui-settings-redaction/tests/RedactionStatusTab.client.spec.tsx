@@ -39,6 +39,7 @@ const READY: RedactionStatusView = {
   },
   ocrMode: 'tool',
   restore: { onWrite: true, lastError: null, files: 0 },
+  numberScale: 1,
 }
 
 const ROSTER: RedactionRosterView = {
@@ -96,6 +97,7 @@ function face(overrides: Partial<RedactionStatusTabInjected> = {}): RedactionSta
     saveOcrPath: overrides.saveOcrPath ?? (async () => true),
     saveOcrMode: overrides.saveOcrMode ?? (async () => true),
     saveOcrBackend: overrides.saveOcrBackend ?? (async () => true),
+    saveNumberScale: overrides.saveNumberScale ?? (async () => true),
   }
 }
 

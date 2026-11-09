@@ -140,3 +140,33 @@
   font-size: 13px;
   color: var(--dsw-alias-label-secondary);
 }
+
+.scaleValue {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-color-label-secondary);
+}
+
+.scaleGrid {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 2px;
+  max-width: 420px;
+}
+
+.scaleCell,
+.scaleCellOn {
+  padding: 2px 0;
+  font-size: 10px;
+  line-height: 16px;
+  border: 1px solid var(--ds-color-border-l2);
+  background: var(--ds-color-bg-layer-1);
+  color: var(--ds-color-label-tertiary);
+  cursor: pointer;
+}
+
+.scaleCellOn {
+  background: var(--ds-color-state-success-primary);
+  border-color: var(--ds-color-state-success-primary);
+  color: #fff;
+}

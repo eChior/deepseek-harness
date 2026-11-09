@@ -534,12 +534,10 @@ async function runGroup(
     stdout.on('data', (chunk: string) => {
       output += chunk
     })
-    if (stderr !== null) stderr.setEncoding('utf8')
-    if (stderr !== null) {
-      stderr.on('data', (chunk: string) => {
-        diagnostics = (diagnostics + chunk).slice(-DIAGNOSTIC_CHARS)
-      })
-    }
+    stderr.setEncoding('utf8')
+    stderr.on('data', (chunk: string) => {
+      diagnostics = (diagnostics + chunk).slice(-DIAGNOSTIC_CHARS)
+    })
     child.on('error', () => {
       clearTimeout(timer)
       finish(NOTHING_RESTORED)

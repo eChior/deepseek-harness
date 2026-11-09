@@ -9,6 +9,7 @@
  * air gap gets the same reader as one that is not.
  */
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
@@ -23,6 +24,25 @@ const ARCHIVES: Readonly<Record<string, string>> = {
 const EXECUTABLES: Readonly<Record<string, string>> = {
   'win32-x64': 'dsh-ocr.exe',
   'linux-arm64': 'dsh-ocr',
+}
+
+/**
+ * Fingerprint of the archive that produced the unpacked files.
+ *
+ * Without it an upgrade would leave the reader from the previous install in
+ * place forever: the executable is there, so there is nothing to do. Users
+ * would keep running an old reader that cannot answer the current protocol
+ * and no error would ever say so.
+ */
+const STAMP = '.archive'
+
+/** What a previous unpack recorded, or an empty string when it recorded nothing. */
+function recordedStamp(path: string): string {
+  try {
+    return readFileSync(path, 'utf8').trim()
+  } catch {
+    return ''
+  }
 }
 
 /** One file an archive holds. */
@@ -88,8 +108,9 @@ export function readArchive(bytes: Buffer): ArchiveEntry[] {
 /**
  * Unpack the reader for this platform, if the client ships one.
  *
- * Runs on every start and does nothing once the files are there, so an upgrade
- * that replaces the archive is the only thing that unpacks again. An unpack
+ * Runs on every start and unpacks only when the archive is not the one that
+ * produced the files already there, so an upgrade replaces the reader instead
+ * of leaving the old one in place. An unpack
  * that fails leaves whatever was there before in place rather than a directory
  * holding half a program.
  * @param options Where the application's resources are and which platform to unpack.
@@ -111,13 +132,16 @@ export async function installBundledReader(options: {
   if (archive === undefined || executable === undefined) return undefined
   const directory = join(options.home, 'redaction', 'ocr')
   const target = join(directory, executable)
-  if (existsSync(target)) return target
   const source = join(options.resources, archive)
   if (!existsSync(source)) {
     options.log?.(`redaction: the client ships no reader at ${source}`)
     return undefined
   }
-  const entries = readArchive(readFileSync(source))
+  const bytes = readFileSync(source)
+  const fingerprint = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
+  const stamp = join(directory, STAMP)
+  if (existsSync(target) && recordedStamp(stamp) === fingerprint) return target
+  const entries = readArchive(bytes)
   await mkdir(directory, { recursive: true })
   for (const entry of entries) {
     // Names come from an archive we built, but a path that walks out of the
@@ -130,6 +154,7 @@ export async function installBundledReader(options: {
     await writeFile(destination, entry.data)
   }
   if (platform !== 'win32') await chmod(target, 0o755)
+  await writeFile(stamp, fingerprint)
   options.log?.(`redaction: unpacked the reader into ${directory}`)
   return existsSync(target) ? target : undefined
 }

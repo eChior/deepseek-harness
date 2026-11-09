@@ -103,6 +103,7 @@ export class RedactionController extends TypertRemoteService {
       ocr: view.ocr,
       ocrMode: view.ocrMode,
       restore: view.restore,
+      numberScale: view.numberScale,
     })
   }
 
@@ -141,6 +142,19 @@ export class RedactionController extends TypertRemoteService {
   @Remote
   setMappings(request: { readonly enabled: boolean }): Promise<{ readonly enabled: boolean }> {
     return Promise.resolve({ enabled: this.ctx.redaction.setMappings(request.enabled) })
+  }
+
+  /**
+   * Set the multiplier applied to quantities, one-way.
+   *
+   * Nothing records the original, so a written file keeps the scaled figure and
+   * no write-back undoes it. `1` leaves numbers alone.
+   * @param request The multiplier the page chose.
+   * @returns The multiplier in force after the call.
+   */
+  @Remote
+  setNumberScale(request: { readonly scale: number }): { readonly numberScale: number } {
+    return { numberScale: this.ctx.redaction.setNumberScale(request.scale) }
   }
 
   /**

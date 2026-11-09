@@ -92,13 +92,23 @@ describe('installBundledReader', () => {
     expect(existsSync(join(home, 'redaction', 'ocr', 'libSkiaSharp.dll'))).toBe(true)
   })
 
-  it('does nothing once the reader is already there', async () => {
+  it('replaces the reader an earlier install left behind', async () => {
     const resources = packaged({ 'dsh-ocr.exe': 'reader' }, 'dsh-ocr-win-x64.zip')
     const home = root()
     mkdirSync(join(home, 'redaction', 'ocr'), { recursive: true })
     writeFileSync(join(home, 'redaction', 'ocr', 'dsh-ocr.exe'), 'older reader')
     const path = await installBundledReader({ resources, home, platform: 'win32', architecture: 'x64' })
-    expect(readFileSync(path ?? '', 'utf8')).toBe('older reader')
+    expect(readFileSync(path ?? '', 'utf8')).toBe('reader')
+  })
+
+  it('does nothing when this archive already produced the files', async () => {
+    const resources = packaged({ 'dsh-ocr.exe': 'reader' }, 'dsh-ocr-win-x64.zip')
+    const home = root()
+    await installBundledReader({ resources, home, platform: 'win32', architecture: 'x64' })
+    const target = join(home, 'redaction', 'ocr', 'dsh-ocr.exe')
+    writeFileSync(target, 'edited by hand')
+    const path = await installBundledReader({ resources, home, platform: 'win32', architecture: 'x64' })
+    expect(readFileSync(path ?? '', 'utf8')).toBe('edited by hand')
   })
 
   it('reports nothing on a platform the client does not build for', async () => {

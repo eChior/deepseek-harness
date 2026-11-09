@@ -74,6 +74,10 @@ export function apply(ctx: ClientContext): void {
     roster: async () => unwrap('roster', await remote.roster()),
     uploads: async () => unwrap('uploads', await remote.uploads()),
     upload: async request => unwrap('upload', await remote.upload(request)),
+    saveNumberScale: async (scale) => {
+      unwrap('numberScale', await remote.setNumberScale({ scale }))
+      return true
+    },
     drop: async request => unwrap('drop', await remote.drop(request)),
     setEnabled: async request => unwrap('setEnabled', await remote.setEnabled(request)),
     departments: async () => unwrap('departments', await remote.departments()),
@@ -122,6 +126,9 @@ export function apply(ctx: ClientContext): void {
   // The table is asked for by session: a mapping file belongs to one task, and
   // two conversations may hand the same placeholder to different values.
   const badgeInjected = (): RedactionBadgeInjected => ({
+    // The descriptor names its parameter, so the payload has to carry a
+    // `request` field even when no session is named: without it the gateway
+    // rejects the call as `arguments-invalid` and the button looks dead.
     restoreSession: async () => unwrap('restoreSession', await remote.restoreSession({})),
     entries: async () => unwrap('entries', await remote.entries()),
     status: async () => unwrap('status', await remote.status()),

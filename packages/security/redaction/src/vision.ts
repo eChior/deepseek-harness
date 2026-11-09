@@ -348,6 +348,8 @@ function supportsServe(command: string): Promise<boolean> {
 function serveOnce(server: ReaderServer, payload: string, timeoutMs: number): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let settled = false
+    // The wait handlers below close over this, so it is assigned after them.
+    // oxlint-disable-next-line prefer-const
     let timer: NodeJS.Timeout | undefined
     const wait: ServeWait = {
       resolve: (raw: string) => {

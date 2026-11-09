@@ -51,6 +51,8 @@ export interface RedactionStatusView {
   readonly ocrMode: 'tool' | 'prompt'
   /** Whether a document the model writes gets its placeholders replaced, and how that went. */
   readonly restore: RedactionRestoreView
+  /** Multiplier applied to quantities, one-way; `1` leaves them alone. */
+  readonly numberScale: number
 }
 
 /** How the document write-back stands on this machine. */

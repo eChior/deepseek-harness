@@ -225,11 +225,63 @@ function expandHexRuns(text: string): string {
  * @param priority - category ids in the order a tie is broken.
  * @returns the redacted text with the hits and the protected spans.
  */
+/**
+ * A bare number a scaled session may rewrite.
+ *
+ * Deliberately narrow. A version (`1.2.3`), a date (`2026-11-09`), a clock time
+ * (`12:30`), a path segment, an identifier (`SMP-IT-009`) and a number already
+ * carrying a marker (`[0.26]`) are all left alone: they are things a reader acts
+ * on, and scaling one produces a value that is neither the original nor a marker.
+ * Single digits are excluded too — `1` in prose is an ordinal, not a quantity.
+ */
+const SCALABLE_NUMBER = /(?<![\w.\-/:[\]])-?\d+(?:\.\d+)?(?!\.?\d|[\-/:\[\]])/gu
+
+/** Below this many significant digits a number is a label, not a quantity. */
+const SCALABLE_DIGITS = 2
+
+/**
+ * Scale every quantity in a string, marking each result.
+ *
+ * The marker is visible on purpose. A zero-width character is invisible to the
+ * reader, gets dropped when a model retypes the number, and collides with the one
+ * the placeholder code already strips — after which the next pass scales the value
+ * a second time. A bracketed number survives retyping and reads as "not the real
+ * figure", which is exactly what it is.
+ *
+ * Scaling is one-way: nothing records the original, so no write-back undoes it.
+ * That is the point of the switch — a session that may read text but must not read
+ * true magnitudes.
+ * @param text - text whose numbers should change.
+ * @param factor - multiplier, normally between 0.01 and 100.
+ * @returns the text with each surviving quantity marked.
+ */
+export function scaleNumbers(text: string, factor: number): string {
+  if (!Number.isFinite(factor) || factor === 1) return text
+  return text.replace(SCALABLE_NUMBER, (token: string) => {
+    const digits = token.replaceAll('-', '').replaceAll('.', '')
+    if (digits.length < SCALABLE_DIGITS) return token
+    const value = Number(token)
+    if (!Number.isFinite(value)) return token
+    return `[${formatScaled(value * factor)}]`
+  })
+}
+
+/**
+ * Render a scaled quantity with at most two decimals and no trailing zeros.
+ * @param value - the scaled number.
+ * @returns the number as text.
+ */
+function formatScaled(value: number): string {
+  const rounded = Math.round(value * 100) / 100
+  return String(rounded)
+}
+
 export function redactText(
   text: string,
   rules: readonly RedactionRule[],
   map: RedactionMap,
   priority: readonly string[] = DEFAULT_PRIORITY,
+  scale: number = 1,
 ): RedactionResult {
   text = expandHexRuns(text)
   const spans = protectedSpans(text)
@@ -239,7 +291,7 @@ export function redactText(
   const hits = spans.length === 0
     ? accepted
     : accepted.filter(hit => !spans.some(([start, end]) => hit.start < end && start < hit.end))
-  if (hits.length === 0) return { text, hits: [], placeholders: [] }
+  if (hits.length === 0) return { text: scaleNumbers(text, scale), hits: [], placeholders: [] }
   const placeholders: string[] = []
   let output = ''
   let cursor = 0
@@ -278,5 +330,5 @@ export function redactText(
     cursor = end
   }
   output += text.slice(cursor)
-  return { text: output, hits, placeholders }
+  return { text: scaleNumbers(output, scale), hits, placeholders }
 }
