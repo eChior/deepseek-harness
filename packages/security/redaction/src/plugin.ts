@@ -281,6 +281,9 @@ export interface RedactionStatus {
   readonly restore: RestoreStatus
   /** Multiplier applied to quantities, one-way; `1` leaves them alone. */
   readonly numberScale: number
+
+  /** Whether the scale applies at all, so a scale of 1 can still be switched on. */
+  readonly numberScaleOn: boolean
 }
 
 /** How the document write-back stands on this machine. */
@@ -426,6 +429,7 @@ export class RedactionService extends Service {
   private restoreOnWrite: boolean
   /** The multiplier in force; `1` leaves numbers alone. */
   private scaleValue = 1
+  private scaleOn = false
 
   private modeValue: 'tool' | 'prompt' = 'tool'
 
@@ -501,6 +505,7 @@ export class RedactionService extends Service {
       ocrBackend: this.backendValue,
       restore: { onWrite: this.config.restoreOnWrite, lastError: null, lastResult: null, files: 0 },
       numberScale: this.config.numberScale,
+      numberScaleOn: false,
     }
     ctx.effect(() => {
       void this.load()
@@ -656,6 +661,26 @@ export class RedactionService extends Service {
   /**
    * The multiplier currently applied to quantities.
    * @returns the multiplier, `1` when scaling is off.
+   */
+  /**
+   * Turn the numeric scale on or off without losing the chosen factor.
+   * @param on - whether written documents carry scaled numbers.
+   * @returns The switch as it now stands.
+   */
+  setNumberScaleOn(on: boolean): boolean {
+    this.scaleOn = on
+    this.current = { ...this.current, numberScaleOn: on }
+    return on
+  }
+
+  /** The scale switch as it now stands. */
+  get numberScaleOn(): boolean {
+    return this.scaleOn
+  }
+
+  /**
+   * The factor written documents carry, whatever the switch says.
+   * @returns The multiplier in force.
    */
   get numberScale(): number {
     return this.scaleValue
@@ -945,7 +970,7 @@ export class RedactionService extends Service {
    * @returns The rewritten text, or the input when no rule matched.
    */
   redactText(text: string): string {
-    return this.rewriteText(text, this.scaleValue)
+    return this.rewriteText(text, this.scaleOn ? this.scaleValue : 1)
   }
 
   /**

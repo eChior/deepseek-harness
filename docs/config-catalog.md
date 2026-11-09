@@ -2499,6 +2499,12 @@ export interface Config {
    * Off means the reader decides per file, with the restore tool.
    */
   restoreOnWrite?: boolean
+  /**
+   * Multiplier applied to every quantity, one-way and marked in the text.
+   * `1` leaves numbers alone; the switch is off by default because a scaled
+   * session cannot answer a question about true magnitudes.
+   */
+  numberScale?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->

@@ -105,6 +105,7 @@ export class RedactionController extends TypertRemoteService {
       ocrBackend: view.ocrBackend,
       restore: view.restore,
       numberScale: view.numberScale,
+      numberScaleOn: view.numberScaleOn,
     })
   }
 
@@ -146,6 +147,7 @@ export class RedactionController extends TypertRemoteService {
   }
 
   /**
+  /**
    * Set the multiplier applied to quantities, one-way.
    *
    * Nothing records the original, so a written file keeps the scaled figure and
@@ -156,6 +158,16 @@ export class RedactionController extends TypertRemoteService {
   @Remote
   setNumberScale(request: { readonly scale: number }): { readonly numberScale: number } {
     return { numberScale: this.ctx.redaction.setNumberScale(request.scale) }
+  }
+
+  /**
+   * Turn the numeric scale on or off while keeping the factor.
+   * @param request Whether scaled numbers should reach the model.
+   * @returns The switch as it now stands.
+   */
+  @Remote
+  setNumberScaleOn(request: { readonly enabled: boolean }): { readonly numberScaleOn: boolean } {
+    return { numberScaleOn: this.ctx.redaction.setNumberScaleOn(request.enabled) }
   }
 
   /**

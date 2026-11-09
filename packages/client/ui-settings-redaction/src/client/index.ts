@@ -154,6 +154,11 @@ export function apply(ctx: ClientContext): void {
         // The scale the next status reports is the one in force.
       })
     },
+    saveNumberScaleOn: (on) => {
+      void remote.setNumberScaleOn({ enabled: on }).catch((_error: unknown) => {
+        // The status the next refresh reports carries the switch as it stands.
+      })
+    },
     setMappings: (enabled) => {
       void remote.setMappings({ enabled }).catch((_error: unknown) => {
         // A refused write leaves the switch where the next poll reports it.

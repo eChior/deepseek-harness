@@ -1840,6 +1840,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'The multiplier in force after the call.',
       },
       {
+        signature: 'setNumberScaleOn(on: boolean): boolean',
+        description: 'Turn the numeric scale on or off without losing the chosen factor.',
+        parameters: [{ name: 'on', description: 'whether written documents carry scaled numbers.' }],
+        returns: 'The switch as it now stands.',
+      },
+      {
         signature: 'setOcrMode(mode: \'tool\' | \'prompt\'): \'tool\' | \'prompt\'',
         description: 'Switch whether a picture is read as it arrives or when the model asks.',
         parameters: [{ name: 'mode', description: '`tool` keeps the picture and waits; `prompt` reads it on arrival.' }],
@@ -6432,7 +6438,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n    readonly ocrMode: \'tool\' | \'prompt\';\n    readonly ocrBackend: \'auto\' | \'cpu\' | \'gpu\';\n    readonly restore: RestoreStatus;\n    readonly numberScale: number;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n    readonly ocrMode: \'tool\' | \'prompt\';\n    readonly ocrBackend: \'auto\' | \'cpu\' | \'gpu\';\n    readonly restore: RestoreStatus;\n    readonly numberScale: number;\n    readonly numberScaleOn: boolean;\n}',
   },
   {
     name: 'Registry',
@@ -6528,7 +6534,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RestoreStatus',
-    declaration: 'export interface RestoreStatus {\n    readonly onWrite: boolean;\n    readonly lastError: string | null;\n    readonly files: number;\n}',
+    declaration: 'export interface RestoreStatus {\n    readonly onWrite: boolean;\n    readonly lastError: string | null;\n    readonly lastResult: string | null;\n    readonly files: number;\n}',
   },
   {
     name: 'ResumeAgentOptions',

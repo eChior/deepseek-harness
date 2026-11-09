@@ -33,6 +33,7 @@ const STATUS: RedactionStatusView = {
   ocrBackend: 'auto',
   restore: { onWrite: true, lastError: null, lastResult: null, files: 0 },
   numberScale: 1,
+  numberScaleOn: false,
   ocr: {
     engine: 'windows',
     path: '',

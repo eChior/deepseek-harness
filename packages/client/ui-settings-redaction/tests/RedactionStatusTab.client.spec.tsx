@@ -41,6 +41,7 @@ const READY: RedactionStatusView = {
   ocrBackend: 'auto',
   restore: { onWrite: true, lastError: null, lastResult: null, files: 0 },
   numberScale: 1,
+  numberScaleOn: false,
 }
 
 const ROSTER: RedactionRosterView = {

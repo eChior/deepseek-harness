@@ -53,6 +53,7 @@ export interface RedactionBadgeInjected {
   setMappings: (enabled: boolean) => void
   /** Publish the multiplier applied to quantities, one-way. */
   saveNumberScale: (scale: number) => void
+  saveNumberScaleOn: (on: boolean) => void
   /** Colour a restored original is painted in. */
   highlightColor: string
   /** Publish the colour choice. */
@@ -75,7 +76,7 @@ const DEFAULT_COLOR = '#d92d20'
 export function RedactionBadge({
   entries, status, setUserView, userView, readUserView, subscribeUserView,
   restoreSession,
-  setMappings, saveNumberScale, highlightColor, setHighlightColor, t,
+  setMappings, saveNumberScale, saveNumberScaleOn, highlightColor, setHighlightColor, t,
 }: RedactionBadgeProps) {
   const [items, setItems] = useState<readonly RedactionEntryView[]>([])
   const [state, setState] = useState<RedactionStatusView | null>(null)
@@ -273,25 +274,26 @@ export function RedactionBadge({
           <div className={css.switches}>
             <div className={css.switchRow}>
               <Switch
-                checked={(state?.numberScale ?? 1) !== 1}
+                checked={state?.numberScaleOn ?? false}
                 label={t('numberScaleLabel')}
-                onChange={(on) => { saveNumberScale(on ? 0.01 : 1) }}
+                onChange={(on) => { saveNumberScaleOn(on) }}
               />
               <span className={css.switchLabel}>{t('numberScaleLabel')}</span>
               <span className={css.scaleValue}>×{state?.numberScale ?? 1}</span>
             </div>
-            <div className={css.scaleTrack}>
-              {SCALE_STEPS.map(step => (
-                <button
-                  key={step}
-                  type="button"
-                  className={(state?.numberScale ?? 1) === step ? css.scaleSegmentOn : css.scaleSegment}
-                  title={`×${step}`}
-                  aria-label={`×${step}`}
-                  onClick={() => { saveNumberScale(step) }}
-                />
-              ))}
-            </div>
+            <input
+              type="range"
+              className={css.scaleRange}
+              min={0}
+              max={SCALE_STEPS.length - 1}
+              step={1}
+              value={Math.max(0, SCALE_STEPS.indexOf(state?.numberScale ?? 1))}
+              aria-label={t('numberScaleStep')}
+              onChange={(event) => {
+                const step = SCALE_STEPS[Number(event.currentTarget.value)]
+                if (step !== undefined) saveNumberScale(step)
+              }}
+            />
             <div className={css.switchRow}>
               <Switch
                 checked={mappings}

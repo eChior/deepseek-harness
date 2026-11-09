@@ -55,6 +55,9 @@ export interface RedactionStatusView {
   readonly restore: RedactionRestoreView
   /** Multiplier applied to quantities, one-way; `1` leaves them alone. */
   readonly numberScale: number
+
+  /** Whether the scale applies at all, so a scale of 1 can still be switched on. */
+  readonly numberScaleOn: boolean
 }
 
 /** How the document write-back stands on this machine. */

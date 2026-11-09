@@ -803,6 +803,13 @@ setMappings(on: boolean): boolean
 setNumberScale(scale: number): number
 
 /**
+ * Turn the numeric scale on or off without losing the chosen factor.
+ * @param on - whether written documents carry scaled numbers.
+ * @returns The switch as it now stands.
+ */
+setNumberScaleOn(on: boolean): boolean
+
+/**
  * Switch whether a picture is read as it arrives or when the model asks.
  * @param mode - `tool` keeps the picture and waits; `prompt` reads it on arrival.
  * @returns the mode now in force.
