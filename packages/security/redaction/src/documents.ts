@@ -362,6 +362,12 @@ function restoreOutcome(output: string): RestoreOutcome {
   return NOTHING_RESTORED
 }
 
+/** Wraps the interpreter argv in whatever the host confines commands with. */
+export type Confine = (argv: readonly string[]) => Promise<readonly string[]>
+
+/** Wraps the interpreter argv for one directory the host has to unlock. */
+export type ConfineFor = (directory: string) => Confine | undefined
+
 /**
  * Hand the documents and the mapping to the interpreter that may touch them.
  *
@@ -370,16 +376,11 @@ function restoreOutcome(output: string): RestoreOutcome {
  * @param paths Documents this call named, absolute or relative to the session.
  * @param mappings Placeholder-to-original pairs in force right now.
  * @param cwd - the session's working directory, used to resolve a relative path.
- * @param confine - wraps the argv so the host grants the directory before the
- *   interpreter runs; without it the interpreter keeps the caller's own access.
+ * @param confineFor - resolves the wrapper for one directory, so the host grants
+ *   it before the interpreter runs; without it the interpreter keeps the
+ *   caller's own access.
  * @returns how many files were rewritten; zero when nothing applied.
  */
-/** Wraps the interpreter argv in whatever the host confines commands with. */
-export type Confine = (argv: readonly string[]) => Promise<readonly string[]>
-
-/** Wraps the interpreter argv for one directory the host has to unlock. */
-export type ConfineFor = (directory: string) => Confine | undefined
-
 export async function restoreDocuments(
   paths: readonly string[],
   mappings: readonly DocumentMapping[],

@@ -134,4 +134,16 @@ export {
   type TermSourceConfig,
   type TermSourceKind,
 } from './source.ts'
-export { DEFAULT_VISION_TIMEOUT_MS, normalizeRecognized, recognizeImageText } from './vision.ts'
+export {
+  DEFAULT_VISION_TIMEOUT_MS,
+  normalizeRecognized,
+  parseReaderOutput,
+  recognizeImage,
+  recognizeImageText,
+  type ReaderOutput,
+  type VisionBox,
+  type VisionCharacter,
+  type VisionLine,
+  type VisionOptions,
+  type VisionResult,
+} from './vision.ts'

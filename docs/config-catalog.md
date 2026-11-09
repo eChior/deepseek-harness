@@ -2418,7 +2418,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-redaction`
 
-- `source`: [`packages/security/redaction/src/plugin.ts:144`](../packages/security/redaction/src/plugin.ts)
+- `source`: [`packages/security/redaction/src/plugin.ts:145`](../packages/security/redaction/src/plugin.ts)
 
 ```ts config-catalog
 /**
@@ -3028,7 +3028,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-skill-repo`
 
-- `source`: [`packages/skill/skill-repo/src/index.ts:88`](../packages/skill/skill-repo/src/index.ts)
+- `source`: [`packages/skill/skill-repo/src/index.ts:60`](../packages/skill/skill-repo/src/index.ts)
 
 ```ts config-catalog
 /** Fields a deployment can set for the skill mirror. */

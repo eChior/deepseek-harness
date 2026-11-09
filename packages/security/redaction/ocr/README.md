@@ -11,7 +11,8 @@ runtime of its own, so shipping it to every machine that never reads an image
 would be waste. It is published on the intranet instead, and a machine that
 wants it unpacks the archive into `%USERPROFILE%\.dsh\redaction\ocr\` — the
 provider looks there on every status read, so downloading and unpacking is the
-whole installation. A deployment that keeps the file elsewhere sets the path:
+whole installation. On Linux the unpacked `dsh-ocr` needs `chmod +x`: a zip
+carries no Unix permission bits. A deployment that keeps the file elsewhere sets the path:
 
 ```yaml
 # cordis.patch.yml, or the settings form for this plugin
@@ -31,7 +32,7 @@ a drop-in replacement:
 | | |
 |---|---|
 | stdin | the image as base64 |
-| stdout | one recognized line per line, UTF-8 |
+| stdout | one recognized line per line by default, UTF-8; a JSON report on request |
 | exit 0 | the text on stdout, possibly empty |
 | exit ≠ 0 | a diagnostic on stderr; the caller reports it and keeps the image out of the session |
 
@@ -39,8 +40,59 @@ stdout is UTF-8 explicitly, not the console's code page: a Windows process that
 writes through the ANSI page turns every recognized Chinese character into
 garbage that no redaction rule matches.
 
+Plain text stays the default so a Host older than the reader keeps working:
+`--json` or `DSH_OCR_JSON=1` asks for the JSON report, and the Host parses either
+answer. The report carries each line together with its detected box:
+
+```json
+{
+  "version": 1,
+  "backend": "cpu",
+  "elapsedMs": 562,
+  "image": { "width": 1440, "height": 900 },
+  "text": "华润三九众益制药有限公司",
+  "lines": [
+    {
+      "text": "华润三九众益制药有限公司",
+      "box": { "x1": 24, "y1": 16, "x2": 216.2, "y2": 18, "x3": 216, "y3": 39, "x4": 23.8, "y4": 37 },
+      "detectionScore": 0.8486,
+      "recognitionScore": 38.536,
+      "classificationScore": 0.9999,
+      "rotationDegrees": 0,
+      "characters": []
+    }
+  ]
+}
+```
+
+`box` holds the four corners in input-image pixels, clockwise from the top-left.
+`detectionScore` and `classificationScore` are 0–1 confidences;
+`recognitionScore` is the recognizer's raw score, not normalized, and only
+useful for relative comparison. `--chars` adds a `characters` array to every
+line, each with `text`, `score` and its own `box`; it implies `--json`, because
+plain text cannot carry the coordinates. `--backend=cpu|vulkan|metal` matches
+`DSH_OCR_BACKEND`, and the argument wins.
+
 Passing a file path as the only argument reads that file instead, which is what
 makes the binary debuggable by hand.
+
+### Serving several images
+
+The Host keeps the reader alive by default so the model loads once: started with
+`--serve`, it reads one base64 image per line on stdin and writes one JSON report
+per line on stdout, in the order the images were written; `--serve --chars` adds
+the per-character boxes. `--version` prints `dsh-ocr 2` and exits — the Host uses
+it to find out whether a binary understands the serve protocol, and an older one
+that does not is still read one process per image. The process exits at EOF, and
+the Host stops it when the Host exits. The Host sets `DOTNET_TieredCompilation=0`
+for the server: tiered JIT re-compiles the kernels between tier-0 and tier-1, and
+a server pays that on every image for the first few, while a one-shot process is
+too short-lived to benefit — so the switch is only turned off for the server.
+Without a remembered backend the first served image starts on the CPU: the Vulkan
+measurement alone costs seconds on an integrated GPU, and a server that reads many
+images should not spend that before its first answer. A machine that wants Vulkan
+pins `DSH_OCR_BACKEND=vulkan`, or runs one one-shot call first so the measurement
+is written to the cache.
 
 ## Building it
 
@@ -79,18 +131,30 @@ tar -a -c -f dsh-ocr-linux-arm64.zip -C out/linux-arm64 dsh-ocr libSkiaSharp.so
 
 The kernels run on the CPU by default and on a GPU when the machine has one that
 is actually faster. The first image this tool ever reads is measured both ways —
-CPU against Vulkan — the winner is written to `%TEMP%\dsh-ocr-backend.txt`, and
-every later call loads one model only. A measurement beats a device name: an
-integrated GPU is often the slower choice, and the numbers differ per machine.
+CPU against Vulkan — the winner is written to a cache file, and every later call
+loads one model only. A measurement beats a device name: an integrated GPU is
+often the slower choice, and the numbers differ per machine.
 
-On the machine this was written on (AMD Radeon 780M integrated) Vulkan measured
-708 ms against the CPU's 422 ms, so it chose the CPU. A discrete card is the other
-way round by a factor of several. A Kylin machine with a Mali GPU is measured the
-same way, and one without a Vulkan loader stays on the CPU without a word on
-stdout.
+The cache is written, in order, to `DSH_OCR_CACHE`, beside the executable, or
+`%TEMP%`. The executable comes before `%TEMP%` for a reason: a Host subprocess
+with a restricted token may not be able to write `%TEMP%`, and while the cache
+has never been written every call measures both backends again, which turns one
+image into 1.7–2 s. Only when all three candidates fail does the reader report
+`backend cache write failed on every candidate path` on stderr.
 
-`DSH_OCR_BACKEND=cpu|vulkan|metal` skips the measurement. The chosen backend is
-reported on stderr, never on stdout, so the Host's contract is unchanged.
+On the machine this was written on (AMD Radeon 780M integrated), a one-shot call —
+process start, decode, model load, recognition — measured about 640 ms on the CPU
+against 770 ms on Vulkan, so it chose the CPU. The first served image still pays
+the process start and the model load (about 1 s, including the protocol probe);
+after that each image is recognition only, about 85 ms for a 1440×900 screenshot —
+the same order as the upstream benchmark for this class of device. A discrete card
+is the other way round by a factor of several. A Kylin machine with a Mali GPU is
+measured the same way, and one without a Vulkan loader stays on the CPU without a
+word on stdout.
+
+`DSH_OCR_BACKEND=cpu|vulkan|metal` and `--backend` skip the measurement. The
+chosen backend is reported on stderr, never on stdout, so the Host's contract is
+unchanged.
 
 ## Publishing it
 

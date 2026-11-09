@@ -900,9 +900,11 @@ async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
  * and no argument to point at it, so the badge offers a button instead — this
  * is what it calls.
  * @param directory The session's working directory.
+ * @param sessionId The session whose remembered documents to restore, when the
+ * caller has one.
  * @returns how the pass went, for the badge to show.
  */
-async restoreSession(directory?: string): Promise<RestoreOutcome>
+async restoreSession(directory?: string, sessionId?: string): Promise<RestoreOutcome>
 
 /**
  * Tell the provider which department the signed-in colleague belongs to.

@@ -1032,6 +1032,8 @@ export class RedactionService extends Service {
    * and no argument to point at it, so the badge offers a button instead — this
    * is what it calls.
    * @param directory The session's working directory.
+   * @param sessionId The session whose remembered documents to restore, when the
+   * caller has one.
    * @returns how the pass went, for the badge to show.
    */
   async restoreSession(directory?: string, sessionId?: string): Promise<RestoreOutcome> {
@@ -1044,7 +1046,10 @@ export class RedactionService extends Service {
     const outcome = await this.restorePaths(paths).catch((error: unknown) => ({
       restored: 0, files: [], skipped: [], error: String(error),
     }))
-    const blocked = outcome.skipped[0]
+    // A file this pass left alone because it holds no placeholder is not a
+    // failure: the earlier pass already restored it. Only a pass that could
+    // not finish is worth telling the user about.
+    const blocked = outcome.skipped.find(file => !file.reason.startsWith('no placeholder'))
     this.current = {
       ...this.current,
       restore: {
@@ -1122,7 +1127,10 @@ export class RedactionService extends Service {
     // user sees a file still holding placeholders and asks why. Reporting only an
     // unmapped code was not enough — a pass that ran and found nothing to do read
     // exactly like a pass that never ran, which is the question it has to answer.
-    const blocked = outcome.skipped[0]
+    // A file this pass left alone because it holds no placeholder is not a
+    // failure: the earlier pass already restored it. Only a pass that could
+    // not finish is worth telling the user about.
+    const blocked = outcome.skipped.find(file => !file.reason.startsWith('no placeholder'))
     this.current = {
       ...this.current,
       restore: {

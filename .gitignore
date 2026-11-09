@@ -73,3 +73,8 @@ packages/skill/skill-repo/assets/skills.token
 # The reader archives travel as release assets; GitHub will not take a pack this
 # large through the proxy, so the build downloads them instead.
 apps/desktop/resources/ocr/*.zip
+
+# The reader's publish output: rebuilt from source, never committed.
+packages/security/redaction/out/
+
+dev-desktop.log

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { describeVision, normalizeRecognized, resolvePaddle } from '../src/vision.ts'
+import { describeVision, normalizeRecognized, parseReaderOutput, resolvePaddle } from '../src/vision.ts'
 
 /**
  * A downloaded reader has to switch itself on.
@@ -60,5 +60,54 @@ describe('normalizeRecognized', () => {
 
   it('leaves a lone Chinese character alone', () => {
     expect(normalizeRecognized('一')).toBe('一')
+  })
+})
+
+/**
+ * A reader report is a process boundary, so the host parses it defensively.
+ *
+ * An updated reader answers with the geometry a caller may need; a download
+ * that predates the report keeps writing text. Both have to arrive as text,
+ * because the redaction path is the same whichever reader answered.
+ */
+describe('parseReaderOutput', () => {
+  it('keeps the geometry a JSON report carries', () => {
+    const report = JSON.stringify({
+      version: 1,
+      backend: 'cpu',
+      elapsedMs: 412.5,
+      image: { width: 1440, height: 900 },
+      text: '华润三九',
+      lines: [{
+        text: '华润三九',
+        box: { x1: 1, y1: 2, x2: 3, y2: 4, x3: 5, y3: 6, x4: 7, y4: 8 },
+        detectionScore: 0.9,
+        recognitionScore: 12.5,
+        classificationScore: 1,
+        rotationDegrees: 0,
+        characters: [{ text: '华', score: 3.5, box: { x1: 1, y1: 2, x2: 3, y2: 4, x3: 5, y3: 6, x4: 7, y4: 8 } }],
+      }],
+    })
+    const parsed = parseReaderOutput(report)
+    expect(parsed.text).toBe('华润三九')
+    expect(parsed.backend).toBe('cpu')
+    expect(parsed.elapsedMs).toBe(412.5)
+    expect(parsed.image).toEqual({ width: 1440, height: 900 })
+    expect(parsed.lines).toHaveLength(1)
+    expect(parsed.lines[0]?.box).toEqual({ x1: 1, y1: 2, x2: 3, y2: 4, x3: 5, y3: 6, x4: 7, y4: 8 })
+    expect(parsed.lines[0]?.characters[0]?.text).toBe('华')
+  })
+
+  it('reads an older reader that wrote plain text', () => {
+    expect(parseReaderOutput('华 润 三 九\n第二行')).toEqual({ text: '华 润 三 九\n第二行', lines: [] })
+  })
+
+  it('falls back to text when the report is not the expected object', () => {
+    expect(parseReaderOutput('{"text":"只有文本"}').lines).toEqual([])
+    expect(parseReaderOutput('{not json').text).toBe('{not json')
+  })
+
+  it('skips a line whose box is missing', () => {
+    expect(parseReaderOutput(JSON.stringify({ text: 'x', lines: [{ text: 'x' }] })).lines).toEqual([])
   })
 })

@@ -9,7 +9,8 @@
 它**不在安装包里**。这个二进制自带模型和一份 .NET 运行时，把它发给每一台从
 不读图的机器是浪费。所以它发布在内网上，需要的机器把压缩包解开到
 `%USERPROFILE%\.dsh\redaction\ocr\`——插件每次读状态都会看这个目录，所以下载
-并解压就是全部安装步骤。把文件放在别处的部署再填路径：
+并解压就是全部安装步骤。Linux 的包解压后还要 `chmod +x dsh-ocr`：zip 不带
+Unix 权限位。把文件放在别处的部署再填路径：
 
 ```yaml
 # cordis.patch.yml, or the settings form for this plugin
@@ -28,14 +29,59 @@
 | | |
 |---|---|
 | stdin | base64 编码的图片 |
-| stdout | 一行一条识别结果，UTF-8 |
+| stdout | 默认一行一条识别结果，UTF-8；请求 JSON 时是一份 JSON 报告 |
 | exit 0 | stdout 上是识别到的文本，可能为空 |
 | exit ≠ 0 | stderr 上是诊断信息；调用方报告它，并且不把图片带进会话 |
 
 stdout 显式用 UTF-8，而不是控制台代码页：Windows 进程若按 ANSI 代码页写出，
 模型认出的每个汉字都会变成乱码，任何脱敏规则都匹配不上。
 
-唯一参数传一个文件路径时改读该文件——这是它能够手工调试的原因。
+默认只写纯文本，好让宿主的旧版本不必跟着升级：`--json` 参数或
+`DSH_OCR_JSON=1` 环境变量请求 JSON 报告，宿主两种输出都解析。报告把每行文字
+和检测框放在一起：
+
+```json
+{
+  "version": 1,
+  "backend": "cpu",
+  "elapsedMs": 562,
+  "image": { "width": 1440, "height": 900 },
+  "text": "华润三九众益制药有限公司",
+  "lines": [
+    {
+      "text": "华润三九众益制药有限公司",
+      "box": { "x1": 24, "y1": 16, "x2": 216.2, "y2": 18, "x3": 216, "y3": 39, "x4": 23.8, "y4": 37 },
+      "detectionScore": 0.8486,
+      "recognitionScore": 38.536,
+      "classificationScore": 0.9999,
+      "rotationDegrees": 0,
+      "characters": []
+    }
+  ]
+}
+```
+
+`box` 是输入图片像素里的四个角，从左上的角开始顺时针。`detectionScore` 和
+`classificationScore` 是 0–1 的置信度；`recognitionScore` 是识别器的原始分数，
+不归一化，只适合相对比较。`--chars` 让每行多一个 `characters` 数组，每个字符
+带 `text`、`score` 和自己的 `box`；它隐含 `--json`，因为纯文本放不下这些坐标。
+`--backend=cpu|vulkan|metal` 与 `DSH_OCR_BACKEND` 等价，参数优先。
+
+### 常驻模式
+
+宿主默认让读图器常驻，这样模型只加载一次：带 `--serve` 启动后，stdin 上每行
+一张 base64 图片，stdout 上每行一份 JSON 报告，按写入顺序一一对应；`--serve
+--chars` 同时给出逐字符框。`--version` 打印 `dsh-ocr 2` 后退出，宿主用它探测
+这个可执行文件是否理解常驻协议——不认识该参数的旧版本会退回每张图一个进程，
+行为不变。读到 EOF 时进程退出；宿主退出时也会结束它。宿主给常驻进程设
+`DOTNET_TieredCompilation=0`：分层 JIT 会让前几张在 tier-0 和 tier-1 之间
+反复重编译，常驻进程的每张图都要等它一次，而一次性进程活得太短，用不上这个
+开关，所以只在常驻模式下关掉。常驻模式下没有缓存时，第一张直接走 CPU：Vulkan
+的测量本身在核显上要几秒，而常驻进程会连着读很多张，不该为一次测量耽误第一
+张。想换 Vulkan 的机器用 `DSH_OCR_BACKEND=vulkan`，或先跑一次一次性调用让它
+测出来并写进缓存。
+
+不传参数时读 stdin；传一个文件路径时读该文件——这是它能够手工调试的原因。
 
 ## 构建
 
@@ -71,16 +117,25 @@ tar -a -c -f dsh-ocr-linux-arm64.zip -C out/linux-arm64 dsh-ocr libSkiaSharp.so
 ## 跑在哪块设备上
 
 默认在 CPU 上跑，机器上有一块确实更快的 GPU 时就用 GPU。这个工具读到的第一张
-图会两种都测一遍——CPU 对 Vulkan——把更快的那个写进
-`%TEMP%\dsh-ocr-backend.txt`，之后每次调用只加载一次模型。实测比设备名可靠：
-核显经常是更慢的那一个，而且每台机器的数字都不一样。
+图会两种都测一遍——CPU 对 Vulkan——把更快的那个写进缓存文件，之后每次调用只
+加载一次模型。实测比设备名可靠：核显经常是更慢的那一个，而且每台机器的数字都
+不一样。
 
-写这份文档的那台机器（AMD Radeon 780M 核显）上 Vulkan 是 708 ms，CPU 是
-422 ms，所以它选了 CPU。独显则相反，快好几倍。带 Mali GPU 的麒麟机器同样按
-实测决定；没有 Vulkan 加载器的机器留在 CPU 上，stdout 上不会多一个字。
+缓存按这个顺序找地方写：`DSH_OCR_CACHE` 指定的路径、可执行文件旁边、
+`%TEMP%`。先写可执行文件旁边是有原因的：从受限的宿主子进程里启动时，`%TEMP%`
+可能不可写，而缓存一次都没写成过的时候，每次调用都会重新双测，一张图就成了
+1.7–2 秒。三个位置都写不进去才在 stderr 上报告一行
+`backend cache write failed on every candidate path`。
 
-`DSH_OCR_BACKEND=cpu|vulkan|metal` 可以跳过实测。选中的后端只报到 stderr，
-从不写 stdout，所以对宿主机的契约没有变化。
+写这份文档的那台机器（AMD Radeon 780M 核显）上，一次性调用（进程启动、
+解码、加载模型、识别）CPU 约 640 ms，Vulkan 约 770 ms，所以它选了 CPU。
+常驻模式下第一张仍要付出进程启动与模型加载（约 1 s，含一次协议探测），
+之后每张只做识别，1440×900 的截图约 85 ms——与上游基准里同档设备的量级
+一致。独显则相反，快好几倍。带 Mali GPU 的麒麟机器同样按实测决定；没有
+Vulkan 加载器的机器留在 CPU 上，stdout 上不会多一个字。
+
+`DSH_OCR_BACKEND=cpu|vulkan|metal` 和 `--backend` 可以跳过实测。选中的后端只
+报到 stderr，从不写 stdout，所以对宿主机的契约没有变化。
 
 ## 发布
 

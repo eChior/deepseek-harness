@@ -1894,9 +1894,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'What the attempt did with the queue.',
       },
       {
-        signature: 'async restoreSession(directory?: string): Promise<RestoreOutcome>',
+        signature: 'async restoreSession(directory?: string, sessionId?: string): Promise<RestoreOutcome>',
         description: 'Restore every document under a session directory, because the user asked.\n\nThe automatic pass only hears about files an argument named. A model that buries the output path inside a script leaves the file full of placeholders and no argument to point at it, so the badge offers a button instead — this is what it calls.',
-        parameters: [{ name: 'directory', description: 'The session\'s working directory.' }],
+        parameters: [{ name: 'directory', description: 'The session\'s working directory.' }, { name: 'sessionId', description: 'The session whose remembered documents to restore, when the caller has one.' }],
         returns: 'how the pass went, for the badge to show.',
       },
       {
