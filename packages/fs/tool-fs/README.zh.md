@@ -45,7 +45,7 @@ kind: "package-reference"
 |---|---|---|
 | `read` | `file_path`、`offset?`、`limit?` | 带行号的 UTF-8 内容与分页 footer；`offset` 从 1 开始，`limit` 默认为配置的 `readLimit`，上限也为该值 |
 | `read_image` | `file_path` | 读取并持久保存 PNG/JPEG/WebP/GIF 源图；无扩展名路径（包括规范化附件对象路径）按文件签名识别格式；规范化可在下一次模型请求前缩小图片，因此模型无需先创建缩略图 |
-| `read_image_text` | `file_path?` | 用本机的本地读图器读出图里的文字；省略路径时读这段对话自己带的最新一张图。只在挂了本地读图器时出现。 |
+| `read_image_text` | `file_path?`、`with_characters?` | 用本机的本地读图器读出图里的文字，并给出每一行的位置框（`with_characters` 时连同每个字的位置框）；省略路径时读这段对话自己带的最新一张图。只在挂了本地读图器时出现。 |
 | `write` | `file_path`、`content` | 创建或完整替换文件；有策略插件时，覆盖要求先在未变版本上执行 `read`，创建不需要 |
 | `edit` | `file_path`、`old_string`、`new_string`、`replace_all?` | 字面量替换，除非 `replace_all` 为 true 否则要求唯一匹配；有策略插件时，要求先执行 `read` 且文件未变 |
 

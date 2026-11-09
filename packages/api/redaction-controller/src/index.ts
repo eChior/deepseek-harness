@@ -102,6 +102,7 @@ export class RedactionController extends TypertRemoteService {
       imageTool: view.imageTool,
       ocr: view.ocr,
       ocrMode: view.ocrMode,
+      ocrBackend: view.ocrBackend,
       restore: view.restore,
       numberScale: view.numberScale,
     })
@@ -155,6 +156,26 @@ export class RedactionController extends TypertRemoteService {
   @Remote
   setNumberScale(request: { readonly scale: number }): { readonly numberScale: number } {
     return { numberScale: this.ctx.redaction.setNumberScale(request.scale) }
+  }
+
+  /**
+   * Switch when a picture is read.
+   * @param request - the mode the user picked.
+   * @returns the mode now in force.
+   */
+  @Remote
+  setOcrMode(request: { readonly mode: 'tool' | 'prompt' }): { readonly ocrMode: 'tool' | 'prompt' } {
+    return { ocrMode: this.ctx.redaction.setOcrMode(request.mode) }
+  }
+
+  /**
+   * Pick the device the reader runs on.
+   * @param request - the backend the user picked.
+   * @returns the backend now in force.
+   */
+  @Remote
+  setOcrBackend(request: { readonly backend: 'auto' | 'cpu' | 'gpu' }): { readonly ocrBackend: 'auto' | 'cpu' | 'gpu' } {
+    return { ocrBackend: this.ctx.redaction.setOcrBackend(request.backend) }
   }
 
   /**

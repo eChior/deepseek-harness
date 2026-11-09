@@ -17,20 +17,19 @@ import type {
   RedactionUploadView,
   RedactionVisionView,
 } from '@deepseek-ai/dsh-api-redaction-controller/types'
-import { Button, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './RedactionStatusTab.module.css'
 
 /** Registration-side Remote face used by the page. */
 /**
- * The twenty multipliers the page offers, geometric from 0.01 to 100.
- * One stop per cell, so the row reads as a scale rather than a list of
- * arbitrary numbers.
+ * The twenty multipliers the scale offers: one below 0.1, the nine tenths up
+ * to 1, then whole factors up to 10. Hand-picked rather than generated, because
+ * "shrink by a hundredth" and "grow tenfold" are the ends people actually want.
  */
-export const SCALE_STEPS: readonly number[] = Array.from(
-  { length: 20 },
-  (_unused, index) => Number((0.01 * 10000 ** (index / 19)).toPrecision(3)),
-)
+export const SCALE_STEPS: readonly number[] = [
+  0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+]
 
 export interface RedactionStatusTabInjected {
   /** Read the current provider status. */
@@ -248,34 +247,8 @@ export function RedactionStatusTab(props: RedactionStatusTabProps) {
         </dd>
         <dt className={css.term}>{t('mappingsLabel')}</dt>
         <dd className={css.value}>{view.mappings ? t('toggleOn') : t('toggleOff')}</dd>
-        <dt className={css.term}>{t('numberScaleLabel')}</dt>
-        <dd className={css.value}>
-          <Switch
-            checked={view.numberScale !== 1}
-            label={t('numberScaleLabel')}
-            onChange={(on) => { void props.saveNumberScale(on ? (SCALE_STEPS[9] ?? 1) : 1) }}
-          />
-          {view.numberScale !== 1 && <span className={css.scaleValue}>×{view.numberScale}</span>}
-        </dd>
-        <dt className={css.term}>{t('numberScaleStep')}</dt>
-        <dd className={css.value}>
-          <div className={css.scaleGrid}>
-            {SCALE_STEPS.map(step => (
-              <button
-                key={step}
-                type="button"
-                className={view.numberScale === step ? css.scaleCellOn : css.scaleCell}
-                title={`×${step}`}
-                onClick={() => { void props.saveNumberScale(step) }}
-              >
-                ×{step}
-              </button>
-            ))}
-          </div>
-        </dd>
       </dl>
       <p className={css.hint}>{t('rulesHint')}</p>
-      <p className={css.hint}>{t('numberScaleHint')}</p>
       {view.detail !== null && <p className={css.note}>{t('detailBlocked', { detail: view.detail })}</p>}
       {view.lastError !== null && <p className={css.note}>{t('staleLabel')}: {view.lastError}</p>}
       {view.pending > 0 && <p className={css.hint}>{t('pendingHint')}</p>}

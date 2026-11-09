@@ -49,6 +49,8 @@ export interface RedactionStatusView {
   readonly ocr: RedactionVisionView
   /** Whether an attached picture is read as it arrives or only when the model asks. */
   readonly ocrMode: 'tool' | 'prompt'
+
+  readonly ocrBackend: 'auto' | 'cpu' | 'gpu'
   /** Whether a document the model writes gets its placeholders replaced, and how that went. */
   readonly restore: RedactionRestoreView
   /** Multiplier applied to quantities, one-way; `1` leaves them alone. */

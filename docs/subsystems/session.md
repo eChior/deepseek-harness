@@ -789,6 +789,30 @@ Rewrite the text of an admitted prompt into stable placeholders, so the values i
 setMappings(on: boolean): boolean
 
 /**
+ * Set the multiplier applied to quantities in what the model reads.
+ *
+ * One-way by design: nothing records the original, so a written file keeps
+ * the scaled figure and no write-back undoes it. `1` turns the scaling off.
+ * @param scale The multiplier, clamped to the range the page offers.
+ * @returns The multiplier in force after the call.
+ */
+setNumberScale(scale: number): number
+
+/**
+ * Switch whether a picture is read as it arrives or when the model asks.
+ * @param mode - `tool` keeps the picture and waits; `prompt` reads it on arrival.
+ * @returns the mode now in force.
+ */
+setOcrMode(mode: 'tool' | 'prompt'): 'tool' | 'prompt'
+
+/**
+ * Pick the device the reader runs on without rebuilding the plugin.
+ * @param backend - `auto` measures once, `cpu` and `gpu` skip the measurement.
+ * @returns the backend now in force.
+ */
+setOcrBackend(backend: 'auto' | 'cpu' | 'gpu'): 'auto' | 'cpu' | 'gpu'
+
+/**
  * Load a term list and start refreshing it.
  *
  * The cached copy is preferred because it is the one this machine last saw a
@@ -854,6 +878,21 @@ redactValue(value: JsonValue): JsonValue
  * @returns The redacted text, or `undefined` when no text could be read.
  */
 async recognizeImage(data: string, mediaType: string): Promise<string | undefined>
+
+/**
+ * Read one encoded image on this machine and return its text with the
+ * geometry of every line.
+ *
+ * `recognizeImage` answers a model that accepts text alone; this variant keeps
+ * the line boxes so a caller that must place the text inside the picture can.
+ * The pixels still never leave this machine, and every string is redacted
+ * before it is returned, character boxes included.
+ * @param data The image as canonical base64.
+ * @param mediaType Its media type, for the log.
+ * @param options - `characters: true` also reports one box per character.
+ * @returns The redacted layout, or `undefined` when no text could be read.
+ */
+async recognizeImageLayout( data: string, mediaType: string, options: { readonly characters?: boolean } = {}, ): Promise<ImageTextLayout | undefined>
 
 /**
  * Ask the publisher to add a term to the list.

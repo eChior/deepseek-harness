@@ -38,6 +38,7 @@ const READY: RedactionStatusView = {
     backend: 'auto',
   },
   ocrMode: 'tool',
+  ocrBackend: 'auto',
   restore: { onWrite: true, lastError: null, files: 0 },
   numberScale: 1,
 }

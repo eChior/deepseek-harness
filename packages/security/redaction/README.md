@@ -52,6 +52,8 @@ No field turns the provider off. A disabled provider writes exactly the values t
 
 Images never reach the model as pixels. This package is also the reader the attachment store calls: it recognizes the text inside an admitted image, redacts that text, and hands the text back for the image part. Nothing is written to disk, and a recognition that fails or times out substitutes a blocked marker instead of the image. A caller that admits attachments on its own can pass the reader down — `admitPromptContent(parts, ctx.get('redaction'))` — and get the same treatment for a child agent's read.
 
+`recognizeImageLayout` is the same read for a caller that also needs geometry: it returns the redacted text plus one box per detected line, and per character when `characters` is asked for. `read_image_text` uses it to report where each line sat. The boxes are pixel coordinates in the decoded image, and every string — line text and character text alike — is redacted before it leaves.
+
 `restore(text)` swaps the placeholders this process issued back for their values. It belongs where a human reads text, never on the way into a session.
 
 `status` reports the revision the loaded list declares, where it came from, how many terms and patterns it carries, how many replacements this process has made, how many term requests are queued, how many uploaded lists are in force, how many directory names are in force, and a failure detail. A term list that cannot be read leaves no rules loaded, which replaces nothing, and the reason stays visible in `status.detail` instead of failing the plugin load.

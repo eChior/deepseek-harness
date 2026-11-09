@@ -163,6 +163,36 @@
   gap: 6px;
 }
 
+.scaleTrack {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin: 2px 0 6px;
+  padding: 0;
+}
+
+.scaleSegment,
+.scaleSegmentOn {
+  flex: 1 1 0;
+  height: 8px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: var(--dsw-alias-border-l2);
+  cursor: pointer;
+}
+
+.scaleSegmentOn {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.scaleValue {
+  margin-left: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .switchRow {
   display: flex;
   align-items: center;

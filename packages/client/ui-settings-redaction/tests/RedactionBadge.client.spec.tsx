@@ -30,6 +30,7 @@ const STATUS: RedactionStatusView = {
   imageTool: false,
   mappings: true,
   ocrMode: 'tool',
+  ocrBackend: 'auto',
   restore: { onWrite: true, lastError: null, files: 0 },
   numberScale: 1,
   ocr: {
@@ -129,7 +130,8 @@ describe('RedactionBadge', () => {
     render(<RedactionBadge {...props({ setMappings })} />)
     await waitFor(() => { expect(screen.getByRole('button', { name: '脱敏状态' }).textContent).toContain('7') })
     fireEvent.click(screen.getByRole('button', { name: '脱敏状态' }))
-    fireEvent.click(screen.getByRole('switch'))
+    // The scale switch comes first in the panel; the mapping switch is the next one.
+    fireEvent.click(screen.getAllByRole('switch')[1] as HTMLElement)
     expect(setMappings.mock.calls).toEqual([[false]])
   })
 
@@ -155,6 +157,6 @@ describe('RedactionBadge', () => {
     await waitFor(() => { expect(entries).toHaveBeenCalledOnce() })
     fireEvent.click(screen.getByRole('button', { name: '脱敏状态' }))
     expect(screen.getByRole('button', { name: '原文' })).toBeTruthy()
-    expect(screen.getByRole('switch')).toBeTruthy()
+    expect(screen.getAllByRole('switch')).toHaveLength(2)
   })
 })

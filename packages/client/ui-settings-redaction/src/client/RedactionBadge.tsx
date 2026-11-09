@@ -17,6 +17,7 @@ import type {
 import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './RedactionBadge.module.css'
+import { SCALE_STEPS } from './RedactionStatusTab.tsx'
 
 /** Which form the transcript is currently reading. */
 export type RedactionUserView = 'original' | 'placeholder'
@@ -50,6 +51,8 @@ export interface RedactionBadgeInjected {
   subscribeUserView: (listener: () => void) => () => void
   /** Publish whether an ended session writes its placeholder table to disk. */
   setMappings: (enabled: boolean) => void
+  /** Publish the multiplier applied to quantities, one-way. */
+  saveNumberScale: (scale: number) => void
   /** Colour a restored original is painted in. */
   highlightColor: string
   /** Publish the colour choice. */
@@ -72,7 +75,7 @@ const DEFAULT_COLOR = '#d92d20'
 export function RedactionBadge({
   entries, status, setUserView, userView, readUserView, subscribeUserView,
   restoreSession,
-  setMappings, highlightColor, setHighlightColor, t,
+  setMappings, saveNumberScale, highlightColor, setHighlightColor, t,
 }: RedactionBadgeProps) {
   const [items, setItems] = useState<readonly RedactionEntryView[]>([])
   const [state, setState] = useState<RedactionStatusView | null>(null)
@@ -262,6 +265,27 @@ export function RedactionBadge({
           </button>
 
           <div className={css.switches}>
+            <div className={css.switchRow}>
+              <Switch
+                checked={(state?.numberScale ?? 1) !== 1}
+                label={t('numberScaleLabel')}
+                onChange={(on) => { saveNumberScale(on ? 0.01 : 1) }}
+              />
+              <span className={css.switchLabel}>{t('numberScaleLabel')}</span>
+              <span className={css.scaleValue}>×{state?.numberScale ?? 1}</span>
+            </div>
+            <div className={css.scaleTrack}>
+              {SCALE_STEPS.map(step => (
+                <button
+                  key={step}
+                  type="button"
+                  className={(state?.numberScale ?? 1) === step ? css.scaleSegmentOn : css.scaleSegment}
+                  title={`×${step}`}
+                  aria-label={`×${step}`}
+                  onClick={() => { saveNumberScale(step) }}
+                />
+              ))}
+            </div>
             <div className={css.switchRow}>
               <Switch
                 checked={mappings}

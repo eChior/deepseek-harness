@@ -72,8 +72,8 @@ import {
 } from './source.ts'
 import { compileRules, isUsable, parseTermList, type ParsedTermList, type RedactionCategory, type RedactionRule } from './terms.ts'
 import { redactText as applyRules } from './redact.ts'
-import { DEFAULT_VISION_TIMEOUT_MS, describeVision, recognizeImageText, resolvePaddle } from './vision.ts'
-import type { VisionEngine } from './vision.ts'
+import { DEFAULT_VISION_TIMEOUT_MS, describeVision, recognizeImage, recognizeImageText, resolvePaddle } from './vision.ts'
+import type { VisionBox, VisionEngine } from './vision.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -275,6 +275,8 @@ export interface RedactionStatus {
   readonly ocr: VisionStatus
   /** Whether an attached picture is read on arrival or only when the model asks. */
   readonly ocrMode: 'tool' | 'prompt'
+
+  readonly ocrBackend: 'auto' | 'cpu' | 'gpu'
   /** Whether a written document gets its placeholders replaced, and what went wrong. */
   readonly restore: RestoreStatus
   /** Multiplier applied to quantities, one-way; `1` leaves them alone. */
@@ -305,6 +307,48 @@ export interface VisionStatus {
   readonly directory: string
   /** Which device the optional reader uses: measured on first run, or pinned. */
   readonly backend: 'auto' | 'cpu' | 'gpu'
+}
+
+/** One character box a picture's line held, when the caller asked for them. */
+export interface ImageTextCharacter {
+  /** The character's text, already redacted. */
+  readonly text: string
+  /** The reader's confidence in that character. */
+  readonly score: number
+  /** Four corners, in input-image pixels. */
+  readonly box: VisionBox
+}
+
+/** One line of text a picture held, with where it sat in the picture. */
+export interface ImageTextLine {
+  /** The line's text, already redacted. */
+  readonly text: string
+  /** Four corners, clockwise from the line's top-left, in input-image pixels. */
+  readonly box: VisionBox
+  /** Detector confidence for the box, 0..1. */
+  readonly detectionScore: number
+  /** Recognizer score for the line, raw and not normalized to 0..1. */
+  readonly recognitionScore: number
+  /** Character boxes; empty unless the caller asked for them. */
+  readonly characters: readonly ImageTextCharacter[]
+}
+
+/**
+ * One picture's text together with the geometry the reader measured.
+ *
+ * `lines` is empty when the reader in force reports text only (the Windows and
+ * Tesseract engines do), so a caller must treat the geometry as optional even
+ * when it asked for it.
+ */
+export interface ImageTextLayout {
+  /** The whole picture's text, already redacted. */
+  readonly text: string
+  /** Pixel size of the image the boxes are relative to, when the reader reports it. */
+  readonly image?: { readonly width: number; readonly height: number }
+  /** The lines the picture held, in reading order. */
+  readonly lines: readonly ImageTextLine[]
+  /** The device that read it, when the reader reports one. */
+  readonly backend?: 'cpu' | 'vulkan' | 'metal'
 }
 
 /**
@@ -381,6 +425,10 @@ export class RedactionService extends Service {
   /** The multiplier in force; `1` leaves numbers alone. */
   private scaleValue = 1
 
+  private modeValue: 'tool' | 'prompt' = 'tool'
+
+  private backendValue: 'auto' | 'cpu' | 'gpu' = 'auto'
+
   /**
    * The directory of the last call this process ran a tool for.
    *
@@ -425,6 +473,8 @@ export class RedactionService extends Service {
     this.readImageOn = this.config.readImage
     this.restoreOnWrite = this.config.restoreOnWrite
     this.scaleValue = this.config.numberScale
+    this.modeValue = this.config.ocrMode
+    this.backendValue = this.config.ocrBackend
     // Started here rather than in an effect: a session can end before an effect
     // runs, and a write must never outrun the read it depends on.
     this.ready = this.loadMappings()
@@ -446,6 +496,7 @@ export class RedactionService extends Service {
       imageTool: this.config.readImage,
       ocr: this.visionStatus(),
       ocrMode: this.config.ocrMode,
+      ocrBackend: this.backendValue,
       restore: { onWrite: this.config.restoreOnWrite, lastError: null, files: 0 },
       numberScale: this.config.numberScale,
     }
@@ -609,6 +660,28 @@ export class RedactionService extends Service {
   }
 
   /**
+   * Switch whether a picture is read as it arrives or when the model asks.
+   * @param mode - `tool` keeps the picture and waits; `prompt` reads it on arrival.
+   * @returns the mode now in force.
+   */
+  setOcrMode(mode: 'tool' | 'prompt'): 'tool' | 'prompt' {
+    this.modeValue = mode
+    this.current = { ...this.current, ocrMode: mode }
+    return mode
+  }
+
+  /**
+   * Pick the device the reader runs on without rebuilding the plugin.
+   * @param backend - `auto` measures once, `cpu` and `gpu` skip the measurement.
+   * @returns the backend now in force.
+   */
+  setOcrBackend(backend: 'auto' | 'cpu' | 'gpu'): 'auto' | 'cpu' | 'gpu' {
+    this.backendValue = backend
+    this.current = { ...this.current, ocr: { ...this.current.ocr, backend: backend } }
+    return backend
+  }
+
+  /**
    * Whether a picture attached to a prompt is read as it arrives.
    *
    * The prompt path asks this before it decides whether to hand a reader to the
@@ -617,7 +690,7 @@ export class RedactionService extends Service {
    * @returns The configured mode.
    */
   get ocrMode(): 'tool' | 'prompt' {
-    return this.config.ocrMode
+    return this.modeValue
   }
 
   /** What the term list declares and how many replacements this process has made. */
@@ -857,7 +930,9 @@ export class RedactionService extends Service {
     if (this.rules.length === 0) return [...parts]
     return parts.map((part) => {
       if (part.type !== 'text' || typeof part.text !== 'string') return part
-      const text = this.redactText(part.text)
+      // A person typing a number means it as written; only a document the
+      // model produces is scaled.
+      const text = this.rewriteText(part.text, 1)
       return text === part.text ? part : { ...part, text }
     })
   }
@@ -868,8 +943,18 @@ export class RedactionService extends Service {
    * @returns The rewritten text, or the input when no rule matched.
    */
   redactText(text: string): string {
+    return this.rewriteText(text, this.scaleValue)
+  }
+
+  /**
+   * Rewrite one string with a chosen multiplier.
+   * @param text Text to rewrite.
+   * @param scale Multiplier applied to quantities; `1` leaves them alone.
+   * @returns The rewritten text.
+   */
+  private rewriteText(text: string, scale: number): string {
     if (this.rules.length === 0) return text
-    const result = applyRules(text, this.rules, this.map, undefined, this.scaleValue)
+    const result = applyRules(text, this.rules, this.map, undefined, scale)
     if (result.hits.length > 0) {
       this.current = { ...this.current, replacements: this.current.replacements + result.hits.length }
       this.scheduleMappings()
@@ -914,7 +999,7 @@ export class RedactionService extends Service {
       present: path !== '',
       download: OCR_RELEASES,
       directory,
-      backend: this.config.ocrBackend,
+      backend: this.backendValue,
     }
   }
 
@@ -949,9 +1034,59 @@ export class RedactionService extends Service {
         paddlePath: this.config.ocrPath,
         paddleDirectory: this.readerDirectory(),
         timeoutMs: this.config.visionTimeoutMs,
-        backend: this.config.ocrBackend,
+        backend: this.backendValue,
       })
       return text === '' ? '[图片-无文字]' : this.redactText(text)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`redaction: could not read a ${mediaType} image locally: ${detail}`)
+      return undefined
+    }
+  }
+
+  /**
+   * Read one encoded image on this machine and return its text with the
+   * geometry of every line.
+   *
+   * `recognizeImage` answers a model that accepts text alone; this variant keeps
+   * the line boxes so a caller that must place the text inside the picture can.
+   * The pixels still never leave this machine, and every string is redacted
+   * before it is returned, character boxes included.
+   * @param data The image as canonical base64.
+   * @param mediaType Its media type, for the log.
+   * @param options - `characters: true` also reports one box per character.
+   * @returns The redacted layout, or `undefined` when no text could be read.
+   */
+  async recognizeImageLayout(
+    data: string,
+    mediaType: string,
+    options: { readonly characters?: boolean } = {},
+  ): Promise<ImageTextLayout | undefined> {
+    if (!this.config.vision || this.rules.length === 0) return undefined
+    try {
+      const result = await recognizeImage(Buffer.from(data, 'base64'), {
+        paddlePath: this.config.ocrPath,
+        paddleDirectory: this.readerDirectory(),
+        timeoutMs: this.config.visionTimeoutMs,
+        backend: this.backendValue,
+        ...(options.characters === true ? { characters: true } : {}),
+      })
+      return {
+        text: result.text === '' ? '[图片-无文字]' : this.redactText(result.text),
+        ...(result.image === undefined ? {} : { image: result.image }),
+        lines: result.lines.map(line => ({
+          text: this.redactText(line.text),
+          box: line.box,
+          detectionScore: line.detectionScore,
+          recognitionScore: line.recognitionScore,
+          characters: line.characters.map(character => ({
+            text: this.redactText(character.text),
+            score: character.score,
+            box: character.box,
+          })),
+        })),
+        ...(result.backend === undefined ? {} : { backend: result.backend }),
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       this.ctx.logger.warn(`redaction: could not read a ${mediaType} image locally: ${detail}`)

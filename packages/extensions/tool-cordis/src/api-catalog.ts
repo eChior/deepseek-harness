@@ -1834,6 +1834,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'The value now in force.',
       },
       {
+        signature: 'setNumberScale(scale: number): number',
+        description: 'Set the multiplier applied to quantities in what the model reads.\n\nOne-way by design: nothing records the original, so a written file keeps the scaled figure and no write-back undoes it. `1` turns the scaling off.',
+        parameters: [{ name: 'scale', description: 'The multiplier, clamped to the range the page offers.' }],
+        returns: 'The multiplier in force after the call.',
+      },
+      {
+        signature: 'setOcrMode(mode: \'tool\' | \'prompt\'): \'tool\' | \'prompt\'',
+        description: 'Switch whether a picture is read as it arrives or when the model asks.',
+        parameters: [{ name: 'mode', description: '`tool` keeps the picture and waits; `prompt` reads it on arrival.' }],
+        returns: 'the mode now in force.',
+      },
+      {
+        signature: 'setOcrBackend(backend: \'auto\' | \'cpu\' | \'gpu\'): \'auto\' | \'cpu\' | \'gpu\'',
+        description: 'Pick the device the reader runs on without rebuilding the plugin.',
+        parameters: [{ name: 'backend', description: '`auto` measures once, `cpu` and `gpu` skip the measurement.' }],
+        returns: 'the backend now in force.',
+      },
+      {
         signature: 'async load(): Promise<RedactionStatus>',
         description: 'Load a term list and start refreshing it.\n\nThe cached copy is preferred because it is the one this machine last saw a publisher confirm, and the copy inside the package is the fallback for an install that never reached the publisher — except when the package carries a later revision, which is what an upgrade looks like. A refresh follows whenever a list was loaded and the deployment tracks a repository.',
         parameters: [],
@@ -1873,6 +1891,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read the text out of one encoded image on this machine and redact it.\n\nThe image is decoded in memory and read by a local recognizer: it is never stored, never returned, and never sent to a model, so a screenshot reaches the session as the text it held and nothing else. A caller that gets `undefined` reports the failure and keeps the image out of the session — handing the pixels to the model is the one outcome this must not produce.',
         parameters: [{ name: 'data', description: 'The image as canonical base64.' }, { name: 'mediaType', description: 'Its media type, for the log.' }],
         returns: 'The redacted text, or `undefined` when no text could be read.',
+      },
+      {
+        signature: 'async recognizeImageLayout( data: string, mediaType: string, options: { readonly characters?: boolean } = {}, ): Promise<ImageTextLayout | undefined>',
+        description: 'Read one encoded image on this machine and return its text with the geometry of every line.\n\n`recognizeImage` answers a model that accepts text alone; this variant keeps the line boxes so a caller that must place the text inside the picture can. The pixels still never leave this machine, and every string is redacted before it is returned, character boxes included.',
+        parameters: [{ name: 'data', description: 'The image as canonical base64.' }, { name: 'mediaType', description: 'Its media type, for the log.' }, { name: 'options', description: '`characters: true` also reports one box per character.' }],
+        returns: 'The redacted layout, or `undefined` when no text could be read.',
       },
       {
         signature: 'async requestTerm(term: string, note?: string): Promise<TermRequest>',
@@ -6408,7 +6432,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RedactionStatus',
-    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n    readonly ocrMode: \'tool\' | \'prompt\';\n    readonly restore: RestoreStatus;\n}',
+    declaration: 'export interface RedactionStatus {\n    readonly enabled: boolean;\n    readonly revision: string | null;\n    readonly terms: number;\n    readonly patterns: number;\n    readonly replacements: number;\n    readonly source: TermSourceKind;\n    readonly lastChecked: string | null;\n    readonly lastError: string | null;\n    readonly detail: string | null;\n    readonly pending: number;\n    readonly localFiles: number;\n    readonly departments: number;\n    readonly roster: number;\n    readonly mappings: boolean;\n    readonly imageTool: boolean;\n    readonly ocr: VisionStatus;\n    readonly ocrMode: \'tool\' | \'prompt\';\n    readonly ocrBackend: \'auto\' | \'cpu\' | \'gpu\';\n    readonly restore: RestoreStatus;\n    readonly numberScale: number;\n}',
   },
   {
     name: 'Registry',

@@ -276,6 +276,19 @@ function formatScaled(value: number): string {
   return String(rounded)
 }
 
+/**
+ * Replace every rule hit in one string with its placeholder.
+ *
+ * Hits are reduced to a non-overlapping set first — longest match, then
+ * category priority, then leftmost — and a hit that falls inside a path or a
+ * `<path>` envelope is dropped rather than clipped.
+ * @param text - the string to rewrite.
+ * @param rules - the compiled rules currently in force.
+ * @param map - the placeholder table this result is recorded in.
+ * @param priority - category order, highest first.
+ * @param scale - multiplier applied to quantities, one-way.
+ * @returns the rewritten text, the hits it replaced, and the placeholders issued.
+ */
 export function redactText(
   text: string,
   rules: readonly RedactionRule[],

@@ -84,9 +84,14 @@ export function apply(ctx: ClientContext): void {
     setDepartment: async request => unwrap('setDepartment', await remote.setDepartment(request)),
     example: async () => unwrap('example', await remote.example()),
     saveOcrPath: async path => ctx.configForms.get<{ ocrPath?: string }>('redaction').set('ocrPath', path),
-    saveOcrMode: async mode => ctx.configForms.get<{ ocrMode?: 'tool' | 'prompt' }>('redaction').set('ocrMode', mode),
-    saveOcrBackend: async backend => ctx.configForms.get<{ ocrBackend?: 'auto' | 'cpu' | 'gpu' }>('redaction')
-      .set('ocrBackend', backend),
+    saveOcrMode: async (mode) => {
+      unwrap('ocrMode', await remote.setOcrMode({ mode }))
+      return true
+    },
+    saveOcrBackend: async (backend) => {
+      unwrap('ocrBackend', await remote.setOcrBackend({ backend }))
+      return true
+    },
   }
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
@@ -144,6 +149,11 @@ export function apply(ctx: ClientContext): void {
     },
     // The mapping switch lives on the Host guard, not in a client preference:
     // the session-end write happens in the Host process.
+    saveNumberScale: (scale) => {
+      void remote.setNumberScale({ scale }).catch((_error: unknown) => {
+        // The scale the next status reports is the one in force.
+      })
+    },
     setMappings: (enabled) => {
       void remote.setMappings({ enabled }).catch((_error: unknown) => {
         // A refused write leaves the switch where the next poll reports it.

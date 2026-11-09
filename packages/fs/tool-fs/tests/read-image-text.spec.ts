@@ -15,6 +15,7 @@ import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import { pickConversationImage } from '@deepseek-ai/dsh-tool-fs/src/read-image-text.ts'
+import type { ImageTextLayout } from '@deepseek-ai/dsh-tool-fs/src/read-image-text.ts'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 
 /** 1x1 red PNG. */
@@ -35,6 +36,7 @@ class FakeReader extends Service {
   static last: FakeReader | undefined
 
   readonly seen: { data: string; mediaType: string }[] = []
+  readonly layoutAsks: { readonly characters: boolean }[] = []
   answer: string | undefined = '合同编号 AB12345678'
 
   constructor(ctx: Context) {
@@ -45,6 +47,40 @@ class FakeReader extends Service {
   recognizeImage(data: string, mediaType: string): Promise<string | undefined> {
     this.seen.push({ data, mediaType })
     return Promise.resolve(this.answer)
+  }
+
+  recognizeImageLayout(
+    data: string,
+    mediaType: string,
+    options?: { readonly characters?: boolean },
+  ): Promise<ImageTextLayout | undefined> {
+    this.seen.push({ data, mediaType })
+    this.layoutAsks.push({ characters: options?.characters === true })
+    if (this.answer === undefined) return Promise.resolve(undefined)
+    return Promise.resolve({
+      text: this.answer,
+      image: { width: 1440, height: 900 },
+      lines: [{
+        text: this.answer,
+        box: { x1: 10, y1: 20, x2: 110, y2: 40, x3: 110, y3: 40, x4: 10, y4: 40 },
+        detectionScore: 0.9,
+        recognitionScore: 12.5,
+        characters: options?.characters === true
+          ? [{ text: '合', score: 0.98, box: { x1: 10, y1: 20, x2: 20, y2: 20, x3: 20, y3: 40, x4: 10, y4: 40 } }]
+          : [],
+      }],
+    })
+  }
+}
+
+/** A stand-in for an older provider that answers text only, with no boxes. */
+class FakeTextOnlyReader extends Service {
+  constructor(ctx: Context) {
+    super(ctx, 'redaction')
+  }
+
+  recognizeImage(): Promise<string | undefined> {
+    return Promise.resolve('只有文字')
   }
 }
 
@@ -128,6 +164,8 @@ afterEach(async () => {
 
 interface SetupOptions {
   reader?: boolean
+  /** Mount a provider that reports text only, to exercise the fallback. */
+  textOnly?: boolean
   readImageText?: boolean
   conversation?: boolean
 }
@@ -142,8 +180,12 @@ async function setup(options: SetupOptions = {}) {
   await ctx.plugin(ToolFs, { readImageText: options.readImageText ?? true })
   let reader: FakeReader | undefined
   if (options.reader !== false) {
-    await ctx.plugin(FakeReader)
-    reader = FakeReader.last
+    if (options.textOnly === true) {
+      await ctx.plugin(FakeTextOnlyReader)
+    } else {
+      await ctx.plugin(FakeReader)
+      reader = FakeReader.last
+    }
   }
   if (options.conversation === true) {
     await ctx.plugin(FakeAttachments)
@@ -183,6 +225,29 @@ describe('read_image_text', () => {
     expect(reader?.seen).toHaveLength(1)
     expect(reader?.seen[0]?.mediaType).toBe('image/png')
     expect(Buffer.from(reader?.seen[0]?.data ?? '', 'base64')).toEqual(PNG_1X1)
+  })
+
+  it('returns the text with the box of every line', async () => {
+    const { ctx, dir } = await setup()
+    await writeFile(join(dir, 'sop.png'), PNG_1X1)
+    const body = text(await run(ctx, { file_path: 'sop.png' }))
+    expect(body).toContain('<image width="1440" height="900" />')
+    expect(body).toContain('<line x1="10" y1="20" x2="110" y2="40">合同编号 AB12345678</line>')
+  })
+
+  it('asks for character boxes only when the call asks', async () => {
+    const { ctx, dir, reader } = await setup()
+    await writeFile(join(dir, 'sop.png'), PNG_1X1)
+    await run(ctx, { file_path: 'sop.png', with_characters: true })
+    expect(reader?.layoutAsks).toEqual([{ characters: true }])
+  })
+
+  it('falls back to plain text when the mounted reader reports no geometry', async () => {
+    const { ctx, dir } = await setup({ textOnly: true })
+    await writeFile(join(dir, 'sop.png'), PNG_1X1)
+    const body = text(await run(ctx, { file_path: 'sop.png' }))
+    expect(body).toContain('只有文字')
+    expect(body).not.toContain('<lines>')
   })
 
   it('picks the newest picture a conversation carries', () => {
