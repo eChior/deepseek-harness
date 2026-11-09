@@ -61,8 +61,10 @@ export interface RedactionStatusView {
 export interface RedactionRestoreView {
   /** Whether a written document is repaired without asking. */
   readonly onWrite: boolean
-  /** Why the last write-back changed nothing, or null when the last one worked. */
+  /** Why the last write-back could not run at all, or null when it ran. */
   readonly lastError: string | null
+  /** What the last write-back found but left alone, such as an unmapped placeholder. */
+  readonly lastResult: string | null
   /** Placeholders replaced in files on disk since this process started. */
   readonly files: number
 }

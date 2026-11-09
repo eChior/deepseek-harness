@@ -287,8 +287,10 @@ export interface RedactionStatus {
 export interface RestoreStatus {
   /** Whether a file the model writes is repaired without asking. */
   readonly onWrite: boolean
-  /** Why the last write-back changed nothing, or null when the last one worked. */
+  /** Why the last write-back could not run at all, or null when it ran. */
   readonly lastError: string | null
+  /** What the last write-back found but left alone, such as an unmapped placeholder. */
+  readonly lastResult: string | null
   /** Files repaired since this process started. */
   readonly files: number
 }
@@ -497,7 +499,7 @@ export class RedactionService extends Service {
       ocr: this.visionStatus(),
       ocrMode: this.config.ocrMode,
       ocrBackend: this.backendValue,
-      restore: { onWrite: this.config.restoreOnWrite, lastError: null, files: 0 },
+      restore: { onWrite: this.config.restoreOnWrite, lastError: null, lastResult: null, files: 0 },
       numberScale: this.config.numberScale,
     }
     ctx.effect(() => {
@@ -1226,8 +1228,8 @@ export class RedactionService extends Service {
       ...this.current,
       restore: {
         onWrite: this.restoreOnWrite,
-        lastError: outcome.error
-          ?? (blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`),
+        lastError: outcome.error ?? null,
+        lastResult: blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`,
         files: this.current.restore.files + outcome.restored,
       },
     }
@@ -1307,8 +1309,8 @@ export class RedactionService extends Service {
       ...this.current,
       restore: {
         onWrite: this.restoreOnWrite,
-        lastError: outcome.error
-          ?? (blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`),
+        lastError: outcome.error ?? null,
+        lastResult: blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`,
         files: this.current.restore.files + outcome.restored,
       },
     }
