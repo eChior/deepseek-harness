@@ -96,45 +96,45 @@ async function loaded(includeRoster: boolean): Promise<Context> {
     vision: false,
     includeRoster,
   })
-  await ctx.redaction.load()
+  await ctx.veil.load()
   return ctx
 }
 
 describe('staff directory', () => {
   it('keeps the directory out of the rules but the published list in force', async () => {
     const ctx = await loaded(true)
-    expect(ctx.redaction.status.roster).toBe(0)
+    expect(ctx.veil.status.roster).toBe(0)
     // Names and departments pass through untouched now.
-    expect(ctx.redaction.redactText('张三')).toBe('张三')
-    expect(ctx.redaction.redactText('质量管理部')).toBe('质量管理部')
+    expect(ctx.veil.redactText('张三')).toBe('张三')
+    expect(ctx.veil.redactText('质量管理部')).toBe('质量管理部')
     // The published half is still in force.
-    expect(ctx.redaction.redactText('结晶温度')).not.toBe('结晶温度')
+    expect(ctx.veil.redactText('结晶温度')).not.toBe('结晶温度')
   })
 
   it('still identifies both colleagues for attribution', async () => {
     const ctx = await loaded(true)
-    expect(ctx.redaction.identify('张三')?.department).toBe('质量管理部')
-    expect(ctx.redaction.identify('李四')?.department).toBe('生产部')
-    expect(ctx.redaction.attributionFor('李四')).toEqual({ author: '李四', department: '生产部' })
+    expect(ctx.veil.identify('张三')?.department).toBe('质量管理部')
+    expect(ctx.veil.identify('李四')?.department).toBe('生产部')
+    expect(ctx.veil.attributionFor('李四')).toEqual({ author: '李四', department: '生产部' })
   })
 
   it('names the department of the colleague asking', async () => {
     const ctx = await loaded(true)
-    expect(ctx.redaction.identify('张三')?.department).toBe('质量管理部')
-    expect(ctx.redaction.identify(' 张三 ')?.employeeId).toBe('20792036')
-    expect(ctx.redaction.identify('王五')).toBeUndefined()
-    expect(ctx.redaction.attributionFor('张三')).toEqual({ author: '张三', department: '质量管理部' })
+    expect(ctx.veil.identify('张三')?.department).toBe('质量管理部')
+    expect(ctx.veil.identify(' 张三 ')?.employeeId).toBe('20792036')
+    expect(ctx.veil.identify('王五')).toBeUndefined()
+    expect(ctx.veil.attributionFor('张三')).toEqual({ author: '张三', department: '质量管理部' })
   })
 
   it('carries a name the directory does not list without inventing a department', async () => {
     const ctx = await loaded(true)
-    expect(ctx.redaction.attributionFor('外来人员')).toEqual({ author: '外来人员' })
-    expect(ctx.redaction.attributionFor('   ')).toEqual({})
+    expect(ctx.veil.attributionFor('外来人员')).toEqual({ author: '外来人员' })
+    expect(ctx.veil.attributionFor('   ')).toEqual({})
   })
 
   it('describes what the directory contributes', async () => {
     const ctx = await loaded(true)
-    expect(ctx.redaction.rosterSummary()).toEqual({
+    expect(ctx.veil.rosterSummary()).toEqual({
       enabled: true,
       revision: '2026-10-17',
       people: 2,
@@ -144,12 +144,12 @@ describe('staff directory', () => {
 
   it('contributes nothing when the deployment turns it off', async () => {
     const ctx = await loaded(false)
-    expect(ctx.redaction.status.roster).toBe(0)
-    expect(ctx.redaction.identify('张三')).toBeUndefined()
-    expect(ctx.redaction.rosterSummary().enabled).toBe(false)
-    expect(ctx.redaction.redactText('张三')).toBe('张三')
+    expect(ctx.veil.status.roster).toBe(0)
+    expect(ctx.veil.identify('张三')).toBeUndefined()
+    expect(ctx.veil.rosterSummary().enabled).toBe(false)
+    expect(ctx.veil.redactText('张三')).toBe('张三')
     // The published half does not depend on the directory being readable.
-    expect(ctx.redaction.redactText('结晶温度')).not.toBe('结晶温度')
+    expect(ctx.veil.redactText('结晶温度')).not.toBe('结晶温度')
   })
 
   it('keeps replacing from the published list when the directory cannot be opened', async () => {
@@ -168,9 +168,9 @@ describe('staff directory', () => {
       vision: false,
       includeRoster: true,
     })
-    await ctx.redaction.load()
-    expect(ctx.redaction.status.roster).toBe(0)
-    expect(ctx.redaction.status.detail).toBeNull()
-    expect(ctx.redaction.redactText('结晶温度')).not.toBe('结晶温度')
+    await ctx.veil.load()
+    expect(ctx.veil.status.roster).toBe(0)
+    expect(ctx.veil.status.detail).toBeNull()
+    expect(ctx.veil.redactText('结晶温度')).not.toBe('结晶温度')
   })
 })

@@ -503,7 +503,7 @@ export class SkillRepository extends Service {
     const profile = await account.getProfile(client).catch(() => undefined)
     const raw = profile?.value?.name
     if (typeof raw !== 'string' || raw === '') return { name: null, department: null }
-    const directory = this.ctx.get('redaction') as
+    const directory = this.ctx.get('veil') as
       { identify?: (account: string) => { department?: unknown } | undefined } | undefined
     const person = directory?.identify?.(raw)
     const department = person?.department

@@ -116,24 +116,24 @@ describe('the queue file', () => {
 describe('requests through the provider', () => {
   it('reports how many requests are waiting', async () => {
     const { ctx, directory } = await harness()
-    await ctx.redaction.requestTerm('结晶温度')
-    expect(ctx.redaction.status.pending).toBe(1)
-    expect((await ctx.redaction.pendingRequests()).length).toBe(1)
+    await ctx.veil.requestTerm('结晶温度')
+    expect(ctx.veil.status.pending).toBe(1)
+    expect((await ctx.veil.pendingRequests()).length).toBe(1)
     expect((await readTermRequests(directory)).length).toBe(1)
   })
 
   it('keeps every request when no destination is configured', async () => {
     const { ctx } = await harness()
-    await ctx.redaction.requestTerm('结晶温度')
-    const delivery = await ctx.redaction.deliverRequests()
+    await ctx.veil.requestTerm('结晶温度')
+    const delivery = await ctx.veil.deliverRequests()
     expect(delivery).toEqual({ sink: null, sent: 0, failed: 0, pending: 1 })
-    expect(ctx.redaction.status.pending).toBe(1)
+    expect(ctx.veil.status.pending).toBe(1)
   })
 
   it('settles what a sink takes and what it refuses', async () => {
     const { ctx } = await harness()
-    await ctx.redaction.requestTerm('结晶温度')
-    await ctx.redaction.requestTerm('偏差等级')
+    await ctx.veil.requestTerm('结晶温度')
+    await ctx.veil.requestTerm('偏差等级')
     const refused: string[] = []
     const sink: TermRequestSink = {
       name: 'test',
@@ -142,14 +142,14 @@ describe('requests through the provider', () => {
         refused.push(request.term)
       },
     }
-    const delivery = await ctx.redaction.deliverRequests(sink)
+    const delivery = await ctx.veil.deliverRequests(sink)
     expect(delivery).toEqual({ sink: 'test', sent: 1, failed: 1, pending: 0 })
     expect(refused).toEqual(['结晶温度'])
-    const stored = await ctx.redaction.pendingRequests()
+    const stored = await ctx.veil.pendingRequests()
     expect(stored.find(request => request.term === '结晶温度')?.state).toBe('uploaded')
     const failed = stored.find(request => request.term === '偏差等级')
     expect(failed?.state).toBe('rejected')
     expect(failed?.detail).toBe('issue tracker is down')
-    expect(ctx.redaction.status.pending).toBe(0)
+    expect(ctx.veil.status.pending).toBe(0)
   })
 })

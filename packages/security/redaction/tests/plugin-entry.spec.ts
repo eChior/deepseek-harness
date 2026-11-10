@@ -1,7 +1,7 @@
 /**
  * Cordis accepts a plugin only as a function or as an object carrying `apply`.
  * A module that exports the service class and forgets `apply` is rejected before
- * it registers anything — and because every consumer looks `ctx.redaction` up and
+ * it registers anything — and because every consumer looks `ctx.veil` up and
  * steps aside when it is undefined, that rejection is silent: no log line, no
  * failed gate, and a session log that keeps every value verbatim. The entry point
  * is asserted here rather than assumed.
@@ -55,9 +55,9 @@ describe('plugin entry point', () => {
       vision: false,
       includeRoster: false,
     })
-    await ctx.redaction.load()
-    expect(ctx.get('redaction')).toBeDefined()
-    expect(ctx.redaction.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
+    await ctx.veil.load()
+    expect(ctx.get('veil')).toBeDefined()
+    expect(ctx.veil.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
   })
 
   it('teaches the model to leave a placeholder verbatim', async () => {

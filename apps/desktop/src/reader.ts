@@ -130,7 +130,7 @@ export async function installBundledReader(options: {
   const archive = ARCHIVES[key]
   const executable = EXECUTABLES[key]
   if (archive === undefined || executable === undefined) return undefined
-  const directory = join(options.home, 'redaction', 'ocr')
+  const directory = join(options.home, 'veil', 'ocr')
   const target = join(directory, executable)
   const source = join(options.resources, archive)
   if (!existsSync(source)) {

@@ -339,7 +339,7 @@ export class SessionCommandController {
     // prompt. `prompt` mode additionally reads the text as the image arrives and
     // appends it; `tool` mode leaves the reading to the model, so no reader is
     // handed to the attachment store and no text is appended.
-    const redaction = this.ctx.get('redaction') as (LocalImageReader & { ocrMode?: 'tool' | 'prompt' }) | undefined
+    const redaction = this.ctx.get('veil') as (LocalImageReader & { ocrMode?: 'tool' | 'prompt' }) | undefined
     const imageReader = redaction?.ocrMode === 'prompt' ? redaction : undefined
     const sendsImages = hasImage && redaction === undefined
     const admit = async (): Promise<SessionPromptValue> => {

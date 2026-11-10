@@ -189,8 +189,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content.',
   },
   {
-    key: 'redaction',
-    pkg: 'redaction',
+    key: 'veil',
+    pkg: 'veil',
     title: 'Prompt redaction before message creation',
     mode: 'core',
     note: 'Rewrites the text of an admitted prompt into per-category placeholders while it is still a plain part list, before any caller can append it to a session; the replacement map stays in memory so no file on disk can restore a value.',

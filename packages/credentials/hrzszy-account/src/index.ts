@@ -185,7 +185,7 @@ export default class RworkAccount extends DeepSeekAccount {
 
   /** The department the roster attributes to a colleague name. */
   private departmentOf(name: string): string | null {
-    const redaction = this.ctx.get('redaction') as {
+    const redaction = this.ctx.get('veil') as {
       identify?: (account: string) => { department?: string } | undefined
     } | undefined
     return redaction?.identify?.(name)?.department ?? null

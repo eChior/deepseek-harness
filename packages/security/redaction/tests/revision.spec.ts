@@ -54,8 +54,8 @@ async function load(shipped: string, cached: { revision: string; term: string } 
   if (cached !== undefined) await cache(cacheDirectory, cached.revision, cached.term)
   const ctx = new Context()
   await ctx.plugin(entry, { termsPath, cacheDirectory, remote: '', refreshMinutes: 0, vision: false, includeRoster: false })
-  await ctx.redaction.load()
-  return ctx.redaction
+  await ctx.veil.load()
+  return ctx.veil
 }
 
 describe('term list revision ordering', () => {

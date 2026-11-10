@@ -47,7 +47,7 @@ async function mount(cache: string, termsPath: string): Promise<Context> {
     vision: false,
     includeRoster: false,
   })
-  await ctx.redaction.load()
+  await ctx.veil.load()
   return ctx
 }
 
@@ -69,7 +69,7 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
     onTestFinished(() => rm(directory, { recursive: true, force: true }))
     const ctx = await mount(cache, termsPath)
 
-    const placeholder = ctx.redaction.redactText('红霉素肠溶胶囊')
+    const placeholder = ctx.veil.redactText('红霉素肠溶胶囊')
     expect(placeholder).toBe('[产品-1]')
     const path = join(directory, 'notes.md')
     await writeFile(path, `# 记录\n\n产品是 ${placeholder}\n`, 'utf8')
@@ -84,7 +84,7 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
     onTestFinished(() => rm(directory, { recursive: true, force: true }))
     const ctx = await mount(cache, termsPath)
 
-    const placeholder = ctx.redaction.redactText('红霉素肠溶胶囊')
+    const placeholder = ctx.veil.redactText('红霉素肠溶胶囊')
     const path = join(directory, '报告.docx')
     const archive = zipSync({
       '[Content_Types].xml': new TextEncoder().encode('<Types/>'),
@@ -103,10 +103,10 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
     onTestFinished(() => rm(directory, { recursive: true, force: true }))
     const ctx = await mount(cache, termsPath)
 
-    const placeholder = ctx.redaction.redactText('红霉素肠溶胶囊')
+    const placeholder = ctx.veil.redactText('红霉素肠溶胶囊')
     const path = join(directory, 'notes.md')
     await writeFile(path, `产品是 ${placeholder}\n`, 'utf8')
-    ctx.redaction.setMappings(false)
+    ctx.veil.setMappings(false)
 
     await call(ctx, { path })
 
@@ -117,7 +117,7 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
     const { directory, cache, termsPath } = await scratch()
     onTestFinished(() => rm(directory, { recursive: true, force: true }))
     const ctx = await mount(cache, termsPath)
-    ctx.redaction.redactText('红霉素肠溶胶囊')
+    ctx.veil.redactText('红霉素肠溶胶囊')
 
     await expect(call(ctx, { path: join(directory, 'absent.docx') })).resolves.toBeUndefined()
   })
@@ -132,7 +132,7 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
     // to come back, so both older shapes are read the same way.
     const path = join(directory, 'legacy.md')
     await writeFile(path, '产品是 ⁠产品-1⁠ 和 产品-1。', 'utf8')
-    ctx.redaction.redactText('红霉素肠溶胶囊')
+    ctx.veil.redactText('红霉素肠溶胶囊')
 
     await call(ctx, { path })
 
@@ -148,7 +148,7 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
     // of the code the map holds, so all three spellings have to land.
     const path = join(directory, 'spaced.md')
     await writeFile(path, '[产品 1] 和 [产品- 1] 和 [产品 - 1]', 'utf8')
-    ctx.redaction.redactText('红霉素肠溶胶囊')
+    ctx.veil.redactText('红霉素肠溶胶囊')
 
     await call(ctx, { path })
 

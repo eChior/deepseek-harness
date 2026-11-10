@@ -142,7 +142,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   workspaceChanges: 'deliverables.md',
   terminalController: 'workspace.md',
   directoryPickerController: 'workspace.md',
-  redaction: 'session.md',
+  veil: 'session.md',
   skillRepo: 'skills.md',
 }
 

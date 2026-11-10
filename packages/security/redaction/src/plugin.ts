@@ -77,7 +77,7 @@ import type { VisionBox, VisionEngine } from './vision.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    redaction: RedactionService
+    veil: RedactionService
   }
 }
 
@@ -454,7 +454,7 @@ export class RedactionService extends Service {
   private readonly ready: Promise<void>
 
   constructor(ctx: Context, config: Config = {}) {
-    super(ctx, 'redaction')
+    super(ctx, 'veil')
     this.config = {
       termsPath: config.termsPath ?? TERMS_PATH,
       remote: config.remote ?? PUBLISHED_TERMS,
@@ -1488,7 +1488,6 @@ export class RedactionService extends Service {
     // not be appended twice.
     const fresh = all.slice(this.written)
     if (fresh.length === 0) return
-    this.written = all.length
     const directory = join(this.config.cacheDirectory, 'mappings')
     try {
       await mkdir(directory, { recursive: true })
@@ -1498,6 +1497,10 @@ export class RedactionService extends Service {
       if (key === undefined) return
       const body = fresh.map(entry => sealEntry(entry, key)).join('')
       await appendFile(join(directory, MAPPING_FILE), body, 'utf8')
+      // The cursor moves only once the pairs are on disk. Moving it first turns
+      // any failed write into a permanent loss: the entries stay in memory for
+      // this process, then vanish on the next launch with nothing to retry.
+      this.written = all.length
     } catch {
       // A mapping that cannot be written only costs the restore step; the
       // placeholders in the session stay in force and this process keeps

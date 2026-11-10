@@ -107,7 +107,7 @@ export function apply(ctx: Context): void {
    * @returns after the directory answered, or immediately when it did not.
    */
   const readAttribution = async (generation: number): Promise<void> => {
-    const directory = ctx.get('remote.redaction') as StaffDirectory | undefined
+    const directory = ctx.get('remote.veil') as StaffDirectory | undefined
     if (directory === undefined) return
     let person: AccountAttribution | undefined
     try {

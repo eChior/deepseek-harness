@@ -196,7 +196,7 @@ export function apply(ctx: Context): void {
   // pairing minted since the last read may have appeared.
   const viewingSession = createSnapshotStore<string | null>(null)
   const readUserPlaceholders = async (): Promise<void> => {
-    const redaction = ctx.get('remote.redaction') as
+    const redaction = ctx.get('remote.veil') as
       { entries?: () => Promise<unknown> } | undefined
     if (redaction?.entries === undefined) return
     try {

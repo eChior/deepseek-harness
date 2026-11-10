@@ -62,7 +62,7 @@ export interface RedactionStatusTabInjected {
 /** Full component props assembled by the Settings slot renderer. */
 export type RedactionStatusTabProps =
   PropsRuntime<'settings.plugins.tab'>
-  & PropsLocale<'settings.redaction'>
+  & PropsLocale<'settings.veil'>
   & InjectFace<RedactionStatusTabInjected>
 
 type Translate = RedactionStatusTabProps['t']

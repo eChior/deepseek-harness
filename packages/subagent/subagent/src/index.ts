@@ -453,7 +453,7 @@ export class SubagentRuntime extends TypertRemoteService {
         // instead of pixels the child's model would receive unredacted.
         content = await attachments.admitPromptContent(
           request.content,
-          this.ctx.get('redaction') as LocalImageReader | undefined,
+          this.ctx.get('veil') as LocalImageReader | undefined,
         )
       }
       return {

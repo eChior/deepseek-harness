@@ -64,13 +64,13 @@ const EXAMPLE_FILE = 'terms-local.example.yaml'
  */
 export class RedactionController extends TypertRemoteService {
   /** Required services: the provider to republish, and the account to attribute an upload to. */
-  static inject = ['redaction', 'deepseekAccount', 'agents']
+  static inject = ['veil', 'deepseekAccount', 'agents']
 
   /**
    * @param ctx - Host with the redaction provider and the account service mounted.
    */
   constructor(ctx: Context) {
-    super(ctx, 'redactionController', { namespace: 'redaction' })
+    super(ctx, 'redactionController', { namespace: 'veil' })
   }
 
   /**
@@ -82,8 +82,8 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   async status(): Promise<RedactionStatusView> {
-    await this.ctx.redaction.noteAccount(await this.accountName())
-    const view = this.ctx.redaction.status
+    await this.ctx.veil.noteAccount(await this.accountName())
+    const view = this.ctx.veil.status
     return Promise.resolve({
       enabled: view.enabled,
       revision: view.revision,
@@ -122,7 +122,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   async restoreSession(request: { readonly sessionId?: string }): Promise<RedactionRestorePassView> {
-    const outcome = await this.ctx.redaction.restoreSession(this.sessionDirectory(request.sessionId), request.sessionId)
+    const outcome = await this.ctx.veil.restoreSession(this.sessionDirectory(request.sessionId), request.sessionId)
     const view: RedactionRestorePassView = {
       restored: outcome.restored,
       files: outcome.files,
@@ -143,7 +143,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   setMappings(request: { readonly enabled: boolean }): Promise<{ readonly enabled: boolean }> {
-    return Promise.resolve({ enabled: this.ctx.redaction.setMappings(request.enabled) })
+    return Promise.resolve({ enabled: this.ctx.veil.setMappings(request.enabled) })
   }
 
   /**
@@ -157,7 +157,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   setNumberScale(request: { readonly scale: number }): { readonly numberScale: number } {
-    return { numberScale: this.ctx.redaction.setNumberScale(request.scale) }
+    return { numberScale: this.ctx.veil.setNumberScale(request.scale) }
   }
 
   /**
@@ -167,7 +167,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   setNumberScaleOn(request: { readonly enabled: boolean }): { readonly numberScaleOn: boolean } {
-    return { numberScaleOn: this.ctx.redaction.setNumberScaleOn(request.enabled) }
+    return { numberScaleOn: this.ctx.veil.setNumberScaleOn(request.enabled) }
   }
 
   /**
@@ -177,7 +177,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   setOcrMode(request: { readonly mode: 'tool' | 'prompt' }): { readonly ocrMode: 'tool' | 'prompt' } {
-    return { ocrMode: this.ctx.redaction.setOcrMode(request.mode) }
+    return { ocrMode: this.ctx.veil.setOcrMode(request.mode) }
   }
 
   /**
@@ -187,7 +187,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   setOcrBackend(request: { readonly backend: 'auto' | 'cpu' | 'gpu' }): { readonly ocrBackend: 'auto' | 'cpu' | 'gpu' } {
-    return { ocrBackend: this.ctx.redaction.setOcrBackend(request.backend) }
+    return { ocrBackend: this.ctx.veil.setOcrBackend(request.backend) }
   }
 
   /**
@@ -203,7 +203,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   entries(): Promise<readonly RedactionEntryView[]> {
-    return Promise.resolve(this.ctx.redaction.entries().map(entry => ({
+    return Promise.resolve(this.ctx.veil.entries().map(entry => ({
       placeholder: entry.placeholder,
       category: entry.category,
       original: entry.original,
@@ -217,10 +217,10 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   async roster(): Promise<RedactionRosterView> {
-    const summary = this.ctx.redaction.rosterSummary()
+    const summary = this.ctx.veil.rosterSummary()
     const account = await this.accountName()
-    await this.ctx.redaction.noteAccount(account)
-    const person = account === null ? undefined : this.ctx.redaction.identify(account)
+    await this.ctx.veil.noteAccount(account)
+    const person = account === null ? undefined : this.ctx.veil.identify(account)
     return {
       ...summary,
       account,
@@ -239,8 +239,8 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   async departments(): Promise<RedactionDepartmentView[]> {
-    await this.ctx.redaction.noteAccount(await this.accountName())
-    return this.ctx.redaction.departmentLists()
+    await this.ctx.veil.noteAccount(await this.accountName())
+    return this.ctx.veil.departmentLists()
   }
 
   /**
@@ -254,11 +254,11 @@ export class RedactionController extends TypertRemoteService {
     const parsed = DepartmentRequest.safeParse(request)
     if (!parsed.success) throw badRequest('setDepartment', parsed.error)
     try {
-      await this.ctx.redaction.setDepartmentEnabled(parsed.data.name, parsed.data.enabled)
+      await this.ctx.veil.setDepartmentEnabled(parsed.data.name, parsed.data.enabled)
     } catch (error) {
       throw rejected('setDepartment', error)
     }
-    const updated = this.ctx.redaction.departmentLists().find(entry => entry.name === parsed.data.name)
+    const updated = this.ctx.veil.departmentLists().find(entry => entry.name === parsed.data.name)
     if (updated === undefined) throw rejected('setDepartment', new Error(`no department list named ${parsed.data.name}`))
     return updated
   }
@@ -270,7 +270,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   async uploads(): Promise<RedactionUploadView[]> {
-    const files = await this.ctx.redaction.localFiles()
+    const files = await this.ctx.veil.localFiles()
     return files.map(file => present(file))
   }
 
@@ -286,9 +286,9 @@ export class RedactionController extends TypertRemoteService {
     const parsed = UploadRequest.safeParse(request)
     if (!parsed.success) throw badRequest('upload', parsed.error)
     const account = await this.accountName()
-    const attribution = account === null ? {} : this.ctx.redaction.attributionFor(account)
+    const attribution = account === null ? {} : this.ctx.veil.attributionFor(account)
     try {
-      return present(await this.ctx.redaction.importLocal(parsed.data.name, parsed.data.text, attribution))
+      return present(await this.ctx.veil.importLocal(parsed.data.name, parsed.data.text, attribution))
     } catch (error) {
       throw rejected('upload', error)
     }
@@ -309,7 +309,7 @@ export class RedactionController extends TypertRemoteService {
   async drop(request: { readonly name: string }): Promise<boolean> {
     const parsed = NameRequest.safeParse(request)
     if (!parsed.success) throw badRequest('drop', parsed.error)
-    return await this.ctx.redaction.removeLocal(parsed.data.name)
+    return await this.ctx.veil.removeLocal(parsed.data.name)
   }
 
   /**
@@ -323,7 +323,7 @@ export class RedactionController extends TypertRemoteService {
     const parsed = EnabledRequest.safeParse(request)
     if (!parsed.success) throw badRequest('setEnabled', parsed.error)
     try {
-      return present(await this.ctx.redaction.setLocalEnabled(parsed.data.name, parsed.data.enabled))
+      return present(await this.ctx.veil.setLocalEnabled(parsed.data.name, parsed.data.enabled))
     } catch (error) {
       throw rejected('setEnabled', error)
     }
@@ -336,7 +336,7 @@ export class RedactionController extends TypertRemoteService {
    */
   @Remote
   async example(): Promise<RedactionExampleView> {
-    return { name: EXAMPLE_FILE, text: await this.ctx.redaction.localExample() }
+    return { name: EXAMPLE_FILE, text: await this.ctx.veil.localExample() }
   }
 
   /**

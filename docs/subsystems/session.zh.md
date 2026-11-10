@@ -778,304 +778,6 @@ interface TurnEndReasonMap {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxredaction--redactionservice"></a>
-
-### `ctx.redaction` — `RedactionService`
-
-Rewrite the text of an admitted prompt into stable placeholders, so the values it replaced reach neither the session log nor a model request.
-
-```ts cordis-catalog
-/**
- * Turn the mapping write-back on or off for the rest of this process.
- * @param on - whether an ended session should leave a restorable table behind.
- * @returns The value now in force.
- */
-setMappings(on: boolean): boolean
-
-/**
- * Set the multiplier applied to quantities in what the model reads.
- *
- * One-way by design: nothing records the original, so a written file keeps
- * the scaled figure and no write-back undoes it. `1` turns the scaling off.
- * @param scale The multiplier, clamped to the range the page offers.
- * @returns The multiplier in force after the call.
- */
-setNumberScale(scale: number): number
-
-/**
- * Turn the numeric scale on or off without losing the chosen factor.
- * @param on - whether written documents carry scaled numbers.
- * @returns The switch as it now stands.
- */
-setNumberScaleOn(on: boolean): boolean
-
-/**
- * Switch whether a picture is read as it arrives or when the model asks.
- * @param mode - `tool` keeps the picture and waits; `prompt` reads it on arrival.
- * @returns the mode now in force.
- */
-setOcrMode(mode: 'tool' | 'prompt'): 'tool' | 'prompt'
-
-/**
- * Pick the device the reader runs on without rebuilding the plugin.
- * @param backend - `auto` measures once, `cpu` and `gpu` skip the measurement.
- * @returns the backend now in force.
- */
-setOcrBackend(backend: 'auto' | 'cpu' | 'gpu'): 'auto' | 'cpu' | 'gpu'
-
-/**
- * Load a term list and start refreshing it.
- *
- * The cached copy is preferred because it is the one this machine last saw a
- * publisher confirm, and the copy inside the package is the fallback for an
- * install that never reached the publisher — except when the package carries a
- * later revision, which is what an upgrade looks like. A refresh follows
- * whenever a list was loaded and the deployment tracks a repository.
- * @returns The status after the attempt; `detail` carries any failure reason.
- */
-async load(): Promise<RedactionStatus>
-
-/**
- * Ask the publisher for the list and adopt it when it changed.
- *
- * A refresh that fails or times out keeps the rules already in hand: a client
- * that cannot reach the repository must go on replacing what it replaced before,
- * which is the reason the list is cached at all.
- * @returns The status after the attempt; `lastError` carries a failure reason.
- */
-async refresh(): Promise<RedactionStatus>
-
-/** Read the uploaded lists and the staff directory, so a synchronous recompile can use both. */
-async reloadLocal(): Promise<void>
-
-/**
- * Rewrite the text parts. Parts that carry no text — images, file references,
- * anything this build does not understand — come back untouched, so a caller
- * can hand the result to the next stage exactly as it would have handed the
- * input.
- * @param parts Parts a caller is about to turn into a message.
- * @returns A new list in which every text part has been rewritten.
- */
-redact<T extends RedactablePart>(parts: readonly T[]): T[]
-
-/**
- * Rewrite one string, for callers holding text outside a part list.
- * @param text Text to rewrite.
- * @returns The rewritten text, or the input when no rule matched.
- */
-redactText(text: string): string
-
-/**
- * Rewrite every string inside a presentation payload.
- *
- * A UI renders the call from this payload and the session log keeps it, so a
- * value that survives here is readable in a transcript even when the model
- * never saw it.
- * @param value The payload, as the tool projected it.
- * @returns The same shape with every string rewritten.
- */
-redactValue(value: JsonValue): JsonValue
-
-/**
- * Read the text out of one encoded image on this machine and redact it.
- *
- * The image is decoded in memory and read by a local recognizer: it is never
- * stored, never returned, and never sent to a model, so a screenshot reaches
- * the session as the text it held and nothing else. A caller that gets
- * `undefined` reports the failure and keeps the image out of the session —
- * handing the pixels to the model is the one outcome this must not produce.
- * @param data The image as canonical base64.
- * @param mediaType Its media type, for the log.
- * @returns The redacted text, or `undefined` when no text could be read.
- */
-async recognizeImage(data: string, mediaType: string): Promise<string | undefined>
-
-/**
- * Read one encoded image on this machine and return its text with the
- * geometry of every line.
- *
- * `recognizeImage` answers a model that accepts text alone; this variant keeps
- * the line boxes so a caller that must place the text inside the picture can.
- * The pixels still never leave this machine, and every string is redacted
- * before it is returned, character boxes included.
- * @param data The image as canonical base64.
- * @param mediaType Its media type, for the log.
- * @param options - `characters: true` also reports one box per character.
- * @returns The redacted layout, or `undefined` when no text could be read.
- */
-async recognizeImageLayout( data: string, mediaType: string, options: { readonly characters?: boolean } = {}, ): Promise<ImageTextLayout | undefined>
-
-/**
- * Ask the publisher to add a term to the list.
- *
- * The request is queued on this machine first, so a machine that cannot reach
- * the publisher loses nothing by asking: the term waits in the queue file and
- * a later delivery carries it. A request never holds a value a session
- * matched — it is the missing term itself, which is what a publisher adds.
- * @param term - the term to add to the list.
- * @param note - why the term belongs in the list.
- * @returns The queued request.
- * @throws Error when the term breaks the shape a list entry can hold.
- */
-async requestTerm(term: string, note?: string): Promise<TermRequest>
-
-/**
- * Everything this machine has queued, oldest first.
- * @returns every request the queue file holds, whatever state each one is in.
- */
-async pendingRequests(): Promise<TermRequest[]>
-
-/**
- * Offer every pending request to a sink and record how each one ended.
- *
- * A sink is optional because the default deployment delivers nothing: the
- * queue exists so a machine can hold a request until someone wires a
- * destination, and this method is the seam that destination plugs into. A
- * request the sink refuses stays on disk as rejected with its reason, so the
- * next reader sees what happened instead of watching the entry disappear.
- * @param sink - destination to offer the requests to; omitted means none is configured.
- * @returns What the attempt did with the queue.
- */
-async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
-
-/**
- * Restore every document under a session directory, because the user asked.
- *
- * The automatic pass only hears about files an argument named. A model that
- * buries the output path inside a script leaves the file full of placeholders
- * and no argument to point at it, so the badge offers a button instead — this
- * is what it calls.
- * @param directory The session's working directory.
- * @param sessionId The session whose remembered documents to restore, when the
- * caller has one.
- * @returns how the pass went, for the badge to show.
- */
-async restoreSession(directory?: string, sessionId?: string): Promise<RestoreOutcome>
-
-/**
- * Tell the provider which department the signed-in colleague belongs to.
- *
- * Called whenever the account is read, so a list that belongs to this reader's
- * department takes part without them ticking anything; a no-op when the answer
- * has not changed, because recompiling on every status read would be wasteful.
- * @param account Account name the roster knows, or null while signed out.
- */
-async noteAccount(account: string | null): Promise<void>
-
-/**
- * Every department list this machine knows, with the state that explains it.
- * @returns One entry per list, ordered by department name.
- */
-departmentLists(): { name: string; enabled: boolean; own: boolean; terms: number; patterns: number; revision: string }[]
-
-/**
- * Switch one department list on or off for this reader.
- * @param name Department the list belongs to.
- * @param enabled Whether the list should take part.
- * @throws {LocalTermError} When no list is stored for that department.
- */
-async setDepartmentEnabled(name: string, enabled: boolean): Promise<void>
-
-/**
- * Every pairing the machine can restore right now, read back before answering.
- * @returns The entries the mapping file records, in the order they were written.
- */
-async mappingsFor(): Promise<readonly RedactionEntry[]>
-
-/**
- * Every pairing this machine can currently restore, for a reader that renders
- * session text to the user. The values are what the model must not see but the
- * user may: they cross to the browser that renders this machine's own sessions
- * and nowhere else.
- *
- * Includes what earlier processes wrote to a mapping file, because a session
- * outlives the process that wrote it and a reader coming back to an older
- * conversation must still be shown the originals behind its placeholders.
- * @returns Every restorable entry, this process's own first.
- */
-entries(): readonly RedactionEntry[]
-
-/**
- * Turn the placeholders a text carries back into the values they stand for.
- * @param text Text that may carry placeholders.
- * @returns The text with every placeholder it carries restored.
- */
-restore(text: string): string
-
-/**
- * Look one colleague up by the name the account service reports.
- * @param account Name as the signed-in account gives it.
- * @returns The directory entry, or undefined when the directory is off or lists nobody by that name.
- */
-identify(account: string): RosterPerson | undefined
-
-/**
- * The attribution an upload by this colleague should carry.
- *
- * The department is the one fact a colleague cannot be asked to type correctly
- * and the one fact the directory already knows, so an upload is stamped from
- * it; a name the directory does not list leaves the department empty rather
- * than guessing at one.
- * @param account Name as the signed-in account gives it.
- * @returns Author and, when the directory knows it, department.
- */
-attributionFor(account: string): { department?: string; author?: string }
-
-/**
- * What the staff directory contributes, for a page that has to describe it.
- * @returns Whether it is on, and how many colleagues and departments it lists.
- */
-rosterSummary(): { enabled: boolean; revision: string | null; people: number; departments: number }
-
-/**
- * List the lists uploaded on this machine, including the ones that do not compile.
- *
- * A file that reports problems is still listed: whoever wrote it has to see what
- * is wrong with it, and hiding it would leave them with a file they cannot find
- * and a rule that silently does nothing.
- * @returns One record per file, as last read.
- */
-async localFiles(): Promise<LocalTermFile[]>
-
-/**
- * Store one uploaded list and put it in force.
- * @param name File name the upload is stored under.
- * @param text The YAML a department wrote, in the format this provider reads.
- * @param attribution Department and person to name when the text names neither.
- * @returns What the stored file declares.
- * @throws LocalTermError when the text does not compile or the machine is full.
- */
-async importLocal(name: string, text: string, attribution: { department?: string; author?: string } = {}): Promise<LocalTermFile>
-
-/**
- * Drop one uploaded list and take its rules back out of force.
- * @param name File name as it was uploaded.
- * @returns True when a file was removed.
- */
-async removeLocal(name: string): Promise<boolean>
-
-/**
- * Turn one uploaded list on or off without touching what it declares.
- *
- * The published list has no such switch: it is the floor every install stands
- * on, and a client that could turn it off would spend part of its life
- * replacing nothing.
- * @param name File name as it was uploaded.
- * @param enabled Whether the list should take part.
- * @returns The stored file as it reads after the change.
- * @throws LocalTermError when no list is stored under that name.
- */
-async setLocalEnabled(name: string, enabled: boolean): Promise<LocalTermFile>
-
-/**
- * The upload template this build ships, for a department to start from.
- * @returns The template as YAML text.
- */
-async localExample(): Promise<string>
-```
-
-Source: [`packages/security/redaction/src/plugin.ts`](../../packages/security/redaction/src/plugin.ts)
-
 <a id="ctxsessioncontroller--sessioncontroller"></a>
 
 ### `ctx.sessionController` — `SessionController`
@@ -1397,6 +1099,304 @@ fork(source: SessionForkSource, boundary?: SessionSeq, childSessionId?: SessionI
 Types: [CreateSessionOptions](persistence.zh.md) · [PrepareSessionOptions](persistence.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/index.ts)
+
+<a id="ctxveil--redactionservice"></a>
+
+### `ctx.veil` — `RedactionService`
+
+Rewrite the text of an admitted prompt into stable placeholders, so the values it replaced reach neither the session log nor a model request.
+
+```ts cordis-catalog
+/**
+ * Turn the mapping write-back on or off for the rest of this process.
+ * @param on - whether an ended session should leave a restorable table behind.
+ * @returns The value now in force.
+ */
+setMappings(on: boolean): boolean
+
+/**
+ * Set the multiplier applied to quantities in what the model reads.
+ *
+ * One-way by design: nothing records the original, so a written file keeps
+ * the scaled figure and no write-back undoes it. `1` turns the scaling off.
+ * @param scale The multiplier, clamped to the range the page offers.
+ * @returns The multiplier in force after the call.
+ */
+setNumberScale(scale: number): number
+
+/**
+ * Turn the numeric scale on or off without losing the chosen factor.
+ * @param on - whether written documents carry scaled numbers.
+ * @returns The switch as it now stands.
+ */
+setNumberScaleOn(on: boolean): boolean
+
+/**
+ * Switch whether a picture is read as it arrives or when the model asks.
+ * @param mode - `tool` keeps the picture and waits; `prompt` reads it on arrival.
+ * @returns the mode now in force.
+ */
+setOcrMode(mode: 'tool' | 'prompt'): 'tool' | 'prompt'
+
+/**
+ * Pick the device the reader runs on without rebuilding the plugin.
+ * @param backend - `auto` measures once, `cpu` and `gpu` skip the measurement.
+ * @returns the backend now in force.
+ */
+setOcrBackend(backend: 'auto' | 'cpu' | 'gpu'): 'auto' | 'cpu' | 'gpu'
+
+/**
+ * Load a term list and start refreshing it.
+ *
+ * The cached copy is preferred because it is the one this machine last saw a
+ * publisher confirm, and the copy inside the package is the fallback for an
+ * install that never reached the publisher — except when the package carries a
+ * later revision, which is what an upgrade looks like. A refresh follows
+ * whenever a list was loaded and the deployment tracks a repository.
+ * @returns The status after the attempt; `detail` carries any failure reason.
+ */
+async load(): Promise<RedactionStatus>
+
+/**
+ * Ask the publisher for the list and adopt it when it changed.
+ *
+ * A refresh that fails or times out keeps the rules already in hand: a client
+ * that cannot reach the repository must go on replacing what it replaced before,
+ * which is the reason the list is cached at all.
+ * @returns The status after the attempt; `lastError` carries a failure reason.
+ */
+async refresh(): Promise<RedactionStatus>
+
+/** Read the uploaded lists and the staff directory, so a synchronous recompile can use both. */
+async reloadLocal(): Promise<void>
+
+/**
+ * Rewrite the text parts. Parts that carry no text — images, file references,
+ * anything this build does not understand — come back untouched, so a caller
+ * can hand the result to the next stage exactly as it would have handed the
+ * input.
+ * @param parts Parts a caller is about to turn into a message.
+ * @returns A new list in which every text part has been rewritten.
+ */
+redact<T extends RedactablePart>(parts: readonly T[]): T[]
+
+/**
+ * Rewrite one string, for callers holding text outside a part list.
+ * @param text Text to rewrite.
+ * @returns The rewritten text, or the input when no rule matched.
+ */
+redactText(text: string): string
+
+/**
+ * Rewrite every string inside a presentation payload.
+ *
+ * A UI renders the call from this payload and the session log keeps it, so a
+ * value that survives here is readable in a transcript even when the model
+ * never saw it.
+ * @param value The payload, as the tool projected it.
+ * @returns The same shape with every string rewritten.
+ */
+redactValue(value: JsonValue): JsonValue
+
+/**
+ * Read the text out of one encoded image on this machine and redact it.
+ *
+ * The image is decoded in memory and read by a local recognizer: it is never
+ * stored, never returned, and never sent to a model, so a screenshot reaches
+ * the session as the text it held and nothing else. A caller that gets
+ * `undefined` reports the failure and keeps the image out of the session —
+ * handing the pixels to the model is the one outcome this must not produce.
+ * @param data The image as canonical base64.
+ * @param mediaType Its media type, for the log.
+ * @returns The redacted text, or `undefined` when no text could be read.
+ */
+async recognizeImage(data: string, mediaType: string): Promise<string | undefined>
+
+/**
+ * Read one encoded image on this machine and return its text with the
+ * geometry of every line.
+ *
+ * `recognizeImage` answers a model that accepts text alone; this variant keeps
+ * the line boxes so a caller that must place the text inside the picture can.
+ * The pixels still never leave this machine, and every string is redacted
+ * before it is returned, character boxes included.
+ * @param data The image as canonical base64.
+ * @param mediaType Its media type, for the log.
+ * @param options - `characters: true` also reports one box per character.
+ * @returns The redacted layout, or `undefined` when no text could be read.
+ */
+async recognizeImageLayout( data: string, mediaType: string, options: { readonly characters?: boolean } = {}, ): Promise<ImageTextLayout | undefined>
+
+/**
+ * Ask the publisher to add a term to the list.
+ *
+ * The request is queued on this machine first, so a machine that cannot reach
+ * the publisher loses nothing by asking: the term waits in the queue file and
+ * a later delivery carries it. A request never holds a value a session
+ * matched — it is the missing term itself, which is what a publisher adds.
+ * @param term - the term to add to the list.
+ * @param note - why the term belongs in the list.
+ * @returns The queued request.
+ * @throws Error when the term breaks the shape a list entry can hold.
+ */
+async requestTerm(term: string, note?: string): Promise<TermRequest>
+
+/**
+ * Everything this machine has queued, oldest first.
+ * @returns every request the queue file holds, whatever state each one is in.
+ */
+async pendingRequests(): Promise<TermRequest[]>
+
+/**
+ * Offer every pending request to a sink and record how each one ended.
+ *
+ * A sink is optional because the default deployment delivers nothing: the
+ * queue exists so a machine can hold a request until someone wires a
+ * destination, and this method is the seam that destination plugs into. A
+ * request the sink refuses stays on disk as rejected with its reason, so the
+ * next reader sees what happened instead of watching the entry disappear.
+ * @param sink - destination to offer the requests to; omitted means none is configured.
+ * @returns What the attempt did with the queue.
+ */
+async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery>
+
+/**
+ * Restore every document under a session directory, because the user asked.
+ *
+ * The automatic pass only hears about files an argument named. A model that
+ * buries the output path inside a script leaves the file full of placeholders
+ * and no argument to point at it, so the badge offers a button instead — this
+ * is what it calls.
+ * @param directory The session's working directory.
+ * @param sessionId The session whose remembered documents to restore, when the
+ * caller has one.
+ * @returns how the pass went, for the badge to show.
+ */
+async restoreSession(directory?: string, sessionId?: string): Promise<RestoreOutcome>
+
+/**
+ * Tell the provider which department the signed-in colleague belongs to.
+ *
+ * Called whenever the account is read, so a list that belongs to this reader's
+ * department takes part without them ticking anything; a no-op when the answer
+ * has not changed, because recompiling on every status read would be wasteful.
+ * @param account Account name the roster knows, or null while signed out.
+ */
+async noteAccount(account: string | null): Promise<void>
+
+/**
+ * Every department list this machine knows, with the state that explains it.
+ * @returns One entry per list, ordered by department name.
+ */
+departmentLists(): { name: string; enabled: boolean; own: boolean; terms: number; patterns: number; revision: string }[]
+
+/**
+ * Switch one department list on or off for this reader.
+ * @param name Department the list belongs to.
+ * @param enabled Whether the list should take part.
+ * @throws {LocalTermError} When no list is stored for that department.
+ */
+async setDepartmentEnabled(name: string, enabled: boolean): Promise<void>
+
+/**
+ * Every pairing the machine can restore right now, read back before answering.
+ * @returns The entries the mapping file records, in the order they were written.
+ */
+async mappingsFor(): Promise<readonly RedactionEntry[]>
+
+/**
+ * Every pairing this machine can currently restore, for a reader that renders
+ * session text to the user. The values are what the model must not see but the
+ * user may: they cross to the browser that renders this machine's own sessions
+ * and nowhere else.
+ *
+ * Includes what earlier processes wrote to a mapping file, because a session
+ * outlives the process that wrote it and a reader coming back to an older
+ * conversation must still be shown the originals behind its placeholders.
+ * @returns Every restorable entry, this process's own first.
+ */
+entries(): readonly RedactionEntry[]
+
+/**
+ * Turn the placeholders a text carries back into the values they stand for.
+ * @param text Text that may carry placeholders.
+ * @returns The text with every placeholder it carries restored.
+ */
+restore(text: string): string
+
+/**
+ * Look one colleague up by the name the account service reports.
+ * @param account Name as the signed-in account gives it.
+ * @returns The directory entry, or undefined when the directory is off or lists nobody by that name.
+ */
+identify(account: string): RosterPerson | undefined
+
+/**
+ * The attribution an upload by this colleague should carry.
+ *
+ * The department is the one fact a colleague cannot be asked to type correctly
+ * and the one fact the directory already knows, so an upload is stamped from
+ * it; a name the directory does not list leaves the department empty rather
+ * than guessing at one.
+ * @param account Name as the signed-in account gives it.
+ * @returns Author and, when the directory knows it, department.
+ */
+attributionFor(account: string): { department?: string; author?: string }
+
+/**
+ * What the staff directory contributes, for a page that has to describe it.
+ * @returns Whether it is on, and how many colleagues and departments it lists.
+ */
+rosterSummary(): { enabled: boolean; revision: string | null; people: number; departments: number }
+
+/**
+ * List the lists uploaded on this machine, including the ones that do not compile.
+ *
+ * A file that reports problems is still listed: whoever wrote it has to see what
+ * is wrong with it, and hiding it would leave them with a file they cannot find
+ * and a rule that silently does nothing.
+ * @returns One record per file, as last read.
+ */
+async localFiles(): Promise<LocalTermFile[]>
+
+/**
+ * Store one uploaded list and put it in force.
+ * @param name File name the upload is stored under.
+ * @param text The YAML a department wrote, in the format this provider reads.
+ * @param attribution Department and person to name when the text names neither.
+ * @returns What the stored file declares.
+ * @throws LocalTermError when the text does not compile or the machine is full.
+ */
+async importLocal(name: string, text: string, attribution: { department?: string; author?: string } = {}): Promise<LocalTermFile>
+
+/**
+ * Drop one uploaded list and take its rules back out of force.
+ * @param name File name as it was uploaded.
+ * @returns True when a file was removed.
+ */
+async removeLocal(name: string): Promise<boolean>
+
+/**
+ * Turn one uploaded list on or off without touching what it declares.
+ *
+ * The published list has no such switch: it is the floor every install stands
+ * on, and a client that could turn it off would spend part of its life
+ * replacing nothing.
+ * @param name File name as it was uploaded.
+ * @param enabled Whether the list should take part.
+ * @returns The stored file as it reads after the change.
+ * @throws LocalTermError when no list is stored under that name.
+ */
+async setLocalEnabled(name: string, enabled: boolean): Promise<LocalTermFile>
+
+/**
+ * The upload template this build ships, for a department to start from.
+ * @returns The template as YAML text.
+ */
+async localExample(): Promise<string>
+```
+
+Source: [`packages/security/redaction/src/plugin.ts`](../../packages/security/redaction/src/plugin.ts)
 
 <a id="api-session-events"></a>
 

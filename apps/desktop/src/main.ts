@@ -257,7 +257,7 @@ app.whenReady().then(async () => {
   })
   // The sandbox child cannot reach a directory that names only the user, so
   // both trees it has to start a binary from gain the Everyone read grant.
-  for (const directory of [join(home, 'dsh-runtimes'), join(home, 'redaction', 'ocr')]) {
+  for (const directory of [join(home, 'dsh-runtimes'), join(home, 'veil', 'ocr')]) {
     grantRuntimeRead(directory, { log: (message) => { console.warn(message) } })
   }
 }).catch((error: unknown) => {

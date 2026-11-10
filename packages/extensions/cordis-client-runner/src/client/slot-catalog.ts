@@ -2643,7 +2643,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'settings.section\' (client-ui-settings-plugins), so it exists while that entry is mounted',
     occupants: [
       'client-ui-settings-plugin-inventory PluginInventorySettingsTab id \'all\'',
-      'client-ui-settings-redaction RedactionStatusTab id \'redaction\'',
+      'client-ui-settings-redaction RedactionStatusTab id \'veil\'',
       'client-ui-settings-skills SkillUploadTab id \'skills-upload\'',
     ],
     replaceRisk: 'none',

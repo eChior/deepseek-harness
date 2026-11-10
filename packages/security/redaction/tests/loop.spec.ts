@@ -54,7 +54,7 @@ async function harness(): Promise<Context> {
     vision: false,
     includeRoster: false,
   })
-  await ctx.redaction.load()
+  await ctx.veil.load()
   ctx.tools.register(defineContentToolFixture({
     name: 'lookup',
     description: 'look up one record',

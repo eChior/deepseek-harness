@@ -219,8 +219,8 @@ function pictureValue(path: string, outcome: ReadOutcome): ImageTextValue {
 /**
  * Register the `read_image_text` tool into the given context.
  * The composing plugin owns the redaction gate: `src/index.ts` calls this
- * inside `ctx.inject(['redaction'], …)` so the tool exists only while a local
- * reader is mounted. Execution still re-checks `ctx.get('redaction')` for
+ * inside `ctx.inject(['veil'], …)` so the tool exists only while a local
+ * reader is mounted. Execution still re-checks `ctx.get('veil')` for
  * direct callers.
  * @param ctx - the registration scope; execution uses its `fs`, `attachments`,
  *   and `sessions` services plus the optional `redaction` service.
@@ -336,7 +336,7 @@ export function applyReadImageTextTool(ctx: Context): void {
     // Recognition is a pure local read; two calls for one picture cannot conflict.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const reader = ctx.get('redaction') as LocalTextReader | undefined
+      const reader = ctx.get('veil') as LocalTextReader | undefined
       const attachments = ctx.get('attachments')
       const optionalPath = typeof args.file_path === 'string' ? args.file_path.trim() : ''
       const withCharacters = args.with_characters === true

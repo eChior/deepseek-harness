@@ -52,7 +52,7 @@ async function bench() {
   }
   new RemoteService(ctx)
   const status = vi.fn<() => Promise<StatusResult>>().mockResolvedValue({ ok: true, value: VIEW })
-  ctx.provide('remote.redaction', {
+  ctx.provide('remote.veil', {
     status,
     roster: vi.fn(),
     uploads: vi.fn(),
@@ -79,7 +79,7 @@ describe('ui-settings-redaction browser plugin', () => {
 
   it('declares only the services the Settings contribution reads', () => {
     // `configForms` carries the transcript view preference the badge writes.
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.redaction', 'sessions', 'configForms'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.veil', 'sessions', 'configForms'])
   })
 
   it('registers a localized tab without reading the Remote eagerly', async () => {
@@ -91,7 +91,7 @@ describe('ui-settings-redaction browser plugin', () => {
     expect(tabEntries).toHaveLength(1)
     const entry = tabEntries[0]!
     expect(entry.component).toBe(RedactionStatusTab)
-    expect(entry.options).toMatchObject({ id: 'redaction', order: 20 })
+    expect(entry.options).toMatchObject({ id: 'veil', order: 20 })
     expect(entry.locale).toBe(NS)
     expect(resolveSlotLabel(entry.options.label)).toBe('脱敏状态')
     expect(b.status).not.toHaveBeenCalled()

@@ -50,8 +50,8 @@ async function mount(cache: string, termsPath: string): Promise<Context> {
     vision: false,
     includeRoster: false,
   })
-  await ctx.redaction.load()
-  await ctx.redaction.reloadLocal()
+  await ctx.veil.load()
+  await ctx.veil.reloadLocal()
   return ctx
 }
 
@@ -60,48 +60,48 @@ describe('department lists', () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
 
-    expect(ctx.redaction.departmentLists()).toEqual([
+    expect(ctx.veil.departmentLists()).toEqual([
       { name: '研发部', enabled: false, own: false, terms: 1, patterns: 0, revision: '2026-10-28' },
     ])
-    expect(ctx.redaction.redactText('结晶温度偏高')).toBe('结晶温度偏高')
+    expect(ctx.veil.redactText('结晶温度偏高')).toBe('结晶温度偏高')
   })
 
   it('puts the list in force once it is ticked, and takes it out again', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
 
-    await ctx.redaction.setDepartmentEnabled('研发部', true)
-    expect(ctx.redaction.departmentLists()[0]?.enabled).toBe(true)
-    expect(ctx.redaction.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
+    await ctx.veil.setDepartmentEnabled('研发部', true)
+    expect(ctx.veil.departmentLists()[0]?.enabled).toBe(true)
+    expect(ctx.veil.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
 
-    await ctx.redaction.setDepartmentEnabled('研发部', false)
-    expect(ctx.redaction.redactText('结晶温度偏高')).toBe('结晶温度偏高')
+    await ctx.veil.setDepartmentEnabled('研发部', false)
+    expect(ctx.veil.redactText('结晶温度偏高')).toBe('结晶温度偏高')
   })
 
   it('keeps the tick for the next process', async () => {
     const { cache, termsPath } = await scratch()
     const first = await mount(cache, termsPath)
-    await first.redaction.setDepartmentEnabled('研发部', true)
+    await first.veil.setDepartmentEnabled('研发部', true)
     await first.fiber.dispose()
 
     const second = await mount(cache, termsPath)
-    expect(second.redaction.departmentLists()[0]?.enabled).toBe(true)
-    expect(second.redaction.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
+    expect(second.veil.departmentLists()[0]?.enabled).toBe(true)
+    expect(second.veil.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
   })
 
   it('refuses a name it never downloaded', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
 
-    await expect(ctx.redaction.setDepartmentEnabled('财务部', true)).rejects.toThrow('no department list named 财务部')
+    await expect(ctx.veil.setDepartmentEnabled('财务部', true)).rejects.toThrow('no department list named 财务部')
   })
 
   it('counts the lists in force in its status', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
-    expect(ctx.redaction.status.departments).toBe(0)
+    expect(ctx.veil.status.departments).toBe(0)
 
-    await ctx.redaction.setDepartmentEnabled('研发部', true)
-    expect(ctx.redaction.status.departments).toBe(1)
+    await ctx.veil.setDepartmentEnabled('研发部', true)
+    expect(ctx.veil.status.departments).toBe(1)
   })
 })

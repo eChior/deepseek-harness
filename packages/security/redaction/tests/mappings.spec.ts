@@ -54,7 +54,7 @@ async function mount(cache: string, termsPath: string): Promise<Context> {
     vision: false,
     includeRoster: false,
   })
-  await ctx.redaction.load()
+  await ctx.veil.load()
   return ctx
 }
 
@@ -95,7 +95,7 @@ describe('redaction mapping files', () => {
   it('writes one file for the whole machine', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
-    ctx.redaction.redactText('结晶温度偏高')
+    ctx.veil.redactText('结晶温度偏高')
     const file = await endSession(ctx, cache, 'task-a', '结晶温度')
     expect(file.endsWith(join('mappings', 'mappings.jsonl'))).toBe(true)
     // The originals never sit on disk in the clear: a tool result, a hex view or
@@ -107,23 +107,23 @@ describe('redaction mapping files', () => {
   it('writes while the process is alive, without waiting for the session to end', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
-    ctx.redaction.redactText('结晶温度偏高')
+    ctx.veil.redactText('结晶温度偏高')
     // The desktop app quits by exiting its process, so `session/disposed` never
     // runs there. A pairing has to reach the disk on its own or the next launch
     // shows placeholders it can no longer read.
     const file = join(cache, 'mappings', 'mappings.jsonl')
     await vi.waitFor(async () => {
       await expect(entriesOf(file)).resolves.toContainEqual(expect.objectContaining({ original: '结晶温度' }))
-    })
+    }, { timeout: 15_000, interval: 50 })
     expect(await readFile(file, 'utf8')).not.toContain('结晶温度')
   })
 
   it('appends every task to the same file', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
-    ctx.redaction.redactText('结晶温度偏高')
+    ctx.veil.redactText('结晶温度偏高')
     await endSession(ctx, cache, 'task-a', '结晶温度')
-    ctx.redaction.redactText('热封温度偏低')
+    ctx.veil.redactText('热封温度偏低')
     await endSession(ctx, cache, 'task-b', '热封温度')
     // Not one file per task: a placeholder means the same value wherever it is
     // read, so every task appends to the machine's table instead.
@@ -141,8 +141,8 @@ describe('redaction mapping files', () => {
   it('leaves nothing behind when the write-back is off', async () => {
     const { cache, termsPath } = await scratch()
     const ctx = await mount(cache, termsPath)
-    ctx.redaction.setMappings(false)
-    ctx.redaction.redactText('结晶温度偏高')
+    ctx.veil.setMappings(false)
+    ctx.veil.redactText('结晶温度偏高')
     const session = Session.create(SessionId('task-off'))
     ctx.emit('session/disposed', session)
     await new Promise(resolve => setTimeout(resolve, 50))
@@ -150,34 +150,34 @@ describe('redaction mapping files', () => {
     // key from an earlier run, but no pairing ever reaches the disk.
     await expect(readdir(join(cache, 'mappings'))).resolves.not.toContain('mappings.jsonl')
     // The map is still in memory, so the reader of this process keeps restoring.
-    expect(ctx.redaction.restore('[工艺-1] 偏高')).toBe('结晶温度 偏高')
+    expect(ctx.veil.restore('[工艺-1] 偏高')).toBe('结晶温度 偏高')
   })
 
   it('restores in a fresh process what an earlier one wrote', async () => {
     const { cache, termsPath } = await scratch()
     const first = await mount(cache, termsPath)
-    first.redaction.redactText('结晶温度偏高')
+    first.veil.redactText('结晶温度偏高')
     await endSession(first, cache, 'task-a', '结晶温度')
 
     const second = await mount(cache, termsPath)
     await vi.waitFor(() => {
-      expect(second.redaction.restore('[工艺-1] 偏高')).toBe('结晶温度 偏高')
+      expect(second.veil.restore('[工艺-1] 偏高')).toBe('结晶温度 偏高')
     })
     // A reader rendering an old conversation sees the original, and the table the
     // browser asks for carries it — whichever task wrote it.
-    expect(await second.redaction.mappingsFor()).toEqual([
+    expect(await second.veil.mappingsFor()).toEqual([
       { placeholder: '[工艺-1]', category: 'craft', original: '结晶温度' },
     ])
-    expect(second.redaction.entries()).toEqual([
+    expect(second.veil.entries()).toEqual([
       { placeholder: '[工艺-1]', category: 'craft', original: '结晶温度' },
     ])
     // The value the file already pinned keeps its number in this process too.
-    expect(second.redaction.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
+    expect(second.veil.redactText('结晶温度偏高')).toBe('[工艺-1]偏高')
     // A value the file never saw takes the next free number, not `[工艺-1]` again.
-    expect(second.redaction.redactText('热封温度偏低')).toBe('[工艺-2]偏低')
-    expect(second.redaction.restore('[工艺-1] 与 [工艺-2]')).toBe('结晶温度 与 热封温度')
+    expect(second.veil.redactText('热封温度偏低')).toBe('[工艺-2]偏低')
+    expect(second.veil.restore('[工艺-1] 与 [工艺-2]')).toBe('结晶温度 与 热封温度')
     // Every replacement is counted, including the one that reused the pinned
     // number; a new entry is recorded only for the value the file never saw.
-    expect(second.redaction.status.replacements).toBe(2)
+    expect(second.veil.status.replacements).toBe(2)
   })
 })

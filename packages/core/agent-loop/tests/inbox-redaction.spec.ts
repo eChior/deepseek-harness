@@ -76,7 +76,7 @@ async function wiredInbox(rawId: string): Promise<{ ctx: Context; inbox: ReactLo
     vision: false,
     includeRoster: false,
   })
-  await ctx.redaction.load()
+  await ctx.veil.load()
   const id = SessionId(rawId)
   const session = ctx.sessions.create(id)
   const agent = stubAgent(id, ctx, session)
@@ -84,7 +84,7 @@ async function wiredInbox(rawId: string): Promise<{ ctx: Context; inbox: ReactLo
     ctx.sessionProjections,
     session,
     agentEvents(ctx, agent),
-    message => rewriteMessage(ctx.get('redaction'), message),
+    message => rewriteMessage(ctx.get('veil'), message),
   )
   return { ctx, inbox }
 }
@@ -128,6 +128,6 @@ describe('inbox redaction', () => {
   it('restores a placeholder to the value this process saw', async () => {
     const { ctx, inbox } = await wiredInbox('redaction-restore')
     inbox.splice('next-turn', Infinity, 0, [userMessage('结晶温度 70 度')])
-    expect(ctx.redaction.restore('复查 [工艺-1] 的记录')).toBe('复查 结晶温度 的记录')
+    expect(ctx.veil.restore('复查 [工艺-1] 的记录')).toBe('复查 结晶温度 的记录')
   })
 })

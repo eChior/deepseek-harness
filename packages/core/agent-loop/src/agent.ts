@@ -188,7 +188,7 @@ export class ReactLoopAgent implements Agent {
    * @returns The message to queue; the input verbatim when no provider is loaded.
    */
   private rewriteIncoming(message: UserMessage): UserMessage {
-    return rewriteMessage(this.ctx.get('redaction') as TextPartRedactor | undefined, message)
+    return rewriteMessage(this.ctx.get('veil') as TextPartRedactor | undefined, message)
   }
 
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void {

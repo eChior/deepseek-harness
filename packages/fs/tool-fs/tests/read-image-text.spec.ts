@@ -40,7 +40,7 @@ class FakeReader extends Service {
   answer: string | undefined = '合同编号 AB12345678'
 
   constructor(ctx: Context) {
-    super(ctx, 'redaction')
+    super(ctx, 'veil')
     FakeReader.last = this
   }
 
@@ -76,7 +76,7 @@ class FakeReader extends Service {
 /** A stand-in for an older provider that answers text only, with no boxes. */
 class FakeTextOnlyReader extends Service {
   constructor(ctx: Context) {
-    super(ctx, 'redaction')
+    super(ctx, 'veil')
   }
 
   recognizeImage(): Promise<string | undefined> {

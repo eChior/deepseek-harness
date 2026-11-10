@@ -249,7 +249,7 @@ async function departmentKey(ctx: Context): Promise<string | undefined> {
   // Before anybody signs in, the deployment's fallback key keeps the route
   // usable; the department table decides again the moment a name is known.
   if (name === undefined) return account.qwenKeyFor(null)
-  const redaction = ctx.get('redaction') as {
+  const redaction = ctx.get('veil') as {
     identify?: (account: string) => { department?: string } | undefined
   } | undefined
   const department = redaction?.identify?.(name)?.department ?? null

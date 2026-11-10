@@ -63,7 +63,7 @@ export interface RedactionBadgeInjected {
 /** Full component props assembled by the composer slot renderer. */
 export type RedactionBadgeProps =
   PropsRuntime<'conversation.input.right'>
-  & PropsLocale<'settings.redaction'>
+  & PropsLocale<'settings.veil'>
   & InjectFace<RedactionBadgeInjected>
 
 /** Re-read interval for the placeholder table and the status, in milliseconds. */

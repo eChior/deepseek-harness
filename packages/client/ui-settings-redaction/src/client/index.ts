@@ -31,12 +31,12 @@ export type { RedactionLocaleKey } from './locales.ts'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Redaction page copy. */
-    'settings.redaction': RedactionLocaleKey
+    'settings.veil': RedactionLocaleKey
   }
 }
 
 /** Dictionary namespace owned by this plugin. */
-export const NS = 'settings.redaction'
+export const NS = 'settings.veil'
 
 /**
  * Services required by the Settings registration, the composer badge, and the
@@ -46,7 +46,7 @@ export const NS = 'settings.redaction'
  * preference through it, and a missing key would make that write throw inside
  * a click handler where nothing catches it.
  */
-export const inject = ['slots', 'locale', 'remote', 'remote.redaction', 'sessions', 'configForms']
+export const inject = ['slots', 'locale', 'remote', 'remote.veil', 'sessions', 'configForms']
 
 /** The Chat namespace holding the transcript view preference. */
 const CHAT_NAMESPACE = 'ui-chat'
@@ -67,7 +67,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-redaction: dictionaries')
 
   const t = ctx.locale.bind(NS)
-  const remote = ctx.remote.redaction
+  const remote = ctx.remote.veil
 
   const injected: RedactionStatusTabInjected = {
     status: async () => unwrap('status', await remote.status()),
@@ -83,7 +83,7 @@ export function apply(ctx: ClientContext): void {
     departments: async () => unwrap('departments', await remote.departments()),
     setDepartment: async request => unwrap('setDepartment', await remote.setDepartment(request)),
     example: async () => unwrap('example', await remote.example()),
-    saveOcrPath: async path => ctx.configForms.get<{ ocrPath?: string }>('redaction').set('ocrPath', path),
+    saveOcrPath: async path => ctx.configForms.get<{ ocrPath?: string }>('veil').set('ocrPath', path),
     saveOcrMode: async (mode) => {
       unwrap('ocrMode', await remote.setOcrMode({ mode }))
       return true
@@ -96,7 +96,7 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
     name: 'settings.plugins.tab',
-    id: 'redaction',
+    id: 'veil',
     order: 20,
     label: () => t('tab'),
     locale: NS,

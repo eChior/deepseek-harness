@@ -95,7 +95,7 @@ export function apply(ctx: Context, config: Config): void {
   // accepting pixels. `ctx.inject` keeps the registration and the service
   // lifetime in step, so unmounting the reader unmounts the tool.
   if (resolved.readImageText) {
-    ctx.inject(['redaction'], (readerCtx) => {
+    ctx.inject(['veil'], (readerCtx) => {
       applyReadImageTextTool(readerCtx)
     })
   }

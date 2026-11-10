@@ -45,11 +45,11 @@ const PLACEHOLDER_PROMPT = [
 ].join('\n')
 
 /**
- * Register the redaction service as `ctx.redaction`.
+ * Register the redaction service as `ctx.veil`.
  *
  * Cordis accepts a plugin only as a function or as an object carrying `apply`, so
  * a module that exports the service class alone is rejected before anything is
- * registered. The consumers that rewrite a message all look `ctx.redaction` up
+ * registered. The consumers that rewrite a message all look `ctx.veil` up
  * and step aside when it is undefined, which makes a missing registration silent
  * rather than loud — hence the export this entry point exists to provide.
  * @param ctx - Context the service is registered on.
