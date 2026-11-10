@@ -13,6 +13,8 @@
  * configuration names either, and no archive has to be unpacked to read one file.
  */
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { join as joinPath } from 'node:path'
+import { mappingKey, openText, sealText } from './mapping-file.ts'
 import { join } from 'node:path'
 
 /** Pointer file naming the cached revision. Lives beside the revisions it names. */
@@ -106,7 +108,10 @@ export async function readCachedTermList(directory: string): Promise<{ text: str
     const pointer = (await readFile(join(directory, CURRENT_POINTER), 'utf8')).trim()
     const path = cachedPath(directory, pointer)
     if (path === undefined) return undefined
-    return { text: await readFile(path, 'utf8'), path }
+    const body = await readFile(path, 'utf8')
+    // A list cached before this release sits in plain text; it still loads, and
+    // the next write seals it.
+    return { text: openText(body, termKey(directory)) ?? body, path }
   } catch {
     /* No pointer, no file, or an unreadable directory: the caller falls back to the bundled list. */
     return undefined
@@ -124,9 +129,10 @@ export async function readCachedTermList(directory: string): Promise<{ text: str
  */
 async function pruneCache(directory: string, current: string): Promise<void> {
   try {
+    // Only the revision in force is kept: an old list left on disk is a copy of
+    // the vocabulary nobody is reading.
     const names = (await readdir(directory)).filter(name => CACHED_TERM_FILE.test(name))
-    const newest = names.toSorted((left, right) => right.localeCompare(left)).slice(0, 2)
-    const stale = names.filter(name => name !== current && !newest.includes(name))
+    const stale = names.filter(name => name !== current)
     await Promise.all(stale.map(name => rm(join(directory, name), { force: true })))
   } catch {
     /* A cache that cannot be pruned still serves the revision it holds. */
@@ -144,7 +150,8 @@ export async function writeCachedTermList(config: TermSourceConfig, text: string
   await mkdir(config.directory, { recursive: true })
   const name = `terms-${revision.replace(/[^A-Za-z0-9._-]/gu, '_')}.yaml`
   const target = join(config.directory, name)
-  await writeFile(target, text, 'utf8')
+  const key = termKey(config.directory)
+  await writeFile(target, key === undefined ? text : sealText(text, key), 'utf8')
   await writeFile(join(config.directory, CURRENT_POINTER), `${name}\n`, 'utf8')
   await pruneCache(config.directory, name)
   return target
@@ -221,4 +228,16 @@ export async function fetchDepartmentText(config: TermSourceConfig, name: string
   const text = await response.text()
   if (text.trim() === '') throw new Error(`redaction: department ${name} is empty`)
   return text
+}
+
+/**
+ * The key sealing the cached vocabulary.
+ *
+ * It is the machine key the mappings use, so one directory holds the only
+ * secret an attacker would need and the lists beside it reveal nothing.
+ * @param directory Cache directory.
+ * @returns The key, or undefined when it cannot be created.
+ */
+function termKey(directory: string): Buffer | undefined {
+  return mappingKey(joinPath(directory, 'mappings'))
 }

@@ -81,6 +81,38 @@ export function sealEntry(entry: RedactionEntry, key: Buffer): string {
 }
 
 /**
+ * Seal a whole document with the machine key.
+ * @param text - the text a file should hold.
+ * @param key - the machine key.
+ * @returns One base64 line, iv and tag prefixed like a sealed entry.
+ */
+export function sealText(text: string, key: Buffer): string {
+  const iv = randomBytes(IV_BYTES)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const body = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
+  return Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64')
+}
+
+/**
+ * Open a document sealed by {@link sealText}.
+ * @param body - the file contents.
+ * @param key - the machine key.
+ * @returns The text, or undefined when this key does not open it.
+ */
+export function openText(body: string, key: Buffer | undefined): string | undefined {
+  if (key === undefined) return undefined
+  try {
+    const packed = Buffer.from(body.trim(), 'base64')
+    if (packed.length <= IV_BYTES + TAG_BYTES) return undefined
+    const decipher = createDecipheriv('aes-256-gcm', key, packed.subarray(0, IV_BYTES))
+    decipher.setAuthTag(packed.subarray(IV_BYTES, IV_BYTES + TAG_BYTES))
+    return Buffer.concat([decipher.update(packed.subarray(IV_BYTES + TAG_BYTES)), decipher.final()]).toString('utf8')
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * One entry recorded in a line, from a sealed line or a plaintext one an
  * earlier release wrote.
  * @param line - the line to open.
