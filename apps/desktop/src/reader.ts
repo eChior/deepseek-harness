@@ -11,10 +11,29 @@
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
 
 /** Archive each platform ships with, relative to the application's resources. */
+/**
+ * Where the download stands in for an archive the build left out.
+ * A machine outside the intranet simply fails here and keeps the
+ * status the settings page already explains.
+ */
+const READER_DOWNLOAD = 'http://10.151.5.175:3000/ITPublic/dsh-ocr/releases/download/v1.2.0'
+const DOWNLOAD_TIMEOUT_MS = 120_000
+
+/** Fetch one archive from the intranet, or nothing when it is out of reach. */
+async function downloadArchive(name: string): Promise<Buffer | undefined> {
+  try {
+    const response = await fetch(`${READER_DOWNLOAD}/${name}`, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) })
+    if (!response.ok) return undefined
+    return Buffer.from(await response.arrayBuffer())
+  } catch {
+    return undefined
+  }
+}
+
 const ARCHIVES: Readonly<Record<string, string>> = {
   'win32-x64': 'ocr/dsh-ocr-win-x64.zip',
   'linux-arm64': 'ocr/dsh-ocr-linux-arm64.zip',
@@ -130,14 +149,21 @@ export async function installBundledReader(options: {
   const archive = ARCHIVES[key]
   const executable = EXECUTABLES[key]
   if (archive === undefined || executable === undefined) return undefined
-  const directory = join(options.home, 'veil', 'ocr')
+  const directory = join(options.home, 'redaction', 'ocr')
   const target = join(directory, executable)
   const source = join(options.resources, archive)
-  if (!existsSync(source)) {
-    options.log?.(`redaction: the client ships no reader at ${source}`)
-    return undefined
+  let bytes: Buffer
+  if (existsSync(source)) {
+    bytes = readFileSync(source)
+  } else {
+    const fetched = await downloadArchive(basename(archive))
+    if (fetched === undefined) {
+      options.log?.(`redaction: the client ships no reader at ${source}`)
+      return undefined
+    }
+    options.log?.(`redaction: fetched the reader from ${READER_DOWNLOAD}`)
+    bytes = fetched
   }
-  const bytes = readFileSync(source)
   const fingerprint = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
   const stamp = join(directory, STAMP)
   if (existsSync(target) && recordedStamp(stamp) === fingerprint) return target
