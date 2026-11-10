@@ -33,7 +33,7 @@ Mount it beside the provider. It requires the `skillRepo` service and registers 
 ## Further Exploration
 
 - [skill-repo](../../skill/skill-repo/README.md) — the provider that lists local skills and publishes one.
-- [redaction-controller](../redaction-controller/README.md) — the neighbouring Remote owner, which is the shape this one follows.
+- [veil-controller](../veil-controller/README.md) — the neighbouring Remote owner, which is the shape this one follows.
 - [remotes](../remotes/README.md) — the client assembly that mounts this namespace.
 - [typert](../../typert/protocol/README.md) — the protocol both faces generate from.
 

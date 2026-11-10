@@ -106,7 +106,7 @@
       "path": "../account-controller"
     },
     {
-      "path": "../redaction-controller"
+      "path": "../veil-controller"
     },
     {
       "path": "../../credentials/deepseek-account"

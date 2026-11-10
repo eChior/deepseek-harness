@@ -359,7 +359,7 @@
     # over-matches is corrected where the list is published, which reaches every
     # machine on its own refresh rather than needing a reinstall or an edit here.
     - id: redaction
-      name: '@deepseek-ai/dsh-redaction'
+      name: '@deepseek-ai/dsh-veil'
 
     - id: skill
       name: '@deepseek-ai/dsh-skill'

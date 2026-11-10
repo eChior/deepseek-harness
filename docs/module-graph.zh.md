@@ -122,12 +122,12 @@ flowchart TD
     pkg_api_account_controller["api-account-controller"]
     pkg_api_gateway["api-gateway"]
     pkg_api_job_controller["api-job-controller"]
-    pkg_api_redaction_controller["api-redaction-controller"]
     pkg_api_remotes["api-remotes"]
     pkg_api_session_controller["api-session-controller"]
     pkg_api_settings_controller["api-settings-controller"]
     pkg_api_skill_repo_controller["api-skill-repo-controller"]
     pkg_api_terminal_controller["api-terminal-controller"]
+    pkg_api_veil_controller["api-veil-controller"]
     pkg_api_workspace_controller["api-workspace-controller"]
     pkg_api_workspace_files["api-workspace-files"]
   end
@@ -196,11 +196,11 @@ flowchart TD
     pkg_client_ui_settings_models["client-ui-settings-models"]
     pkg_client_ui_settings_plugin_inventory["client-ui-settings-plugin-inventory"]
     pkg_client_ui_settings_plugins["client-ui-settings-plugins"]
-    pkg_client_ui_settings_redaction["client-ui-settings-redaction"]
     pkg_client_ui_settings_session_log["client-ui-settings-session-log"]
     pkg_client_ui_settings_shell["client-ui-settings-shell"]
     pkg_client_ui_settings_skills["client-ui-settings-skills"]
     pkg_client_ui_settings_subagent["client-ui-settings-subagent"]
+    pkg_client_ui_settings_veil["client-ui-settings-veil"]
     pkg_client_ui_settings_web_search["client-ui-settings-web-search"]
     pkg_client_ui_shortcuts["client-ui-shortcuts"]
     pkg_client_ui_sidebar["client-ui-sidebar"]
@@ -352,7 +352,7 @@ flowchart TD
     pkg_sdk_protocol["sdk-protocol"]
   end
   subgraph group_security["packages/security"]
-    pkg_redaction["redaction"]
+    pkg_veil["veil"]
   end
   subgraph group_session["packages/session"]
     pkg_session_checkpoint_policy["session-checkpoint-policy"]
@@ -957,8 +957,8 @@ flowchart TD
   pkg_agent_preset_registry --> pkg_system_prompt
   pkg_agent_preset_registry --> pkg_tools
   pkg_agent_preset_registry --> pkg_typert_protocol
-  pkg_redaction --> pkg_system_prompt
-  pkg_redaction --> pkg_tools
+  pkg_veil --> pkg_system_prompt
+  pkg_veil --> pkg_tools
   pkg_session_checkpoint_policy --> pkg_agent
   pkg_session_checkpoint_policy --> pkg_llm
   pkg_session_checkpoint_policy --> pkg_session
@@ -1033,16 +1033,16 @@ flowchart TD
   pkg_session_query --> pkg_session_projection_cache
   pkg_session_query --> pkg_session_title
   pkg_session_query --> pkg_tool_todo
-  pkg_api_redaction_controller --> pkg_agent
-  pkg_api_redaction_controller --> pkg_deepseek_account
-  pkg_api_redaction_controller --> pkg_redaction
-  pkg_api_redaction_controller --> pkg_typert_protocol
   pkg_api_settings_controller --> pkg_agent_preset_registry
   pkg_api_settings_controller --> pkg_credentials
   pkg_api_settings_controller --> pkg_native_command
   pkg_api_settings_controller --> pkg_session
   pkg_api_settings_controller --> pkg_settings
   pkg_api_settings_controller --> pkg_typert_protocol
+  pkg_api_veil_controller --> pkg_agent
+  pkg_api_veil_controller --> pkg_deepseek_account
+  pkg_api_veil_controller --> pkg_typert_protocol
+  pkg_api_veil_controller --> pkg_veil
   pkg_web_app --> pkg_shell_env
   pkg_web_app --> pkg_system_prompt
   pkg_experimental_auto_review --> pkg_agent
@@ -1467,11 +1467,11 @@ flowchart TD
 | [`client-ui-settings-models`](../packages/client/ui-settings-models) | `client` | — |
 | [`client-ui-settings-plugin-inventory`](../packages/client/ui-settings-plugin-inventory) | `client` | — |
 | [`client-ui-settings-plugins`](../packages/client/ui-settings-plugins) | `client` | — |
-| [`client-ui-settings-redaction`](../packages/client/ui-settings-redaction) | `client` | — |
 | [`client-ui-settings-session-log`](../packages/client/ui-settings-session-log) | `client` | — |
 | [`client-ui-settings-shell`](../packages/client/ui-settings-shell) | `client` | — |
 | [`client-ui-settings-skills`](../packages/client/ui-settings-skills) | `client` | — |
 | [`client-ui-settings-subagent`](../packages/client/ui-settings-subagent) | `client` | — |
+| [`client-ui-settings-veil`](../packages/client/ui-settings-veil) | `client` | — |
 | [`client-ui-settings-web-search`](../packages/client/ui-settings-web-search) | `client` | — |
 | [`client-ui-shortcuts`](../packages/client/ui-shortcuts) | `client` | — |
 | [`client-ui-sidebar`](../packages/client/ui-sidebar) | `client` | — |
@@ -1660,7 +1660,7 @@ flowchart TD
 | [`tool-lsp`](../packages/lsp/tool-lsp) | `lsp` | [`llm`](../packages/llm/llm), [`lsp`](../packages/lsp/lsp), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`mcp-resources`](../packages/mcp/mcp-resources) | `mcp` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`agent-preset-registry`](../packages/preset/agent-preset-registry) | `preset` | [`agent`](../packages/core/agent), [`invariants`](../packages/runtime-diagnostics/invariants), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`settings`](../packages/settings/settings), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
-| [`redaction`](../packages/security/redaction) | `security` | [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
+| [`veil`](../packages/security/veil) | `security` | [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`session-checkpoint-policy`](../packages/session/session-checkpoint-policy) | `session` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`tools`](../packages/core/tools) |
 | [`session-title-all-prompts-llm`](../packages/session/session-title-all-prompts-llm) | `session` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`session-title-llm`](../packages/session/session-title-llm) |
 | [`session-title-first-prompt-llm`](../packages/session/session-title-first-prompt-llm) | `session` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`session-title-llm`](../packages/session/session-title-llm) |
@@ -1674,8 +1674,8 @@ flowchart TD
 | [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | `llm` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions), [`session`](../packages/core/session) |
 | [`token-meter`](../packages/llm/token-meter) | `llm` | [`compaction`](../packages/compaction/compaction), [`compaction-image-offload`](../packages/compaction/compaction-image-offload), [`llm`](../packages/llm/llm), [`llm-retry`](../packages/llm/llm-retry), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |
 | [`session-query`](../packages/session-query/session-query) | `session-query` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`session-projection-cache`](../packages/session/session-projection-cache), [`session-title`](../packages/session/session-title), [`tool-todo`](../packages/todo/tool-todo) |
-| [`api-redaction-controller`](../packages/api/redaction-controller) | `api` | [`agent`](../packages/core/agent), [`deepseek-account`](../packages/credentials/deepseek-account), [`redaction`](../packages/security/redaction), [`typert-protocol`](../packages/typert/protocol) |
 | [`api-settings-controller`](../packages/api/settings-controller) | `api` | [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`credentials`](../packages/credentials/credentials), [`native-command`](../packages/util/native-command), [`session`](../packages/core/session), [`settings`](../packages/settings/settings), [`typert-protocol`](../packages/typert/protocol) |
+| [`api-veil-controller`](../packages/api/veil-controller) | `api` | [`agent`](../packages/core/agent), [`deepseek-account`](../packages/credentials/deepseek-account), [`typert-protocol`](../packages/typert/protocol), [`veil`](../packages/security/veil) |
 | [`web-app`](../packages/bundle/web-app) | `bundle` | [`shell-env`](../packages/shell/shell-env), [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-auto-review`](../packages/experimental/auto-review) | `experimental` | [`agent`](../packages/core/agent), [`agent-instructions`](../packages/context/agent-instructions), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`session`](../packages/core/session), [`tools`](../packages/core/tools) |
 | [`tool-cordis`](../packages/extensions/tool-cordis) | `extensions` | [`agent`](../packages/core/agent), [`app-boot`](../packages/boot/app-boot), [`cordis-host-runner`](../packages/extensions/cordis-host-runner), [`tools`](../packages/core/tools) |

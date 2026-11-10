@@ -63,7 +63,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/browser-use-runtime': { kind: 'indirect', reason: 'Browser providers call the library to own resources and expose upstream MCP tools.' },
   'packages/computer-use/computer-use': { kind: 'none', reason: 'The registry only reserves provider names; providers own all model-facing tools and guidance.' },
   'packages/document/office-to-pdf': { kind: 'none', reason: 'The provider returns PDF bytes without constructing model input.' },
-  'packages/security/redaction': { kind: 'indirect', reason: 'The provider rewrites text a consumer already assembled; the consuming plugin owns when the rewrite is applied.' },
+  'packages/security/veil': { kind: 'indirect', reason: 'The provider rewrites text a consumer already assembled; the consuming plugin owns when the rewrite is applied.' },
   'packages/api/skill-repo-controller': { kind: 'none', reason: 'The controller only answers settings-page calls: publishing copies a skill directory into the repository and never assembles model input.' },
   'packages/client/ui-settings-skills': { kind: 'none', reason: 'The tab only lists local skills and asks the host to publish one, so nothing here reaches a prompt or a model request.' },
 
@@ -71,9 +71,9 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/credentials/deepseek-account-platform': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
   'packages/credentials/hrzszy-account': { kind: 'none', reason: 'The identity gateway registers no model context or tools; the session cookie affects host HTTP authentication only.' },
   'packages/api/account-controller': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
-  'packages/api/redaction-controller': { kind: 'none', reason: 'The namespace republishes the provider record, which counts rewrites and never carries the text that was rewritten.' },
+  'packages/api/veil-controller': { kind: 'none', reason: 'The namespace republishes the provider record, which counts rewrites and never carries the text that was rewritten.' },
   'packages/client/ui-settings-account': { kind: 'none', reason: 'Account authorization registers no model context or tools; credentials affect HTTP authentication only.' },
-  'packages/client/ui-settings-redaction': { kind: 'none', reason: 'The tab reads the provider status over Remote and renders it in the browser; it registers nothing model-facing.' },
+  'packages/client/ui-settings-veil': { kind: 'none', reason: 'The tab reads the provider status over Remote and renders it in the browser; it registers nothing model-facing.' },
 
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },

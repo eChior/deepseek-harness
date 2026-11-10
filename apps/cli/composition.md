@@ -112,7 +112,7 @@ flowchart LR
   cfg --> plugin_dsh_base_tool_fs_search
   plugin_dsh_base_agent_instructions["agent-instructions<br/>@deepseek-ai/dsh-agent-instructions"]
   cfg --> plugin_dsh_base_agent_instructions
-  plugin_dsh_base_redaction["redaction<br/>@deepseek-ai/dsh-redaction"]
+  plugin_dsh_base_redaction["redaction<br/>@deepseek-ai/dsh-veil"]
   cfg --> plugin_dsh_base_redaction
   plugin_dsh_base_skill["skill<br/>@deepseek-ai/dsh-skill"]
   cfg --> plugin_dsh_base_skill
@@ -260,7 +260,7 @@ flowchart LR
 | `tool-fs` | `@deepseek-ai/dsh-tool-fs` |
 | `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` |
 | `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` |
-| `redaction` | `@deepseek-ai/dsh-redaction` |
+| `redaction` | `@deepseek-ai/dsh-veil` |
 | `skill` | `@deepseek-ai/dsh-skill` |
 | `skill-repo` | `@deepseek-ai/dsh-skill-repo` |
 | `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` |

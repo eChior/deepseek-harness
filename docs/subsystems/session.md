@@ -1392,7 +1392,7 @@ async setLocalEnabled(name: string, enabled: boolean): Promise<LocalTermFile>
 async localExample(): Promise<string>
 ```
 
-Source: [`packages/security/redaction/src/plugin.ts`](../../packages/security/redaction/src/plugin.ts)
+Source: [`packages/security/veil/src/plugin.ts`](../../packages/security/veil/src/plugin.ts)
 
 <a id="api-session-events"></a>
 

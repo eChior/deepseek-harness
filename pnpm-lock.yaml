@@ -1159,7 +1159,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/registry
 
-  packages/api/redaction-controller:
+  packages/api/veil-controller:
     dependencies:
       zod:
         specifier: ^4.4.3
@@ -1174,9 +1174,9 @@ importers:
       '@deepseek-ai/dsh-deepseek-account':
         specifier: workspace:*
         version: link:../../credentials/deepseek-account
-      '@deepseek-ai/dsh-redaction':
+      '@deepseek-ai/dsh-veil':
         specifier: workspace:*
-        version: link:../../security/redaction
+        version: link:../../security/veil
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol
@@ -1211,9 +1211,9 @@ importers:
       '@deepseek-ai/dsh-api-job-controller':
         specifier: workspace:*
         version: link:../job-controller
-      '@deepseek-ai/dsh-api-redaction-controller':
+      '@deepseek-ai/dsh-api-veil-controller':
         specifier: workspace:*
-        version: link:../redaction-controller
+        version: link:../veil-controller
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:*
         version: link:../session-controller
@@ -2078,9 +2078,9 @@ importers:
       '@deepseek-ai/dsh-pwsh-sandbox':
         specifier: workspace:*
         version: link:../../shell/pwsh-sandbox
-      '@deepseek-ai/dsh-redaction':
+      '@deepseek-ai/dsh-veil':
         specifier: workspace:*
-        version: link:../../security/redaction
+        version: link:../../security/veil
       '@deepseek-ai/dsh-repeat-tool-reminder':
         specifier: workspace:*
         version: link:../../guard/repeat-tool-reminder
@@ -2436,9 +2436,9 @@ importers:
       '@deepseek-ai/dsh-api-job-controller':
         specifier: workspace:*
         version: link:../../api/job-controller
-      '@deepseek-ai/dsh-api-redaction-controller':
+      '@deepseek-ai/dsh-api-veil-controller':
         specifier: workspace:*
-        version: link:../../api/redaction-controller
+        version: link:../../api/veil-controller
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -2580,9 +2580,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings-plugins':
         specifier: workspace:*
         version: link:../../client/ui-settings-plugins
-      '@deepseek-ai/dsh-client-ui-settings-redaction':
+      '@deepseek-ai/dsh-client-ui-settings-veil':
         specifier: workspace:*
-        version: link:../../client/ui-settings-redaction
+        version: link:../../client/ui-settings-veil
       '@deepseek-ai/dsh-client-ui-settings-session-log':
         specifier: workspace:*
         version: link:../../client/ui-settings-session-log
@@ -5128,14 +5128,14 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1
 
-  packages/client/ui-settings-redaction:
+  packages/client/ui-settings-veil:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-api-redaction-controller':
+      '@deepseek-ai/dsh-api-veil-controller':
         specifier: workspace:*
-        version: link:../../api/redaction-controller
+        version: link:../../api/veil-controller
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -7053,9 +7053,9 @@ importers:
       '@deepseek-ai/dsh-llm-pi-ai':
         specifier: workspace:*
         version: link:../../llm/llm-pi-ai
-      '@deepseek-ai/dsh-redaction':
+      '@deepseek-ai/dsh-veil':
         specifier: workspace:*
-        version: link:../../security/redaction
+        version: link:../../security/veil
       '@deepseek-ai/dsh-scope':
         specifier: workspace:*
         version: link:../scope
@@ -10789,7 +10789,7 @@ importers:
         specifier: workspace:*
         version: link:../../subagent/subagent
 
-  packages/security/redaction:
+  packages/security/veil:
     dependencies:
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:*

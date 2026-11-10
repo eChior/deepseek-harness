@@ -35,7 +35,7 @@ The plugin registers one slot and one dictionary. `SkillUploadTab` holds the lis
 - [skill-repo](../../skill/skill-repo/README.md) — the provider that reads the local skills and writes them into the repository.
 - [skill-repo-controller](../../api/skill-repo-controller/README.md) — the Host side republishing that call over the `skillRepo` namespace.
 - [ui-settings](../ui-settings/README.md) — the domain base declaring `settings.plugins.tab`.
-- [ui-settings-redaction](../ui-settings-redaction/README.md) — the neighbouring tab, which is the shape this one follows.
+- [ui-settings-redaction](../ui-settings-veil/README.md) — the neighbouring tab, which is the shape this one follows.
 
 -----
 

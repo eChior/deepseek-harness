@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/security/veil/ocr/README.md
+/dsh-ocr-the-optional-local-image-reader:
+  en: f0912c50038115b0
+  zh: 5bd199e2d40e7bc7
+/dsh-ocr-the-optional-local-image-reader/the-contract:
+  en: 439f80c7203c074e
+  zh: 920a8af4ac983568
+/dsh-ocr-the-optional-local-image-reader/the-contract/serving-several-images:
+  en: 808e031f51945e20
+  zh: e9b39c4de687dcdb
+/dsh-ocr-the-optional-local-image-reader/building-it:
+  en: 0ddd8f2f59f5c50d
+  zh: 0117d0e8a0ebf25d
+/dsh-ocr-the-optional-local-image-reader/which-device-it-runs-on:
+  en: d2f32ca3d5150d50
+  zh: eef2c75b93a9aa3f
+/dsh-ocr-the-optional-local-image-reader/publishing-it:
+  en: 39c0ac542f1548a7
+  zh: de1e2952fc8a18be
+/dsh-ocr-the-optional-local-image-reader/why-paddleocr-and-not-the-platform-engine:
+  en: c4b456ee694cc765
+  zh: 1e5d2ad5780f65c1

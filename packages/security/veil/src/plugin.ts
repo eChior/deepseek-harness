@@ -1,0 +1,1751 @@
+/**
+ * The redaction provider: rewrite the text of a prompt before the harness turns
+ * it into a message, and read the text out of an image on this machine.
+ *
+ * The harness writes a message into the session log the moment it is accepted,
+ * and that log is plain text the model itself can read back. Redacting at the
+ * model boundary would therefore be too late — the value would already be on
+ * disk. This provider exists so the rewrite happens while the prompt is still an
+ * admission result, before any caller can append it anywhere.
+ *
+ * The replacement map is deliberately in memory only. Persisting it would turn
+ * one file into the complete plaintext of everything this feature protects.
+ *
+ * Rules come from a list a deployment publishes in a repository, so a term added
+ * there reaches every client within one refresh interval. What each machine keeps
+ * is a copy of the list, never of the values it matched: losing the copy only
+ * means falling back to the list inside this package.
+ */
+import { Buffer } from 'node:buffer'
+import { Context, Service } from '@deepseek-ai/cordis'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import z from '@deepseek-ai/schemastery'
+import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  listLocalTermFiles,
+  readLocalTermLists,
+  removeLocalTermFile,
+  setLocalTermEnabled,
+  stampAttribution,
+  writeLocalTermFile,
+  LocalTermError,
+  type LocalTermFile,
+  type LocalTermList,
+} from './local.ts'
+import {
+  DOCUMENT_EXTENSIONS,
+  documentsInDirectory,
+  documentPaths,
+  type Confine,
+  restoreDocuments,
+  type DocumentMapping,
+  type RestoreOutcome,
+} from './documents.ts'
+import {
+  departmentNamesOf,
+  departmentNameOf,
+  departmentApplies,
+  describeDepartments,
+  readDepartmentLists,
+  readDepartmentSelection,
+  writeDepartmentList,
+  writeDepartmentSelection,
+  type DepartmentSelection,
+} from './departments.ts'
+import { RedactionMap, type RedactionEntry } from './map.ts'
+import { mappingKey, openLine, sealEntry } from './mapping-file.ts'
+import type { Agent, SessionStartSource } from '@deepseek-ai/dsh-agent'
+import { findPerson, ROSTER_PATH, readRoster, type Roster, type RosterPerson } from './roster.ts'
+import { queueTermRequest, readTermRequests, settleTermRequest, type TermRequest } from './queue.ts'
+import {
+  fetchDepartmentNames,
+  fetchDepartmentText,
+  fetchTermList,
+  readCachedTermList,
+  writeCachedTermList,
+  type TermSourceConfig,
+  type TermSourceKind,
+} from './source.ts'
+import { compileRules, isUsable, parseTermList, type ParsedTermList, type RedactionCategory, type RedactionRule } from './terms.ts'
+import { redactText as applyRules } from './redact.ts'
+import { DEFAULT_VISION_TIMEOUT_MS, describeVision, recognizeImage, recognizeImageText, resolvePaddle } from './vision.ts'
+import type { VisionBox, VisionEngine } from './vision.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    veil: RedactionService
+  }
+}
+
+export const name = '@deepseek-ai/dsh-veil'
+
+/** Term list this build carries. A deployment can point at another file. */
+const TERMS_PATH = fileURLToPath(new URL('../assets/terms.yaml', import.meta.url))
+
+/** Upload template this build ships, for a department to fill in and hand back. */
+const LOCAL_EXAMPLE_PATH = fileURLToPath(new URL('../assets/terms-local.example.yaml', import.meta.url))
+
+/** Repository a deployment publishes the list in, read at start and every few minutes. */
+const PUBLISHED_TERMS = 'http://10.151.5.175:3000/ITPublic/dsh-redaction-terms'
+
+/** Where the optional reader is published, so the settings page can point at it. */
+export const OCR_RELEASES = 'http://10.151.5.175:3000/ITPublic/dsh-ocr/releases'
+
+/** The one mapping file this machine appends to, under the mappings directory. */
+const MAPPING_FILE = 'mappings.jsonl'
+
+/** Revisions that compare as dates; anything else is left to the cache. */
+const DATED_REVISION = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Decide whether the list carried by this package outranks a cached one.
+ *
+ * The cache exists so a machine that cannot reach the publisher keeps replacing
+ * what it replaced yesterday. It must not outrank an upgrade: adopting an older
+ * cache over a newer shipped list would silently drop every term the release
+ * added, and the client would look configured while replacing less than before.
+ * Revisions compare only when both read as dates; anything else leaves the cache
+ * in place, which is the behaviour every install had before this check existed.
+ * @param shipped The list inside the package, absent when it cannot be read.
+ * @param held The list read from the cache.
+ * @returns True when the shipped list declares a later revision.
+ */
+function supersedes(shipped: string | undefined, held: string): boolean {
+  if (shipped === undefined) return false
+  const next = parseTermList(shipped).revision
+  const current = parseTermList(held).revision
+  if (!DATED_REVISION.test(next) || !DATED_REVISION.test(current)) return false
+  return next > current
+}
+
+/**
+ * What a caller has to look like for this provider to rewrite it. Prompts carry
+ * more than text; the provider touches the parts that hold text and hands every
+ * other part back untouched.
+ */
+export interface RedactablePart {
+  readonly type: string
+  readonly text?: string
+}
+
+/**
+ * Fields a deployment can set for this provider.
+ *
+ * There is deliberately no switch that turns the provider off. Redaction is the
+ * one feature whose failure is silent: a disabled provider writes the very
+ * values this feature exists to keep out of the session log, and neither the
+ * user nor the model would see it happen. A rule that over-matches is corrected
+ * on the publishing side, where the fix reaches every machine by itself — so the
+ * escape hatch for a bad rule is the rule list, never a per-machine switch.
+ */
+export interface Config {
+  /** Term list to load when nothing is cached. Defaults to the copy inside this package. */
+  termsPath?: string
+  /** Repository that publishes the list. An empty string keeps this build's copy in place. */
+  remote?: string
+  /** Branch whose tip is the published list. */
+  branch?: string
+  /** Path of the list inside that branch. */
+  file?: string
+  /** Directory holding this machine's copies of the list. */
+  cacheDirectory?: string
+  /** Minutes between refreshes. 0 loads the list once and never contacts the repository. */
+  refreshMinutes?: number
+  /** Per-request timeout, in milliseconds, for one refresh. */
+  timeoutMs?: number
+  /** Set to false to report no text for an image instead of reading it locally. */
+  vision?: boolean
+  /** How long one local recognition may take, in milliseconds. */
+  visionTimeoutMs?: number
+  /**
+   * Path to the optional `dsh-ocr` binary, which reads images with PaddleOCR.
+   *
+   * That binary carries a model and a runtime of its own, so it is published on
+   * the intranet rather than bundled; an empty path keeps the platform reader,
+   * and a machine that downloaded it points this at the file.
+   */
+  ocrPath?: string
+  /**
+   * Add every colleague and department from the shipped staff directory to the
+   * rules, and let an upload inherit its department from it.
+   *
+   * Per-machine rather than fixed, because the directory belongs to one
+   * deployment: a build that carries somebody else's staff list must be able to
+   * leave it out, and a user who would rather not have their own name rewritten
+   * needs a switch they can reach.
+   */
+  includeRoster?: boolean
+  /**
+   * Ciphertext of the staff directory. Defaults to the copy inside this package.
+   *
+   * Exposed so a deployment can point at its own directory without rebuilding,
+   * and so a test can reach one it sealed itself instead of reading the list
+   * that ships here.
+   */
+  rosterPath?: string
+  /** Persist the placeholder table to the local mappings directory when a session ends. */
+  mappings?: boolean
+  /** Deny the read-image tool to every agent of this deployment. Defaults to true: images go through local OCR, not the model. */
+  readImage?: boolean
+  /**
+   * Whether a picture the user attaches is read on arrival or on demand.
+   *
+   * `tool` keeps the image in the session and leaves reading it to the model,
+   * which calls the reader tool when it wants the text; `prompt` reads every
+   * image as the prompt arrives and appends the text beside it, which is what a
+   * deployment whose model has no tools needs.
+   */
+  ocrMode?: 'tool' | 'prompt'
+  /** Which device the optional reader uses: measured on first run, or pinned. */
+  ocrBackend?: 'auto' | 'cpu' | 'gpu'
+  /**
+   * Whether a file the model writes has its placeholders replaced by the originals.
+   *
+   * On by default: a document a model authors carries placeholders, and leaving
+   * them in a file the user opens is the failure this switch exists to prevent.
+   * Off means the reader decides per file, with the restore tool.
+   */
+  restoreOnWrite?: boolean
+  /**
+   * Multiplier applied to every quantity, one-way and marked in the text.
+   * `1` leaves numbers alone; the switch is off by default because a scaled
+   * session cannot answer a question about true magnitudes.
+   */
+  numberScale?: number
+}
+
+export const Config: z<Config> = z.object({
+  termsPath: z.string().default(TERMS_PATH),
+  remote: z.string().default(PUBLISHED_TERMS),
+  branch: z.string().default('main'),
+  file: z.string().default('terms.yaml'),
+  cacheDirectory: z.string().default(dshHomePath('redaction')),
+  refreshMinutes: z.number().default(5),
+  timeoutMs: z.number().default(3000),
+  vision: z.boolean().default(true),
+  visionTimeoutMs: z.number().default(DEFAULT_VISION_TIMEOUT_MS),
+  ocrPath: z.string().default(''),
+  includeRoster: z.boolean().default(true),
+  rosterPath: z.string().default(ROSTER_PATH),
+  mappings: z.boolean().default(true),
+  readImage: z.boolean().default(true),
+  ocrMode: z.union(['tool', 'prompt']).default('tool'),
+  ocrBackend: z.union(['auto', 'cpu', 'gpu']).default('auto'),
+  restoreOnWrite: z.boolean().default(true),
+  numberScale: z.number().min(0.01).max(100).default(1),
+})
+
+/** What the provider has loaded and how much it has replaced so far. */
+export interface RedactionStatus {
+  /** Always true: this provider has no off switch. */
+  readonly enabled: boolean
+  /** Revision the loaded term list declares. */
+  readonly revision: string | null
+  /** Term entries the loaded list declares. */
+  readonly terms: number
+  /** Regular expressions the loaded list declares. */
+  readonly patterns: number
+  /** Replacements this process has made since it started. */
+  readonly replacements: number
+  /** Which copy of the list the loaded rules came from. */
+  readonly source: TermSourceKind
+  /** When the publisher was last asked, as an ISO timestamp. */
+  readonly lastChecked: string | null
+  /** Why the last refresh kept the rules it already had. */
+  readonly lastError: string | null
+  /** Why nothing is being replaced, when a list could not be loaded at all. */
+  readonly detail: string | null
+  /** Term requests waiting on this machine for a delivery target. */
+  readonly pending: number
+  /** Uploaded lists that compiled into the rules in force. */
+  readonly localFiles: number
+  /** Department lists that applied to this reader. */
+  readonly departments: number
+  /** Names the shipped staff directory contributed to the rules, or 0 when it is off. */
+  readonly roster: number
+  /** Whether an ended session writes its placeholder table to the local mappings directory. */
+  readonly mappings: boolean
+  /** Whether the read-image tool is denied for every agent of this deployment. */
+  readonly imageTool: boolean
+  /** Which local reader reads an image, and whether the optional one is installed. */
+  readonly ocr: VisionStatus
+  /** Whether an attached picture is read on arrival or only when the model asks. */
+  readonly ocrMode: 'tool' | 'prompt'
+
+  readonly ocrBackend: 'auto' | 'cpu' | 'gpu'
+  /** Whether a written document gets its placeholders replaced, and what went wrong. */
+  readonly restore: RestoreStatus
+  /** Multiplier applied to quantities, one-way; `1` leaves them alone. */
+  readonly numberScale: number
+
+  /** Whether the scale applies at all, so a scale of 1 can still be switched on. */
+  readonly numberScaleOn: boolean
+}
+
+/** How the document write-back stands on this machine. */
+export interface RestoreStatus {
+  /** Whether a file the model writes is repaired without asking. */
+  readonly onWrite: boolean
+  /** Why the last write-back could not run at all, or null when it ran. */
+  readonly lastError: string | null
+  /** What the last write-back found but left alone, such as an unmapped placeholder. */
+  readonly lastResult: string | null
+  /** Files repaired since this process started. */
+  readonly files: number
+}
+
+/** Which reader an image goes through, and where the optional one lives. */
+export interface VisionStatus {
+  /** The reader in force. */
+  readonly engine: VisionEngine
+  /** Path of the reader in force; empty when this machine has none. */
+  readonly path: string
+  /** Whether that path holds a file. */
+  readonly present: boolean
+  /** Where a deployment downloads the optional reader from. */
+  readonly download: string
+  /** Directory a downloaded reader is unpacked into to switch itself on. */
+  readonly directory: string
+  /** Which device the optional reader uses: measured on first run, or pinned. */
+  readonly backend: 'auto' | 'cpu' | 'gpu'
+}
+
+/** One character box a picture's line held, when the caller asked for them. */
+export interface ImageTextCharacter {
+  /** The character's text, already redacted. */
+  readonly text: string
+  /** The reader's confidence in that character. */
+  readonly score: number
+  /** Four corners, in input-image pixels. */
+  readonly box: VisionBox
+}
+
+/** One line of text a picture held, with where it sat in the picture. */
+export interface ImageTextLine {
+  /** The line's text, already redacted. */
+  readonly text: string
+  /** Four corners, clockwise from the line's top-left, in input-image pixels. */
+  readonly box: VisionBox
+  /** Detector confidence for the box, 0..1. */
+  readonly detectionScore: number
+  /** Recognizer score for the line, raw and not normalized to 0..1. */
+  readonly recognitionScore: number
+  /** Character boxes; empty unless the caller asked for them. */
+  readonly characters: readonly ImageTextCharacter[]
+}
+
+/**
+ * One picture's text together with the geometry the reader measured.
+ *
+ * `lines` is empty when the reader in force reports text only (the Windows and
+ * Tesseract engines do), so a caller must treat the geometry as optional even
+ * when it asked for it.
+ */
+export interface ImageTextLayout {
+  /** The whole picture's text, already redacted. */
+  readonly text: string
+  /** Pixel size of the image the boxes are relative to, when the reader reports it. */
+  readonly image?: { readonly width: number; readonly height: number }
+  /** The lines the picture held, in reading order. */
+  readonly lines: readonly ImageTextLine[]
+  /** The device that read it, when the reader reports one. */
+  readonly backend?: 'cpu' | 'vulkan' | 'metal'
+}
+
+/**
+ * A destination that can take a term request off this machine.
+ *
+ * Nothing in this package implements one: the deployment decides whether a
+ * request reaches the publisher through an intranet endpoint, a repository
+ * issue, or a person copying a file. Exposing the shape lets a deployment wire
+ * its own without this package knowing which one it is.
+ */
+export interface TermRequestSink {
+  /** Name reported back with each delivery. */
+  readonly name: string
+  /**
+   * Hand one request to the publisher.
+   * @param request - the request to deliver.
+   * @throws When the publisher refused it; the message becomes the request's detail.
+   */
+  send(request: TermRequest): Promise<void>
+}
+
+/** What one delivery attempt did with the requests it was offered. */
+export interface TermRequestDelivery {
+  /** Sink the requests were offered to, or null when no sink is configured. */
+  readonly sink: string | null
+  /** Requests the publisher accepted. */
+  readonly sent: number
+  /** Requests the publisher refused, each recorded with its reason. */
+  readonly failed: number
+  /** Requests still waiting, which is every one of them when no sink is configured. */
+  readonly pending: number
+}
+
+/**
+ * Rewrite the text of an admitted prompt into stable placeholders, so the values
+ * it replaced reach neither the session log nor a model request.
+ */
+export class RedactionService extends Service {
+  static inject: string[] = []
+
+  private readonly config: Required<Config>
+  private rules: RedactionRule[] = []
+  private readonly map = new RedactionMap()
+  /** The published list in force, absent until one loads without problems. */
+  private main: { readonly parsed: ParsedTermList; readonly origin: string; readonly source: TermSourceKind } | undefined = undefined
+  /** Uploaded lists as last read, whether or not every one of them compiled. */
+  private local: LocalTermList[] = []
+
+  /**
+   * One list per department, downloaded from the same repository as the published
+   * list. Only the ones that apply to this reader take part in {@link recompile}.
+   */
+  private departments: LocalTermList[] = []
+
+  /** Which department lists the reader ticked, and which they unticked. */
+  private selection: DepartmentSelection = { enabled: [], disabled: [] }
+
+  /** Department of the signed-in colleague, or null while nobody is signed in. */
+  private own: string | null = null
+
+  /** Set while a department synchronisation runs, so two refreshes cannot overlap. */
+  private syncing: Promise<void> | undefined = undefined
+  /** Staff directory as last read, absent when it is off or could not be opened. */
+  private roster: Roster | undefined = undefined
+  private current: RedactionStatus
+  /**
+   * Switches the settings surface can flip at runtime. They start from the
+   * deployment defaults and live past the constructor, so turning the mapping
+   * write-back off does not need a restart.
+   */
+  private mappingsOn: boolean
+  private readImageOn: boolean
+  private restoreOnWrite: boolean
+  /** The multiplier in force; `1` leaves numbers alone. */
+  private scaleValue = 1
+  private scaleOn = false
+
+  private modeValue: 'tool' | 'prompt' = 'tool'
+
+  private backendValue: 'auto' | 'cpu' | 'gpu' = 'auto'
+
+  /**
+   * The directory of the last call this process ran a tool for.
+   *
+   * A Remote reply has no Agent behind it, so a manual pass cannot ask one
+   * where the session writes. The automatic pass already saw the answer, so it
+   * is kept here for the button to reuse.
+   */
+  private lastDirectory: string | undefined
+
+  /** The documents each session wrote, so the button knows what to restore. */
+  private readonly touched = new Map<string, Set<string>>()
+  /** How many entries have already reached a mapping file on this machine. */
+  private written = 0
+  private flushTimer: ReturnType<typeof setTimeout> | undefined
+  private flushing: Promise<void> = Promise.resolve()
+  /** The read-back of the mapping files, awaited before the first write. */
+  private readonly ready: Promise<void>
+
+  constructor(ctx: Context, config: Config = {}) {
+    super(ctx, 'veil')
+    this.config = {
+      termsPath: config.termsPath ?? TERMS_PATH,
+      remote: config.remote ?? PUBLISHED_TERMS,
+      branch: config.branch ?? 'main',
+      file: config.file ?? 'terms.yaml',
+      cacheDirectory: config.cacheDirectory ?? dshHomePath('redaction'),
+      refreshMinutes: config.refreshMinutes ?? 5,
+      timeoutMs: config.timeoutMs ?? 3000,
+      vision: config.vision ?? true,
+      visionTimeoutMs: config.visionTimeoutMs ?? DEFAULT_VISION_TIMEOUT_MS,
+      ocrPath: config.ocrPath ?? '',
+      includeRoster: config.includeRoster ?? true,
+      rosterPath: config.rosterPath ?? ROSTER_PATH,
+      mappings: config.mappings ?? true,
+      readImage: config.readImage ?? true,
+      numberScale: config.numberScale ?? 1,
+      ocrMode: config.ocrMode ?? 'tool',
+      ocrBackend: config.ocrBackend ?? 'auto',
+      restoreOnWrite: config.restoreOnWrite ?? true,
+    }
+    this.mappingsOn = this.config.mappings
+    this.readImageOn = this.config.readImage
+    this.restoreOnWrite = this.config.restoreOnWrite
+    this.scaleValue = this.config.numberScale
+    this.modeValue = this.config.ocrMode
+    this.backendValue = this.config.ocrBackend
+    // Started here rather than in an effect: a session can end before an effect
+    // runs, and a write must never outrun the read it depends on.
+    this.ready = this.loadMappings()
+    this.current = {
+      enabled: true,
+      revision: null,
+      terms: 0,
+      patterns: 0,
+      replacements: 0,
+      source: 'bundled',
+      lastChecked: null,
+      lastError: null,
+      detail: null,
+      pending: 0,
+      localFiles: 0,
+      departments: 0,
+      roster: 0,
+      mappings: this.config.mappings,
+      imageTool: this.config.readImage,
+      ocr: this.visionStatus(),
+      ocrMode: this.config.ocrMode,
+      ocrBackend: this.backendValue,
+      restore: { onWrite: this.config.restoreOnWrite, lastError: null, lastResult: null, files: 0 },
+      numberScale: this.config.numberScale,
+      numberScaleOn: false,
+    }
+    ctx.effect(() => {
+      void this.load()
+      void this.countPending()
+      const minutes = this.config.refreshMinutes
+      if (minutes <= 0 || this.config.remote === '') return () => {}
+      const timer: NodeJS.Timeout = setInterval(() => {
+        void this.refresh()
+      }, minutes * 60_000)
+      /* A pending refresh must not hold the process open after the session ends. */
+      timer.unref()
+      return () => {
+        clearInterval(timer)
+      }
+    }, 'redaction: load the term list and refresh it')
+    // A tool result is the second way a value reaches the session log: reading a
+    // data file, running a query, listing a directory. The decision this handler
+    // returns is what the loop commits, so rewriting it here happens before the
+    // text is appended anywhere. Registered after every other listener of this
+    // event, so it rewrites the text they produced rather than the other way round.
+    ctx.on('tools/post-execute', async (exec, result, next) => {
+      const decision = await next()
+      if (this.rules.length === 0) return decision
+      // A document the call wrote holds the placeholders the model saw, not the
+      // values they stand for, so the originals go back into the file itself.
+      // A model cannot do this: it never has the map.
+      const directory = this.sessionDirectory(exec.agent)
+      if (directory !== undefined) this.lastDirectory = directory
+      await this.restoreWrittenDocuments(exec.arguments, directory, exec.agent?.session.header.id)
+      if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
+      if (decision.value !== undefined) return decision
+      const content = this.redact(decision.content ?? result.content)
+      // A UI renders the call from this payload and the session log keeps it, so a
+      // value left here stays readable in a transcript the model never saw. Read
+      // results carry the file's lines in it.
+      const payload: JsonValue | undefined = decision.meta ?? result.meta
+      const meta = payload === undefined ? undefined : this.redactValue(payload)
+      return {
+        kind: 'accept',
+        content,
+        ...meta === undefined ? {} : { meta },
+        ...decision.additionalContexts === undefined ? {} : { additionalContexts: decision.additionalContexts },
+      }
+    })
+    // A session's placeholders only stay restorable while the mapping exists, so
+    // the mapping goes to the local mappings directory the moment the session
+    // leaves the store. The file is machine-wide: a placeholder means the same
+    // value in every conversation, so leaving it behind for one task would lose
+    // the pairings another task still shows. The restore tool reads it there,
+    // puts the originals back into exported files, and leaves the file in place.
+    ctx.on('session/disposed', () => {
+      this.flushMappings()
+    })
+    // Images go through the local reader, so the model never needs a tool that
+    // would hand a picture to the provider. Deny the tool for every agent this
+    // deployment creates; the status view tells the settings page it happened.
+    ctx.on('agent/created', ({ agent }: { agent: Agent; source: SessionStartSource; signal?: AbortSignal }) => {
+      if (!this.readImageOn) return
+      agent.ctx.tools.guard(execution => execution.name === 'read_image'
+        ? 'read_image is not available: this deployment reads images through local OCR'
+        : undefined)
+    })
+    // The wiring repairs the file a call wrote, but a file edited by hand, or
+    // one an earlier turn touched, needs an explicit pass. This tool is that
+    // handle: it replaces placeholders with their originals inside the file on
+    // disk and leaves the conversation alone, where a placeholder stays the
+    // normal text unless the reader turns on the original-text view.
+    const mappingsOf = (): readonly DocumentMapping[] => this.documentMappings()
+    const directoryOf = (agent: Agent | undefined): string | undefined => this.sessionDirectory(agent)
+    const confinerOf = (directory: string): Confine | undefined => this.confiner(directory)
+    ctx.on('agent/created', ({ agent }: { agent: Agent }) => {
+      agent.ctx.tools.register(defineTool({
+        name: 'restore_redacted_files',
+        description: 'Write the original values back into files on disk that this deployment redacted. '
+          + 'A model only ever sees placeholders, so a document it authored or edited holds placeholders '
+          + 'instead of the real names; this tool replaces them inside the file. It works on a file the '
+          + 'model just created as well as one that already existed — the file only has to hold a '
+          + 'placeholder this machine handed out. It never changes the '
+          + 'conversation, where the placeholders remain the text the reader sees. '
+          + `Supported files: ${[...DOCUMENT_EXTENSIONS].join(' ')}. `
+          + 'The rewrite runs in the whitelisted Python interpreter, because document encryption admits only that one. '
+          + 'Name every file the user wants repaired.',
+        parameters: {
+          paths: {
+            type: 'array', required: true,
+            description: 'Files to rewrite, one path each. Relative paths use the Session working directory.',
+            items: { type: 'string' },
+          },
+        },
+        output: {
+          schema: {
+            type: 'object', additionalProperties: false,
+            properties: {
+              restored: { type: 'integer', required: true },
+              files: {
+                type: 'array', required: true,
+                items: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    path: { type: 'string', required: true },
+                    hits: { type: 'integer', required: true },
+                  },
+                },
+              },
+            },
+          },
+          render: (_args, value) => [{ type: 'text', text: `Restored ${value.restored} placeholder(s) across ${value.files.length} file(s)` }],
+        },
+        async execute(args) {
+          const directory = directoryOf(agent)
+          const outcome = await restoreDocuments(args.paths, mappingsOf(), directory, confinerOf)
+            .catch(() => undefined)
+          return {
+            restored: outcome?.restored ?? 0,
+            files: (outcome?.files ?? []).map(file => ({ path: file.path, hits: file.hits })),
+          }
+        },
+      }))
+    })
+  }
+
+  /** Whether an ended session writes its placeholder table to the mappings directory. */
+  get mappings(): boolean {
+    return this.mappingsOn
+  }
+
+  /**
+   * Turn the mapping write-back on or off for the rest of this process.
+   * @param on - whether an ended session should leave a restorable table behind.
+   * @returns The value now in force.
+   */
+  setMappings(on: boolean): boolean {
+    this.mappingsOn = on
+    this.current = { ...this.current, mappings: on }
+    return this.mappingsOn
+  }
+
+  /**
+   * Set the multiplier applied to quantities in what the model reads.
+   *
+   * One-way by design: nothing records the original, so a written file keeps
+   * the scaled figure and no write-back undoes it. `1` turns the scaling off.
+   * @param scale The multiplier, clamped to the range the page offers.
+   * @returns The multiplier in force after the call.
+   */
+  setNumberScale(scale: number): number {
+    const clamped = Number.isFinite(scale) ? Math.min(100, Math.max(0.01, scale)) : 1
+    this.scaleValue = clamped
+    this.current = { ...this.current, numberScale: clamped }
+    return clamped
+  }
+
+  /**
+   * The multiplier currently applied to quantities.
+   * @returns the multiplier, `1` when scaling is off.
+   */
+  /**
+   * Turn the numeric scale on or off without losing the chosen factor.
+   * @param on - whether written documents carry scaled numbers.
+   * @returns The switch as it now stands.
+   */
+  setNumberScaleOn(on: boolean): boolean {
+    this.scaleOn = on
+    this.current = { ...this.current, numberScaleOn: on }
+    return on
+  }
+
+  /** The scale switch as it now stands. */
+  get numberScaleOn(): boolean {
+    return this.scaleOn
+  }
+
+  /**
+   * The factor written documents carry, whatever the switch says.
+   * @returns The multiplier in force.
+   */
+  get numberScale(): number {
+    return this.scaleValue
+  }
+
+  /**
+   * Switch whether a picture is read as it arrives or when the model asks.
+   * @param mode - `tool` keeps the picture and waits; `prompt` reads it on arrival.
+   * @returns the mode now in force.
+   */
+  setOcrMode(mode: 'tool' | 'prompt'): 'tool' | 'prompt' {
+    this.modeValue = mode
+    this.current = { ...this.current, ocrMode: mode }
+    return mode
+  }
+
+  /**
+   * Pick the device the reader runs on without rebuilding the plugin.
+   * @param backend - `auto` measures once, `cpu` and `gpu` skip the measurement.
+   * @returns the backend now in force.
+   */
+  setOcrBackend(backend: 'auto' | 'cpu' | 'gpu'): 'auto' | 'cpu' | 'gpu' {
+    this.backendValue = backend
+    this.current = { ...this.current, ocr: { ...this.current.ocr, backend: backend } }
+    return backend
+  }
+
+  /**
+   * Whether a picture attached to a prompt is read as it arrives.
+   *
+   * The prompt path asks this before it decides whether to hand a reader to the
+   * attachment store: `tool` keeps the picture and lets the model ask for the
+   * text, `prompt` reads it immediately and appends the text beside it.
+   * @returns The configured mode.
+   */
+  get ocrMode(): 'tool' | 'prompt' {
+    return this.modeValue
+  }
+
+  /** What the term list declares and how many replacements this process has made. */
+  get status(): RedactionStatus {
+    return this.current
+  }
+
+  /** Where this deployment publishes the list, as the refresh reads it. */
+  private get source(): TermSourceConfig {
+    return {
+      remote: this.config.remote,
+      branch: this.config.branch,
+      file: this.config.file,
+      directory: this.config.cacheDirectory,
+      timeoutMs: this.config.timeoutMs,
+    }
+  }
+
+  /**
+   * Load a term list and start refreshing it.
+   *
+   * The cached copy is preferred because it is the one this machine last saw a
+   * publisher confirm, and the copy inside the package is the fallback for an
+   * install that never reached the publisher — except when the package carries a
+   * later revision, which is what an upgrade looks like. A refresh follows
+   * whenever a list was loaded and the deployment tracks a repository.
+   * @returns The status after the attempt; `detail` carries any failure reason.
+   */
+  async load(): Promise<RedactionStatus> {
+    await this.reloadLocal()
+    const cached = await readCachedTermList(this.config.cacheDirectory)
+    let shipped: string | undefined
+    try {
+      shipped = await readFile(this.config.termsPath, 'utf8')
+    } catch (error) {
+      if (cached === undefined) this.record(error)
+    }
+    let adopted = false
+    if (cached !== undefined && !supersedes(shipped, cached.text)) {
+      adopted = this.tryAdopt(cached.text, cached.path, 'cache')
+    }
+    if (!adopted && shipped !== undefined) {
+      adopted = this.tryAdopt(shipped, this.config.termsPath, 'bundled')
+    }
+    if (!adopted && cached !== undefined) {
+      adopted = this.tryAdopt(cached.text, cached.path, 'cache')
+    }
+    if (!adopted) {
+      // Nothing published could be read at all; the uploads stand on their own.
+      this.main = undefined
+      this.recompile()
+    }
+    if (adopted && this.config.refreshMinutes > 0 && this.config.remote !== '') void this.refresh()
+    void this.syncDepartments()
+    return this.current
+  }
+
+  /**
+   * Ask the publisher for the list and adopt it when it changed.
+   *
+   * A refresh that fails or times out keeps the rules already in hand: a client
+   * that cannot reach the repository must go on replacing what it replaced before,
+   * which is the reason the list is cached at all.
+   * @returns The status after the attempt; `lastError` carries a failure reason.
+   */
+  async refresh(): Promise<RedactionStatus> {
+    if (this.config.remote === '') return this.current
+    const checked = new Date().toISOString()
+    try {
+      const text = await fetchTermList(this.source)
+      const parsed = parseTermList(text)
+      if (!isUsable(parsed)) {
+        throw new Error(`the published term list reports ${String(parsed.problems.length)} problem(s)`)
+      }
+      if (parsed.revision === this.current.revision && this.current.source === 'remote') {
+        this.current = { ...this.current, lastChecked: checked, lastError: null }
+        return this.current
+      }
+      this.adopt(text, this.source.remote, 'remote')
+      this.current = { ...this.current, lastChecked: checked, lastError: null }
+      await writeCachedTermList(this.source, text, parsed.revision)
+      void this.syncDepartments()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      this.current = { ...this.current, lastChecked: checked, lastError: detail }
+      this.ctx.logger.warn(`redaction: keeping the term list already loaded: ${detail}`)
+    }
+    return this.current
+  }
+
+  /**
+   * Parse a list and make it the published half of the rules in force.
+   *
+   * Every uploaded list stays in force across this call, because the two answer
+   * different questions: the published one says what the whole company must not
+   * leak, an uploaded one says what this department must not.
+   * @param text The list as published or cached.
+   * @param origin Where the text came from, for the log and for failure messages.
+   * @param source Which copy it is.
+   * @throws When the list declares problems or declares nothing usable.
+   */
+  private adopt(text: string, origin: string, source: TermSourceKind): void {
+    const parsed = parseTermList(text)
+    if (!isUsable(parsed)) {
+      throw new Error(`the term list at ${origin} reports ${String(parsed.problems.length)} problem(s)`)
+    }
+    this.main = { parsed, origin, source }
+    this.recompile()
+    this.current = { ...this.current, detail: null }
+    const uploaded = this.current.localFiles === 0 ? '' : ` plus ${String(this.current.localFiles)} uploaded list(s)`
+    this.ctx.logger.info(`redaction: ${String(this.rules.length)} rule(s) from ${origin} at ${parsed.revision}${uploaded}`)
+  }
+
+  private tryAdopt(text: string, origin: string, source: TermSourceKind): boolean {
+    try {
+      this.adopt(text, origin, source)
+      return true
+    } catch (error) {
+      this.record(error)
+      return false
+    }
+  }
+
+  /**
+   * Record that the published list could not be loaded.
+   *
+   * Uploaded lists keep replacing: a department writes its own terms because the
+   * published list does not cover them, and losing the publisher is no reason to
+   * stop honouring what it wrote.
+   * @param error Why the attempt failed.
+   */
+  private record(error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error)
+    this.main = undefined
+    this.recompile()
+    this.current = { ...this.current, detail }
+    const outcome = this.rules.length === 0
+      ? 'nothing will be replaced'
+      : `keeping ${String(this.rules.length)} rule(s) from uploaded lists`
+    this.ctx.logger.warn(`redaction: ${outcome}: ${detail}`)
+  }
+
+  /** Read the uploaded lists and the staff directory, so a synchronous recompile can use both. */
+  async reloadLocal(): Promise<void> {
+    this.local = await readLocalTermLists(this.config.cacheDirectory)
+    this.departments = await readDepartmentLists(this.config.cacheDirectory)
+    this.selection = await readDepartmentSelection(this.config.cacheDirectory)
+    await this.reloadRoster()
+  }
+
+  /**
+   * Read the staff directory, unless the deployment turned it off.
+   *
+   * A directory that cannot be opened — no key in a build that shipped none, or
+   * a ciphertext this build cannot read — leaves nothing in force and says so
+   * once. It is a convenience the published list also answers, so losing it is
+   * never a reason to stop replacing what the published list already covers.
+   */
+  private async reloadRoster(): Promise<void> {
+    if (!this.config.includeRoster) {
+      this.roster = undefined
+      return
+    }
+    try {
+      this.roster = await readRoster(this.config.rosterPath)
+    } catch (error) {
+      this.roster = undefined
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`redaction: no staff directory is in force: ${detail}`)
+    }
+  }
+
+  /**
+   * Rebuild the rules from the published list in hand plus every usable upload.
+   *
+   * Uploaded categories come first so a department's own rule wins when two of
+   * them match the same span at the same length: the published list is the floor
+   * every install stands on, not the ceiling. Only lists that parsed without a
+   * single problem take part, so a half-finished upload cannot disable the rest.
+   */
+  private recompile(): void {
+    const uploaded = this.local.filter(entry => entry.file.enabled && isUsable(entry.list))
+    const departments = this.departments.filter(entry =>
+      isUsable(entry.list) && departmentApplies(this.selection, departmentNameOf(entry.file), this.own))
+    const roster = this.rosterCategories()
+    const main = this.main
+    const rules = main === undefined && uploaded.length === 0 && departments.length === 0 && roster.length === 0
+      ? []
+      : compileRules({
+        version: main?.parsed.version ?? '1',
+        revision: main?.parsed.revision ?? 'local',
+        categories: [
+          ...uploaded.flatMap(entry => entry.list.categories),
+          ...departments.flatMap(entry => entry.list.categories),
+          ...roster,
+          ...main?.parsed.categories ?? [],
+        ],
+      })
+    this.rules = rules
+    this.current = {
+      ...this.current,
+      revision: main?.parsed.revision ?? null,
+      terms: rules.filter(rule => rule.kind === 'term').length,
+      patterns: rules.filter(rule => rule.kind === 'pattern').length,
+      ...main === undefined ? {} : { source: main.source },
+      localFiles: uploaded.length,
+      departments: departments.length,
+      roster: roster.reduce((count, category) => count + category.terms.length, 0),
+      mappings: this.mappingsOn,
+      imageTool: this.readImageOn,
+    }
+  }
+
+  /**
+   * The staff directory no longer contributes redaction rules.
+   *
+   * It used to turn colleagues and departments into `person`/`department`
+   * terms; the confidentiality office retired that behaviour because redacting
+   * the people a colleague mentions makes the conversation unreadable. The
+   * roster itself stays loaded: {@link identify} and {@link attributionFor}
+   * still read it to stamp uploads and describe the signed-in account.
+   * @returns Always empty; kept so the recompile seam stays in one place.
+   */
+  private rosterCategories(): RedactionCategory[] {
+    return []
+  }
+
+  /**
+   * Rewrite the text parts. Parts that carry no text — images, file references,
+   * anything this build does not understand — come back untouched, so a caller
+   * can hand the result to the next stage exactly as it would have handed the
+   * input.
+   * @param parts Parts a caller is about to turn into a message.
+   * @returns A new list in which every text part has been rewritten.
+   */
+  redact<T extends RedactablePart>(parts: readonly T[]): T[] {
+    if (this.rules.length === 0) return [...parts]
+    return parts.map((part) => {
+      if (part.type !== 'text' || typeof part.text !== 'string') return part
+      // A person typing a number means it as written; only a document the
+      // model produces is scaled.
+      const text = this.rewriteText(part.text, 1)
+      return text === part.text ? part : { ...part, text }
+    })
+  }
+
+  /**
+   * Rewrite one string, for callers holding text outside a part list.
+   * @param text Text to rewrite.
+   * @returns The rewritten text, or the input when no rule matched.
+   */
+  redactText(text: string): string {
+    return this.rewriteText(text, this.scaleOn ? this.scaleValue : 1)
+  }
+
+  /**
+   * Rewrite one string with a chosen multiplier.
+   * @param text Text to rewrite.
+   * @param scale Multiplier applied to quantities; `1` leaves them alone.
+   * @returns The rewritten text.
+   */
+  private rewriteText(text: string, scale: number): string {
+    if (this.rules.length === 0) return text
+    const result = applyRules(text, this.rules, this.map, undefined, scale)
+    if (result.hits.length > 0) {
+      this.current = { ...this.current, replacements: this.current.replacements + result.hits.length }
+      this.scheduleMappings()
+    }
+    return result.text
+  }
+
+  /**
+   * Rewrite every string inside a presentation payload.
+   *
+   * A UI renders the call from this payload and the session log keeps it, so a
+   * value that survives here is readable in a transcript even when the model
+   * never saw it.
+   * @param value The payload, as the tool projected it.
+   * @returns The same shape with every string rewritten.
+   */
+  redactValue(value: JsonValue): JsonValue {
+    if (typeof value === 'string') return this.redactText(value)
+    if (Array.isArray(value)) return value.map(item => this.redactValue(item))
+    if (typeof value === 'object' && value !== null) {
+      const rewritten: Record<string, JsonValue> = {}
+      for (const [key, item] of Object.entries(value)) rewritten[key] = this.redactValue(item)
+      return rewritten
+    }
+    return value
+  }
+
+  /**
+   * Which reader an image would go through on this machine.
+   *
+   * The optional binary is a file the deployment downloaded, so this reports
+   * whether it is actually there: a path that no longer holds a file falls back
+   * to the platform reader instead of failing at the first screenshot.
+   * @returns The engine, the configured path and whether it holds a file.
+   */
+  private visionStatus(): VisionStatus {
+    const directory = this.readerDirectory()
+    const path = resolvePaddle(this.config.ocrPath, directory)
+    return {
+      engine: describeVision({ paddlePath: path }),
+      path,
+      present: path !== '',
+      download: OCR_RELEASES,
+      directory,
+      backend: this.backendValue,
+    }
+  }
+
+  /**
+   * Where a downloaded reader is expected to sit.
+   *
+   * A deployment that downloads the optional reader unpacks it here and is
+   * done: the reader is found on the next status read, without anyone
+   * configuring a path that would differ per machine.
+   * @returns The absolute directory, whether or not it exists yet.
+   */
+  private readerDirectory(): string {
+    return dshHomePath('redaction', 'ocr')
+  }
+
+  /**
+   * Read the text out of one encoded image on this machine and redact it.
+   *
+   * The image is decoded in memory and read by a local recognizer: it is never
+   * stored, never returned, and never sent to a model, so a screenshot reaches
+   * the session as the text it held and nothing else. A caller that gets
+   * `undefined` reports the failure and keeps the image out of the session —
+   * handing the pixels to the model is the one outcome this must not produce.
+   * @param data The image as canonical base64.
+   * @param mediaType Its media type, for the log.
+   * @returns The redacted text, or `undefined` when no text could be read.
+   */
+  async recognizeImage(data: string, mediaType: string): Promise<string | undefined> {
+    if (!this.config.vision || this.rules.length === 0) return undefined
+    try {
+      const text = await recognizeImageText(Buffer.from(data, 'base64'), {
+        paddlePath: this.config.ocrPath,
+        paddleDirectory: this.readerDirectory(),
+        timeoutMs: this.config.visionTimeoutMs,
+        backend: this.backendValue,
+      })
+      return text === '' ? '[图片-无文字]' : this.redactText(text)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`redaction: could not read a ${mediaType} image locally: ${detail}`)
+      return undefined
+    }
+  }
+
+  /**
+   * Read one encoded image on this machine and return its text with the
+   * geometry of every line.
+   *
+   * `recognizeImage` answers a model that accepts text alone; this variant keeps
+   * the line boxes so a caller that must place the text inside the picture can.
+   * The pixels still never leave this machine, and every string is redacted
+   * before it is returned, character boxes included.
+   * @param data The image as canonical base64.
+   * @param mediaType Its media type, for the log.
+   * @param options - `characters: true` also reports one box per character.
+   * @returns The redacted layout, or `undefined` when no text could be read.
+   */
+  async recognizeImageLayout(
+    data: string,
+    mediaType: string,
+    options: { readonly characters?: boolean } = {},
+  ): Promise<ImageTextLayout | undefined> {
+    if (!this.config.vision || this.rules.length === 0) return undefined
+    try {
+      const result = await recognizeImage(Buffer.from(data, 'base64'), {
+        paddlePath: this.config.ocrPath,
+        paddleDirectory: this.readerDirectory(),
+        timeoutMs: this.config.visionTimeoutMs,
+        backend: this.backendValue,
+        ...(options.characters === true ? { characters: true } : {}),
+      })
+      return {
+        text: result.text === '' ? '[图片-无文字]' : this.redactText(result.text),
+        ...(result.image === undefined ? {} : { image: result.image }),
+        lines: result.lines.map(line => ({
+          text: this.redactText(line.text),
+          box: line.box,
+          detectionScore: line.detectionScore,
+          recognitionScore: line.recognitionScore,
+          characters: line.characters.map(character => ({
+            text: this.redactText(character.text),
+            score: character.score,
+            box: character.box,
+          })),
+        })),
+        ...(result.backend === undefined ? {} : { backend: result.backend }),
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`redaction: could not read a ${mediaType} image locally: ${detail}`)
+      return undefined
+    }
+  }
+
+  /**
+   * Ask the publisher to add a term to the list.
+   *
+   * The request is queued on this machine first, so a machine that cannot reach
+   * the publisher loses nothing by asking: the term waits in the queue file and
+   * a later delivery carries it. A request never holds a value a session
+   * matched — it is the missing term itself, which is what a publisher adds.
+   * @param term - the term to add to the list.
+   * @param note - why the term belongs in the list.
+   * @returns The queued request.
+   * @throws Error when the term breaks the shape a list entry can hold.
+   */
+  async requestTerm(term: string, note?: string): Promise<TermRequest> {
+    const request = await queueTermRequest(this.config.cacheDirectory, term, note)
+    await this.countPending()
+    return request
+  }
+
+  /**
+   * Everything this machine has queued, oldest first.
+   * @returns every request the queue file holds, whatever state each one is in.
+   */
+  async pendingRequests(): Promise<TermRequest[]> {
+    return await readTermRequests(this.config.cacheDirectory)
+  }
+
+  /**
+   * Offer every pending request to a sink and record how each one ended.
+   *
+   * A sink is optional because the default deployment delivers nothing: the
+   * queue exists so a machine can hold a request until someone wires a
+   * destination, and this method is the seam that destination plugs into. A
+   * request the sink refuses stays on disk as rejected with its reason, so the
+   * next reader sees what happened instead of watching the entry disappear.
+   * @param sink - destination to offer the requests to; omitted means none is configured.
+   * @returns What the attempt did with the queue.
+   */
+  async deliverRequests(sink?: TermRequestSink): Promise<TermRequestDelivery> {
+    const requests = await readTermRequests(this.config.cacheDirectory)
+    const waiting = requests.filter(request => request.state === 'pending')
+    if (sink === undefined || waiting.length === 0) {
+      const pending = waiting.length
+      this.current = { ...this.current, pending }
+      return { sink: sink?.name ?? null, sent: 0, failed: 0, pending }
+    }
+    let sent = 0
+    let failed = 0
+    for (const request of waiting) {
+      try {
+        await sink.send(request)
+        await settleTermRequest(this.config.cacheDirectory, request.id, 'uploaded')
+        sent += 1
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        await settleTermRequest(this.config.cacheDirectory, request.id, 'rejected', detail)
+        failed += 1
+      }
+    }
+    const pending = await this.countPending()
+    this.ctx.logger.info(`redaction: ${sink.name} took ${String(sent)} term request(s) and refused ${String(failed)}`)
+    return { sink: sink.name, sent, failed, pending }
+  }
+
+  /** Record how many requests are still waiting, for {@link RedactionStatus}. */
+  private async countPending(): Promise<number> {
+    const requests = await readTermRequests(this.config.cacheDirectory)
+    const pending = requests.filter(request => request.state === 'pending').length
+    if (pending !== this.current.pending) this.current = { ...this.current, pending }
+    return pending
+  }
+
+  /**
+   * Append the placeholders this process issued to the machine's mapping file.
+   *
+   * One file for the machine, not one per session: a placeholder means the same
+   * value wherever it is read, so `[产品-3]` minted in one task has to restore in
+   * the next one too. A reader therefore never has to know which task wrote the
+   * pairing it is looking at. Repeated turns append to the same file.
+   *
+   * The map is NOT emptied. An entry that leaves memory stops restoring while the
+   * reader is still looking at the session, and the counters would restart from
+   * one and hand a fresh value a number this file already gave to another.
+   */
+  /**
+   * Keep the mapping file current while the process is alive.
+   *
+   * Waiting for `session/disposed` was not enough: the desktop app is closed by
+   * exiting the process, that event never runs, and every pairing of the run was
+   * lost. A short debounce collapses a burst of hits into one append and still
+   * writes long before a user can quit the app.
+   */
+  /**
+   * Put the originals back into every document one call mentioned.
+   *
+   * The rewrite happens inside the Python interpreter, never here: document
+   * encryption whitelists that interpreter, so this process may only name the
+   * files and hand over the pairs. Nothing runs while the write-back switch is
+   * off, because that switch is what says the originals may reach this
+   * machine's disk at all.
+   * @param seeded The call's parsed arguments.
+   * @param cwd - the session's working directory, which is where a relative write landed.
+   */
+  /**
+   * Restore every document under a session directory, because the user asked.
+   *
+   * The automatic pass only hears about files an argument named. A model that
+   * buries the output path inside a script leaves the file full of placeholders
+   * and no argument to point at it, so the badge offers a button instead — this
+   * is what it calls.
+   * @param directory The session's working directory.
+   * @param sessionId The session whose remembered documents to restore, when the
+   * caller has one.
+   * @returns how the pass went, for the badge to show.
+   */
+  async restoreSession(directory?: string, sessionId?: string): Promise<RestoreOutcome> {
+    if (!this.mappingsOn || !this.restoreOnWrite) return { restored: 0, files: [], skipped: [] }
+    const remembered = sessionId === undefined ? undefined : this.touched.get(sessionId)
+    const paths = remembered === undefined || remembered.size === 0
+      ? await this.documentsToRestore(directory)
+      : [...remembered]
+    if (paths.length === 0) return { restored: 0, files: [], skipped: [] }
+    const outcome = await this.restorePaths(paths).catch((error: unknown) => ({
+      restored: 0, files: [], skipped: [], error: String(error),
+    }))
+    // A file this pass left alone because it holds no placeholder is not a
+    // failure: the earlier pass already restored it. Only a pass that could
+    // not finish is worth telling the user about.
+    const blocked = outcome.skipped.find(file => !file.reason.startsWith('no placeholder'))
+    this.current = {
+      ...this.current,
+      restore: {
+        onWrite: this.restoreOnWrite,
+        lastError: outcome.error ?? null,
+        lastResult: blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`,
+        files: this.current.restore.files + outcome.restored,
+      },
+    }
+    return outcome
+  }
+
+  /**
+   * The documents a manual pass should touch when the session recorded none.
+   * @param directory - the session directory to scan, if the caller named one.
+   * @returns document paths to restore.
+   */
+  private async documentsToRestore(directory: string | undefined): Promise<string[]> {
+    const root = directory === undefined || directory === '' ? this.lastDirectory : directory
+    if (root === undefined) return []
+    return [...(await documentsInDirectory(root))]
+  }
+
+  /**
+   * Restore a set of documents, one directory at a time.
+   * @param paths - absolute document paths, possibly spread over directories.
+   * @returns the summed outcome.
+   */
+  private async restorePaths(paths: readonly string[]): Promise<RestoreOutcome> {
+    const byDirectory = new Map<string, string[]>()
+    for (const path of paths) {
+      const directory = dirname(path)
+      const group = byDirectory.get(directory) ?? []
+      group.push(path)
+      byDirectory.set(directory, group)
+    }
+    let total: RestoreOutcome = { restored: 0, files: [], skipped: [] }
+    for (const [directory, group] of byDirectory) {
+      const outcome = await restoreDocuments(
+        group, this.documentMappings(), directory, target => this.confiner(target),
+      )
+      total = {
+        restored: total.restored + outcome.restored,
+        files: [...total.files, ...outcome.files],
+        skipped: [...total.skipped, ...outcome.skipped],
+        ...(outcome.error === undefined && total.error === undefined ? {} : { error: total.error ?? outcome.error }),
+      }
+    }
+    return total
+  }
+
+  /**
+   * Keep the write-back outside the sandbox.
+   *
+   * The file is the model's own output, and it can sit anywhere — a workspace,
+   * another tool's tree, a folder the sandbox never provisioned. Confining the
+   * interpreter would fail there for a reason that has nothing to do with the
+   * restore, so this pass runs with the process's own rights; a directory that
+   * still refuses the write is repaired in `documents.ts`.
+   * @returns no wrapper, by design.
+   */
+  private confiner(_directory: string | undefined): Confine | undefined {
+    return undefined
+  }
+
+  private async restoreWrittenDocuments(seeded: unknown, cwd?: string, sessionId?: string): Promise<void> {
+    if (!this.mappingsOn || !this.restoreOnWrite) return
+    const paths = documentPaths(seeded)
+    if (paths.length === 0) return
+    if (sessionId !== undefined && cwd !== undefined) this.remember(sessionId, paths, cwd)
+    const outcome = await restoreDocuments(paths, this.documentMappings(), cwd, target => this.confiner(target))
+      .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
+    // A machine with no interpreter, or a file the interpreter refused, used to
+    // vanish into a swallowed promise. The status surface needs the reason: the
+    // user sees a file still holding placeholders and asks why. Reporting only an
+    // unmapped code was not enough — a pass that ran and found nothing to do read
+    // exactly like a pass that never ran, which is the question it has to answer.
+    // A file this pass left alone because it holds no placeholder is not a
+    // failure: the earlier pass already restored it. Only a pass that could
+    // not finish is worth telling the user about.
+    const blocked = outcome.skipped.find(file => !file.reason.startsWith('no placeholder'))
+    this.current = {
+      ...this.current,
+      restore: {
+        onWrite: this.restoreOnWrite,
+        lastError: outcome.error ?? null,
+        lastResult: blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`,
+        files: this.current.restore.files + outcome.restored,
+      },
+    }
+  }
+
+  /**
+   * The working directory of the session a call runs for.
+   *
+   * A model may name a document relatively; the file then sits under the
+   * session directory, not under wherever this process happens to run.
+   * @param agent - the agent the call runs on behalf of.
+   * @returns the absolute directory, or undefined when it cannot be read.
+   */
+  /**
+   * Record the documents a tool just wrote.
+   * @param sessionId - the session the call ran for.
+   * @param paths - the paths the call named.
+   * @param directory - the directory relative paths resolve against.
+   */
+  private remember(sessionId: string, paths: readonly string[], directory: string): void {
+    const known = this.touched.get(sessionId) ?? new Set<string>()
+    for (const path of paths) known.add(isAbsolute(path) ? path : resolve(directory, path))
+    this.touched.set(sessionId, known)
+  }
+
+  private sessionDirectory(agent: Agent | undefined): string | undefined {
+    const cwd = agent?.session.header.cwd
+    return cwd === undefined || cwd === '' ? undefined : cwd
+  }
+
+  /** The placeholder/original pairs a document rewrite needs. */
+  private documentMappings(): readonly DocumentMapping[] {
+    return this.map.entries().map(entry => ({ placeholder: entry.placeholder, original: entry.original }))
+  }
+
+  private scheduleMappings(): void {
+    if (!this.mappingsOn || this.flushTimer !== undefined) return
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = undefined
+      this.flushMappings()
+    }, 400)
+    // Never hold the process open for a pending write.
+    this.flushTimer.unref()
+  }
+
+  /** Flush whatever is pending, in one chain so two appends never interleave. */
+  private flushMappings(): void {
+    if (this.flushTimer !== undefined) {
+      clearTimeout(this.flushTimer)
+      this.flushTimer = undefined
+    }
+    this.flushing = this.flushing.then(() => this.writeMappings()).catch(() => {})
+  }
+
+  /**
+   * Download the department lists the repository publishes.
+   *
+   * A refresh replaces every published file it can read; a failure keeps whatever
+   * is already on this machine, because a department list is extra coverage over
+   * the published list rather than the reason the published list works.
+   */
+  private syncDepartments(): Promise<void> {
+    if (this.syncing !== undefined) return this.syncing
+    this.syncing = this.downloadDepartments().finally(() => {
+      this.syncing = undefined
+    })
+    return this.syncing
+  }
+
+  private async downloadDepartments(): Promise<void> {
+    if (this.config.remote === '') return
+    try {
+      const published = departmentNamesOf(await fetchDepartmentNames(this.source))
+      let changed = false
+      for (const name of published) {
+        await writeDepartmentList(this.config.cacheDirectory, name, await fetchDepartmentText(this.source, name))
+        changed = true
+      }
+      if (!changed) return
+      this.departments = await readDepartmentLists(this.config.cacheDirectory)
+      this.recompile()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`redaction: department lists not refreshed: ${detail}`)
+    }
+  }
+
+  /**
+   * Tell the provider which department the signed-in colleague belongs to.
+   *
+   * Called whenever the account is read, so a list that belongs to this reader's
+   * department takes part without them ticking anything; a no-op when the answer
+   * has not changed, because recompiling on every status read would be wasteful.
+   * @param account Account name the roster knows, or null while signed out.
+   */
+  async noteAccount(account: string | null): Promise<void> {
+    // The department directory arrives with the same load, so a reader who reads
+    // the status before it finishes must not be reported as having no department.
+    await this.ready.catch(() => undefined)
+    const own = account === null ? null : this.identify(account)?.department ?? null
+    if (own === this.own) return
+    this.own = own
+    this.recompile()
+  }
+
+  /**
+   * Every department list this machine knows, with the state that explains it.
+   * @returns One entry per list, ordered by department name.
+   */
+  departmentLists(): { name: string; enabled: boolean; own: boolean; terms: number; patterns: number; revision: string }[] {
+    return describeDepartments(this.departments, this.selection, this.own)
+  }
+
+  /**
+   * Switch one department list on or off for this reader.
+   * @param name Department the list belongs to.
+   * @param enabled Whether the list should take part.
+   * @throws {LocalTermError} When no list is stored for that department.
+   */
+  async setDepartmentEnabled(name: string, enabled: boolean): Promise<void> {
+    if (!this.departments.some(entry => departmentNameOf(entry.file) === name)) {
+      throw new LocalTermError(`redaction: no department list named ${name}`)
+    }
+    const ticked = new Set(this.selection.enabled)
+    const refused = new Set(this.selection.disabled)
+    if (enabled) {
+      ticked.add(name)
+      refused.delete(name)
+    } else {
+      ticked.delete(name)
+      refused.add(name)
+    }
+    this.selection = { enabled: [...ticked], disabled: [...refused] }
+    await writeDepartmentSelection(this.config.cacheDirectory, this.selection)
+    this.recompile()
+  }
+
+  private async writeMappings(): Promise<void> {
+    // Checked before anything is read: with write-back off nothing leaves this
+    // process at all.
+    if (!this.mappingsOn) return
+    // The read of earlier pairings must never gate the write of this one: a
+    // file an earlier release left in a shape this one cannot parse would
+    // otherwise silently stop every mapping this process makes from reaching
+    // the disk, and the write-back would have nothing to restore from.
+    await this.ready.catch(() => undefined)
+    const all = this.map.liveEntries()
+    // Only what this process added since the last file. The entries read back at
+    // startup are not in the live log at all, and the ones already appended must
+    // not be appended twice.
+    const fresh = all.slice(this.written)
+    if (fresh.length === 0) return
+    const directory = join(this.config.cacheDirectory, 'mappings')
+    try {
+      await mkdir(directory, { recursive: true })
+      const key = mappingKey(directory)
+      // Without a key nothing is written: a plaintext mapping on disk is the
+      // hole this sealing exists to close.
+      if (key === undefined) return
+      const body = fresh.map(entry => sealEntry(entry, key)).join('')
+      await appendFile(join(directory, MAPPING_FILE), body, 'utf8')
+      // The cursor moves only once the pairs are on disk. Moving it first turns
+      // any failed write into a permanent loss: the entries stay in memory for
+      // this process, then vanish on the next launch with nothing to retry.
+      this.written = all.length
+    } catch {
+      // A mapping that cannot be written only costs the restore step; the
+      // placeholders in the session stay in force and this process keeps
+      // restoring them for as long as it lives.
+    }
+  }
+
+  /**
+   * Read the mapping files this machine already holds back into the map, so
+   * text from an earlier process still restores and a fresh value never takes a
+   * number one of those files already used.
+   *
+   * Files are read in name order and the first entry for a value wins, which is
+   * the order the restore tool applies them in.
+   */
+  private async loadMappings(): Promise<void> {
+    const directory = join(this.config.cacheDirectory, 'mappings')
+    await mkdir(directory, { recursive: true }).catch(() => undefined)
+    const key = mappingKey(directory)
+    // Every file is folded into the one table, including the per-session files an
+    // earlier release wrote: their pairings are just as valid today. A file still
+    // in the old plaintext form is rewritten sealed as soon as it is read, so the
+    // first launch after this upgrade closes the hole on every machine.
+    for (const name of await mappingFiles(directory)) {
+      // One unreadable file costs only its own pairings: the rest of the table
+      // still loads, and this process keeps writing new ones.
+      const { entries, plain } = await readMappingFile(directory, name, key)
+        .catch(() => ({ entries: [], plain: false }))
+      if (entries.length === 0) continue
+      this.map.adopt(entries)
+      if (plain && key !== undefined) await sealMappingFile(directory, name, key, entries)
+    }
+    this.written = this.map.liveEntries().length
+  }
+
+  /**
+   * Every pairing the machine can restore right now, read back before answering.
+   * @returns The entries the mapping file records, in the order they were written.
+   */
+  async mappingsFor(): Promise<readonly RedactionEntry[]> {
+    await this.ready
+    return this.map.entries()
+  }
+
+  /**
+   * Every pairing this machine can currently restore, for a reader that renders
+   * session text to the user. The values are what the model must not see but the
+   * user may: they cross to the browser that renders this machine's own sessions
+   * and nowhere else.
+   *
+   * Includes what earlier processes wrote to a mapping file, because a session
+   * outlives the process that wrote it and a reader coming back to an older
+   * conversation must still be shown the originals behind its placeholders.
+   * @returns Every restorable entry, this process's own first.
+   */
+  entries(): readonly RedactionEntry[] {
+    return this.map.entries()
+  }
+
+  /**
+   * Turn the placeholders a text carries back into the values they stand for.
+   * @param text Text that may carry placeholders.
+   * @returns The text with every placeholder it carries restored.
+   */
+  restore(text: string): string {
+    return this.map.restore(text)
+  }
+
+  /**
+   * Look one colleague up by the name the account service reports.
+   * @param account Name as the signed-in account gives it.
+   * @returns The directory entry, or undefined when the directory is off or lists nobody by that name.
+   */
+  identify(account: string): RosterPerson | undefined {
+    if (!this.config.includeRoster) return undefined
+    const roster = this.roster
+    if (roster === undefined) return undefined
+    return findPerson(roster, account)
+  }
+
+  /**
+   * The attribution an upload by this colleague should carry.
+   *
+   * The department is the one fact a colleague cannot be asked to type correctly
+   * and the one fact the directory already knows, so an upload is stamped from
+   * it; a name the directory does not list leaves the department empty rather
+   * than guessing at one.
+   * @param account Name as the signed-in account gives it.
+   * @returns Author and, when the directory knows it, department.
+   */
+  attributionFor(account: string): { department?: string; author?: string } {
+    const name = account.trim()
+    if (name === '') return {}
+    const person = this.identify(name)
+    return {
+      author: name,
+      ...person === undefined || person.department === '' ? {} : { department: person.department },
+    }
+  }
+
+  /**
+   * What the staff directory contributes, for a page that has to describe it.
+   * @returns Whether it is on, and how many colleagues and departments it lists.
+   */
+  rosterSummary(): { enabled: boolean; revision: string | null; people: number; departments: number } {
+    const roster = this.roster
+    return {
+      enabled: this.config.includeRoster,
+      revision: roster?.revision ?? null,
+      people: roster?.people.length ?? 0,
+      departments: roster?.departments.length ?? 0,
+    }
+  }
+
+  /**
+   * List the lists uploaded on this machine, including the ones that do not compile.
+   *
+   * A file that reports problems is still listed: whoever wrote it has to see what
+   * is wrong with it, and hiding it would leave them with a file they cannot find
+   * and a rule that silently does nothing.
+   * @returns One record per file, as last read.
+   */
+  async localFiles(): Promise<LocalTermFile[]> {
+    return await listLocalTermFiles(this.config.cacheDirectory)
+  }
+
+  /**
+   * Store one uploaded list and put it in force.
+   * @param name File name the upload is stored under.
+   * @param text The YAML a department wrote, in the format this provider reads.
+   * @param attribution Department and person to name when the text names neither.
+   * @returns What the stored file declares.
+   * @throws LocalTermError when the text does not compile or the machine is full.
+   */
+  async importLocal(name: string, text: string, attribution: { department?: string; author?: string } = {}): Promise<LocalTermFile> {
+    const file = await writeLocalTermFile(this.config.cacheDirectory, name, stampAttribution(text, attribution))
+    await this.reloadLocal()
+    this.recompile()
+    this.ctx.logger.info(`redaction: uploaded the term list ${file.name} with ${String(file.terms)} term(s) and ${String(file.patterns)} pattern(s)`)
+    return file
+  }
+
+  /**
+   * Drop one uploaded list and take its rules back out of force.
+   * @param name File name as it was uploaded.
+   * @returns True when a file was removed.
+   */
+  async removeLocal(name: string): Promise<boolean> {
+    const removed = await removeLocalTermFile(this.config.cacheDirectory, name)
+    if (!removed) return false
+    await this.reloadLocal()
+    this.recompile()
+    this.ctx.logger.info(`redaction: removed the uploaded term list ${name}`)
+    return true
+  }
+
+  /**
+   * Turn one uploaded list on or off without touching what it declares.
+   *
+   * The published list has no such switch: it is the floor every install stands
+   * on, and a client that could turn it off would spend part of its life
+   * replacing nothing.
+   * @param name File name as it was uploaded.
+   * @param enabled Whether the list should take part.
+   * @returns The stored file as it reads after the change.
+   * @throws LocalTermError when no list is stored under that name.
+   */
+  async setLocalEnabled(name: string, enabled: boolean): Promise<LocalTermFile> {
+    const file = await setLocalTermEnabled(this.config.cacheDirectory, name, enabled)
+    await this.reloadLocal()
+    this.recompile()
+    this.ctx.logger.info(`redaction: the uploaded list ${file.name} is now ${enabled ? 'in' : 'out of'} force`)
+    return file
+  }
+
+  /**
+   * The upload template this build ships, for a department to start from.
+   * @returns The template as YAML text.
+   */
+  async localExample(): Promise<string> {
+    return await readFile(LOCAL_EXAMPLE_PATH, 'utf8')
+  }
+}
+
+/**
+ * Names of the mapping files in one directory, oldest name first; empty when the
+ * directory does not exist yet.
+ * @param directory Directory that holds one `.jsonl` file per task.
+ * @returns The file names, sorted, or an empty list.
+ */
+async function mappingFiles(directory: string): Promise<string[]> {
+  try {
+    return (await readdir(directory)).filter(name => name.endsWith('.jsonl')).sort()
+  } catch {
+    // No directory yet: this install has never ended a session with the
+    // write-back on.
+    return []
+  }
+}
+
+/**
+ * Entries recorded in one mapping file.
+ * @param directory Directory that holds the file.
+ * @param name File name to read.
+ * @returns The entries it records; empty when it is missing or empty.
+ */
+async function readMappingFile(
+  directory: string,
+  name: string,
+  key: Buffer | undefined,
+): Promise<{ entries: RedactionEntry[]; plain: boolean }> {
+  let body: string
+  try {
+    body = await readFile(join(directory, name), 'utf8')
+  } catch {
+    return { entries: [], plain: false }
+  }
+  const entries: RedactionEntry[] = []
+  let plain = false
+  for (const line of body.split('\n')) {
+    if (line.trim() === '') continue
+    if (!line.includes('"e"')) plain = true
+    const entry = openLine(line, key)
+    if (entry !== undefined) entries.push(entry)
+  }
+  return { entries, plain }
+}
+
+/**
+ * Rewrite one mapping file with every entry sealed.
+ * @param directory - the directory holding the file.
+ * @param name - the file to rewrite.
+ * @param key - the machine key.
+ * @param entries - the pairings the file records.
+ */
+async function sealMappingFile(
+  directory: string,
+  name: string,
+  key: Buffer,
+  entries: readonly RedactionEntry[],
+): Promise<void> {
+  try {
+    await writeFile(join(directory, name), entries.map(entry => sealEntry(entry, key)).join(''), 'utf8')
+  } catch {
+    // A file that cannot be rewritten stays as it is; the entries are already in
+    // the map, so the session is unaffected and the next launch tries again.
+  }
+}

@@ -1,0 +1,441 @@
+/**
+ * The redaction page: which term list the provider loaded, how many rules it
+ * compiled, how many replacements this process has made, and — the part a
+ * department acts on — the term lists uploaded to this machine.
+ *
+ * The status half is read-only because the guard has no off switch. The upload
+ * half is writable because the published list is the floor, not the ceiling: a
+ * department knows terms the company list cannot, and the page is where it
+ * says so. Every upload stays on this machine.
+ */
+
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type {
+  RedactionDepartmentView,
+  RedactionRosterView,
+  RedactionStatusView,
+  RedactionUploadView,
+  RedactionVisionView,
+} from '@deepseek-ai/dsh-api-veil-controller/types'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import css from './RedactionStatusTab.module.css'
+
+/** Registration-side Remote face used by the page. */
+/**
+ * The twenty multipliers the scale offers: one below 0.1, the nine tenths up
+ * to 1, then whole factors up to 10. Hand-picked rather than generated, because
+ * "shrink by a hundredth" and "grow tenfold" are the ends people actually want.
+ */
+export const SCALE_STEPS: readonly number[] = [
+  0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+]
+
+export interface RedactionStatusTabInjected {
+  /** Read the current provider status. */
+  status: () => Promise<RedactionStatusView>
+  /** Read the staff directory summary and what it says about the caller. */
+  roster: () => Promise<RedactionRosterView>
+  /** List the term lists uploaded to this machine. */
+  uploads: () => Promise<RedactionUploadView[]>
+  /** Store one uploaded list and put it in force. */
+  upload: (request: { readonly name: string; readonly text: string }) => Promise<RedactionUploadView>
+  /** Drop one uploaded list. */
+  drop: (request: { readonly name: string }) => Promise<boolean>
+  /** Turn one uploaded list on or off. */
+  setEnabled: (request: { readonly name: string; readonly enabled: boolean }) => Promise<RedactionUploadView>
+  /** List every department list this machine holds. */
+  departments: () => Promise<RedactionDepartmentView[]>
+  /** Turn one department list on or off. */
+  setDepartment: (request: { readonly name: string; readonly enabled: boolean }) => Promise<RedactionDepartmentView>
+  /** Read the example a department starts from. */
+  example: () => Promise<{ readonly name: string; readonly text: string }>
+  /** Point the provider at an optional reader, or at nothing. */
+  saveOcrPath: (path: string) => Promise<boolean>
+  /** Choose whether an attached picture is read on arrival or on demand. */
+  saveOcrMode: (mode: 'tool' | 'prompt') => Promise<boolean>
+  /** Choose which device the optional reader uses. */
+  saveOcrBackend: (backend: 'auto' | 'cpu' | 'gpu') => Promise<boolean>
+  saveNumberScale: (scale: number) => Promise<boolean>
+}
+
+/** Full component props assembled by the Settings slot renderer. */
+export type RedactionStatusTabProps =
+  PropsRuntime<'settings.plugins.tab'>
+  & PropsLocale<'settings.veil'>
+  & InjectFace<RedactionStatusTabInjected>
+
+type Translate = RedactionStatusTabProps['t']
+
+type ViewState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'error' }
+  | { readonly status: 'ready'; readonly view: RedactionStatusView }
+
+/** Largest upload the page will read from disk, matching the provider's own ceiling. */
+const MAX_UPLOAD_BYTES = 256 * 1024
+
+/**
+ * Name the reader an image goes through.
+ *
+ * The optional binary is a separate download, so the page says which one is in
+ * force rather than leaving a machine to guess why recognition reads differently.
+ * @param ocr The provider's reader description.
+ * @param t Translator for this page.
+ * @returns The label shown beside the row.
+ */
+function engineLabel(ocr: RedactionVisionView, t: Translate): string {
+  if (ocr.engine === 'paddle') return t('ocrPaddle')
+  return ocr.engine === 'windows' ? t('ocrWindows') : t('ocrTesseract')
+}
+
+/** Display name of the copy of the term list the loaded rules came from. */
+function sourceLabel(view: RedactionStatusView, t: Translate): string {
+  switch (view.source) {
+    case 'bundled': return t('sourceBundled')
+    case 'cache': return t('sourceCache')
+    case 'remote': return t('sourceRemote')
+  }
+}
+
+/** Render the redaction page, as the Plugins settings section asks. */
+export function RedactionStatusTab(props: RedactionStatusTabProps) {
+  const { t } = props
+  const [state, setState] = useState<ViewState>({ status: 'loading' })
+  const read = props.status
+
+  const refresh = useCallback((): void => {
+    setState({ status: 'loading' })
+    void read().then(
+      (view) => { setState({ status: 'ready', view }) },
+      () => { setState({ status: 'error' }) },
+    )
+  }, [read])
+
+  useEffect(() => {
+    let live = true
+    void read().then(
+      (view) => { if (live) setState({ status: 'ready', view }) },
+      () => { if (live) setState({ status: 'error' }) },
+    )
+    return () => { live = false }
+  }, [read])
+
+  // The path is the one setting on this page a person edits, so it starts
+  // from what the provider holds and follows it until someone types.
+  const [draftPath, setDraftPath] = useState('')
+  const [pathTyped, setPathTyped] = useState(false)
+  const [savingPath, setSavingPath] = useState(false)
+
+  useEffect(() => {
+    if (state.status === 'ready' && !pathTyped) setDraftPath(state.view.ocr.path)
+  }, [state, pathTyped])
+
+  // The two choices are one field each and change on a click, so they save as
+  // they change; the page re-reads the status afterwards to show what is in force.
+  const [savingReader, setSavingReader] = useState(false)
+  const saveReader = useCallback((
+    kind: 'mode' | 'backend',
+    value: 'tool' | 'prompt' | 'auto' | 'cpu' | 'gpu',
+  ): void => {
+    setSavingReader(true)
+    const written = kind === 'mode'
+      ? props.saveOcrMode(value as 'tool' | 'prompt')
+      : props.saveOcrBackend(value as 'auto' | 'cpu' | 'gpu')
+    void written.then(
+      (saved) => {
+        setSavingReader(false)
+        if (saved) refresh()
+      },
+      () => { setSavingReader(false) },
+    )
+  }, [props.saveOcrMode, props.saveOcrBackend, refresh])
+
+  const savePath = useCallback((): void => {
+    setSavingPath(true)
+    void props.saveOcrPath(draftPath).then(
+      (saved) => {
+        setSavingPath(false)
+        setPathTyped(false)
+        if (saved) refresh()
+      },
+      () => { setSavingPath(false) },
+    )
+  }, [props.saveOcrPath, draftPath, refresh])
+
+  if (state.status === 'loading') return <p className={css.status}>{t('loading')}</p>
+  if (state.status === 'error') {
+    return (
+      <div className={css.failure}>
+        <p>{t('error')}</p>
+        <Button onClick={refresh}>{t('retry')}</Button>
+      </div>
+    )
+  }
+
+  const { view } = state
+  return (
+    <section className={css.section}>
+      <div className={css.panel}>
+        <h3 className={css.heading}>{t('guardTitle')}</h3>
+        <p className={css.hint}>{t('guardHint')}</p>
+      </div>
+      <dl className={css.rows}>
+        <dt className={css.term}>{t('revisionLabel')}</dt>
+        <dd className={css.value}>{view.revision ?? t('never')}</dd>
+        <dt className={css.term}>{t('sourceLabel')}</dt>
+        <dd className={css.value}>{sourceLabel(view, t)}</dd>
+        <dt className={css.term}>{t('rulesLabel')}</dt>
+        <dd className={css.value}>{t('rulesValue', { terms: view.terms, patterns: view.patterns })}</dd>
+        <dt className={css.term}>{t('replacementsLabel')}</dt>
+        <dd className={css.value}>{view.replacements}</dd>
+        <dt className={css.term}>{t('pendingLabel')}</dt>
+        <dd className={css.value}>{view.pending}</dd>
+        <dt className={css.term}>{t('checkedLabel')}</dt>
+        <dd className={css.value}>{view.lastChecked ?? t('never')}</dd>
+        <dt className={css.term}>{t('imageToolLabel')}</dt>
+        <dd className={css.value}>{view.imageTool ? t('toggleOn') : t('imageToolLocal')}</dd>
+        <dt className={css.term}>{t('ocrLabel')}</dt>
+        <dd className={css.value}>
+          {engineLabel(view.ocr, t)}
+          {view.ocr.engine !== 'paddle' && (
+            <>
+              {' '}
+              <a href={view.ocr.download} target="_blank" rel="noreferrer">
+                {t('ocrDownload')}
+              </a>
+            </>
+          )}
+        </dd>
+        <dt className={css.term}>{t('ocrPathLabel')}</dt>
+        <dd className={`${css.value} ${css.pathRow}`}>
+          <input
+            className={css.pathInput}
+            value={draftPath}
+            placeholder={t('ocrPathPlaceholder')}
+            onChange={(event) => { setPathTyped(true); setDraftPath(event.target.value) }}
+          />
+          <Button disabled={savingPath || draftPath === view.ocr.path} onClick={savePath}>
+            {t('save')}
+          </Button>
+          <p className={css.hint}>{t('ocrDirectoryHint', { directory: view.ocr.directory })}</p>
+        </dd>
+        <dt className={css.term}>{t('ocrModeLabel')}</dt>
+        <dd className={css.value}>
+          <select
+            className={css.pathInput}
+            value={view.ocrMode}
+            disabled={savingReader}
+            onChange={(event) => { saveReader('mode', event.target.value as 'tool' | 'prompt') }}
+          >
+            <option value="tool">{t('ocrModeTool')}</option>
+            <option value="prompt">{t('ocrModePrompt')}</option>
+          </select>
+        </dd>
+        <dt className={css.term}>{t('ocrBackendLabel')}</dt>
+        <dd className={css.value}>
+          <select
+            className={css.pathInput}
+            value={view.ocr.backend}
+            disabled={savingReader}
+            onChange={(event) => { saveReader('backend', event.target.value as 'auto' | 'cpu' | 'gpu') }}
+          >
+            <option value="auto">{t('ocrBackendAuto')}</option>
+            <option value="cpu">{t('ocrBackendCpu')}</option>
+            <option value="gpu">{t('ocrBackendGpu')}</option>
+          </select>
+        </dd>
+        <dt className={css.term}>{t('mappingsLabel')}</dt>
+        <dd className={css.value}>{view.mappings ? t('toggleOn') : t('toggleOff')}</dd>
+      </dl>
+      <p className={css.hint}>{t('rulesHint')}</p>
+      {view.detail !== null && <p className={css.note}>{t('detailBlocked', { detail: view.detail })}</p>}
+      {view.lastError !== null && <p className={css.note}>{t('staleLabel')}: {view.lastError}</p>}
+      {view.pending > 0 && <p className={css.hint}>{t('pendingHint')}</p>}
+      <div className={css.actions}>
+        <Button onClick={refresh}>{t('refresh')}</Button>
+      </div>
+      <UploadsPanel {...props} onChanged={refresh} />
+    </section>
+  )
+}
+
+/** Props the upload half adds to the ones the page already carries. */
+type UploadsPanelProps = RedactionStatusTabProps & { readonly onChanged: () => void }
+
+/**
+ * The upload half: what this machine holds, and what it takes to add another.
+ *
+ * A file is read in the browser and its text handed over, so the upload is the
+ * YAML the department can already read — there is no server-side path that
+ * accepts an opaque blob, and nothing is stored before the provider accepts it.
+ */
+function UploadsPanel(props: UploadsPanelProps) {
+  const { t } = props
+  const [uploads, setUploads] = useState<readonly RedactionUploadView[] | null>(null)
+  const [departments, setDepartments] = useState<readonly RedactionDepartmentView[] | null>(null)
+  const [roster, setRoster] = useState<RedactionRosterView | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const picker = useRef<HTMLInputElement | null>(null)
+  const readUploads = props.uploads
+  const readRoster = props.roster
+  const readDepartments = props.departments
+
+  const reload = useCallback((): void => {
+    void readUploads().then(setUploads, () => { setUploads([]) })
+    void readRoster().then(setRoster, () => { setRoster(null) })
+    void readDepartments().then(setDepartments, () => { setDepartments([]) })
+  }, [readUploads, readRoster, readDepartments])
+
+  useEffect(reload, [reload])
+
+  const submit = useCallback((file: File): void => {
+    setBusy(true)
+    setFailure(null)
+    void file.text().then(
+      async (text) => {
+        await props.upload({ name: file.name, text })
+        setUploads(await props.uploads())
+        props.onChanged()
+      },
+      (error: unknown) => { setFailure(error instanceof Error ? error.message : String(error)) },
+    ).catch((error: unknown) => {
+      setFailure(error instanceof Error ? error.message : String(error))
+    }).finally(() => {
+      setBusy(false)
+      if (picker.current !== null) picker.current.value = ''
+    })
+  }, [props])
+
+  const choose = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0]
+    if (file === undefined) return
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setFailure(t('uploadsFileTooBig'))
+      event.target.value = ''
+      return
+    }
+    submit(file)
+  }, [submit, t])
+
+  const download = useCallback((): void => {
+    void props.example().then((sample) => {
+      const blob = new Blob([sample.text], { type: 'text/yaml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = sample.name
+      anchor.click()
+      URL.revokeObjectURL(url)
+    }, () => { setFailure(t('error')) })
+  }, [props, t])
+
+  const toggle = useCallback((entry: RedactionUploadView): void => {
+    void props.setEnabled({ name: entry.name, enabled: !entry.enabled }).then(
+      async () => { setUploads(await props.uploads()); props.onChanged() },
+      (error: unknown) => { setFailure(error instanceof Error ? error.message : String(error)) },
+    )
+  }, [props])
+
+  // The reader's own department arrives switched on, so the first tick a new
+  // colleague makes is usually another department's wording, not their own.
+  const toggleDepartment = useCallback((entry: RedactionDepartmentView): void => {
+    void props.setDepartment({ name: entry.name, enabled: !entry.enabled }).then(
+      async () => {
+        setDepartments(await props.departments())
+        setUploads(await props.uploads())
+        props.onChanged()
+      },
+      (error: unknown) => { setFailure(error instanceof Error ? error.message : String(error)) },
+    )
+  }, [props])
+
+  const drop = useCallback((entry: RedactionUploadView): void => {
+    void props.drop({ name: entry.name }).then(
+      async () => { setUploads(await props.uploads()); props.onChanged() },
+      (error: unknown) => { setFailure(error instanceof Error ? error.message : String(error)) },
+    )
+  }, [props])
+
+  return (
+    <div className={css.panel}>
+      <h3 className={css.heading}>{t('departmentsTitle')}</h3>
+      <p className={css.hint}>{t('departmentsHint')}</p>
+      {departments === null && <p className={css.status}>{t('loading')}</p>}
+      {departments !== null && departments.length === 0 && <p className={css.hint}>{t('departmentsEmpty')}</p>}
+      {departments !== null && departments.length > 0 && (
+        <ul className={css.uploads}>
+          {departments.map(entry => (
+            <li key={entry.name} className={css.upload}>
+              <div className={css.uploadHead}>
+                <label className={css.uploadName}>
+                  <input
+                    type="checkbox"
+                    checked={entry.enabled}
+                    onChange={() => { toggleDepartment(entry) }}
+                  />
+                  {entry.name}
+                </label>
+                <span className={css.uploadState}>
+                  {entry.own ? t('departmentsOwn') : t('departmentsElsewhere')}
+                </span>
+              </div>
+              <p className={css.hint}>{t('uploadsCounts', { terms: entry.terms, patterns: entry.patterns })}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <h3 className={css.heading}>{t('uploadsTitle')}</h3>
+      <p className={css.hint}>{t('uploadsHint')}</p>
+      {roster !== null && roster.enabled && roster.account === null && (
+        <p className={css.hint}>{t('uploadsRosterUnknown')}</p>
+      )}
+      {uploads === null && <p className={css.status}>{t('loading')}</p>}
+      {uploads !== null && uploads.length === 0 && <p className={css.hint}>{t('uploadsEmpty')}</p>}
+      {uploads !== null && uploads.length > 0 && (
+        <ul className={css.uploads}>
+          {uploads.map(entry => (
+            <li key={entry.name} className={css.upload}>
+              <div className={css.uploadHead}>
+                <span className={css.uploadName}>{entry.name}</span>
+                <span className={css.uploadState}>{entry.enabled ? t('uploadsEnable') : t('uploadsDisabled')}</span>
+              </div>
+              <p className={css.hint}>
+                {entry.department === null && entry.author === null
+                  ? t('uploadsNoAttribution')
+                  : t('uploadsAttribution', { department: entry.department ?? '', author: entry.author ?? '' })}
+                {' · '}
+                {t('uploadsCounts', { terms: entry.terms, patterns: entry.patterns })}
+              </p>
+              {entry.problems.length > 0 && (
+                <div className={css.note}>
+                  <p>{t('uploadsProblems')}</p>
+                  <ul>
+                    {entry.problems.map((problem, index) => <li key={String(index)}>{problem}</li>)}
+                  </ul>
+                </div>
+              )}
+              <div className={css.actions}>
+                <Button onClick={() => { toggle(entry) }}>{t('uploadsEnable')}</Button>
+                <Button onClick={() => { drop(entry) }}>{t('uploadsRemove')}</Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {failure !== null && <p className={css.note}>{t('uploadsFailed', { detail: failure })}</p>}
+      <div className={css.actions}>
+        <input
+          ref={picker}
+          className={css.file}
+          type="file"
+          accept=".yaml,.yml,.txt"
+          onChange={choose}
+        />
+        <Button onClick={download}>{t('uploadsExample')}</Button>
+        {busy && <span className={css.hint}>{t('uploadsUploading')}</span>}
+      </div>
+    </div>
+  )
+}

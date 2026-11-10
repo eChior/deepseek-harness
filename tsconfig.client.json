@@ -135,7 +135,7 @@
     { "path": "./packages/client/ui-settings-models" },
     { "path": "./packages/client/ui-plugin-manager/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-plugin-inventory" },
-    { "path": "./packages/client/ui-settings-redaction" },
+    { "path": "./packages/client/ui-settings-veil" },
     { "path": "./packages/client/ui-settings-skills" },
     { "path": "./packages/client/locale/tsconfig.client.json" },
     { "path": "./packages/client/ui-renderer" },

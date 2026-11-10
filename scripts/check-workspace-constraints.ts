@@ -212,7 +212,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-skill-office': ['assets'],
   // The term list and the bundled skill copy are data the runtime reads by path;
   // each of these publishes its assets directory beside lib rather than inlining it.
-  '@deepseek-ai/dsh-redaction': ['assets'],
+  '@deepseek-ai/dsh-veil': ['assets'],
   '@deepseek-ai/dsh-skill-repo': ['assets'],
   // The department API keys ride beside the bundle: the account service reads
   // them by path at runtime, so they never enter the loader graph.

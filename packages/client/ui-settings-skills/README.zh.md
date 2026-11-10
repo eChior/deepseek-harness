@@ -41,7 +41,7 @@ kind: "package-reference"
 - [skill-repo](../../skill/skill-repo/README.zh.md) —— 读取本机技能、把它们写进仓库的 provider。
 - [skill-repo-controller](../../api/skill-repo-controller/README.zh.md) —— Host 侧，把该调用以 `skillRepo` 命名空间重新发出。
 - [ui-settings](../ui-settings/README.zh.md) —— 声明 `settings.plugins.tab` 的领域基座。
-- [ui-settings-redaction](../ui-settings-redaction/README.zh.md) —— 相邻的脱敏页，本页沿用它的形状。
+- [ui-settings-redaction](../ui-settings-veil/README.zh.md) —— 相邻的脱敏页，本页沿用它的形状。
 
 -----
 

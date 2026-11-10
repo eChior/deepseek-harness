@@ -7,7 +7,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { RedactionService } from '@deepseek-ai/dsh-redaction'
+import { RedactionService } from '@deepseek-ai/dsh-veil'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mkdtemp, writeFile } from 'node:fs/promises'

@@ -16,9 +16,9 @@ import { join, resolve } from 'node:path'
 
 /** Source file to the archive entry it must appear as. */
 const ASSETS = [
-  ['packages/security/redaction/assets/roster.key', 'roster.key'],
-  ['packages/security/redaction/assets/roster.bin', 'roster.bin'],
-  ['packages/security/redaction/assets/terms.yaml', 'terms.yaml'],
+  ['packages/security/veil/assets/roster.key', 'roster.key'],
+  ['packages/security/veil/assets/roster.bin', 'roster.bin'],
+  ['packages/security/veil/assets/terms.yaml', 'terms.yaml'],
   ['packages/credentials/hrzszy-account/assets/qwen-keys.json', 'qwen-keys.json'],
   ['packages/skill/skill-repo/assets/skills.token', 'skills.token'],
 ]

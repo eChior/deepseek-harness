@@ -2413,102 +2413,6 @@ export type Config = LocalConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-pwsh-sandbox -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-redaction -->
-<a id="deepseek-aidsh-redaction"></a>
-
-## `@deepseek-ai/dsh-redaction`
-
-- `source`: [`packages/security/redaction/src/plugin.ts:145`](../packages/security/redaction/src/plugin.ts)
-
-```ts config-catalog
-/**
- * Fields a deployment can set for this provider.
- *
- * There is deliberately no switch that turns the provider off. Redaction is the
- * one feature whose failure is silent: a disabled provider writes the very
- * values this feature exists to keep out of the session log, and neither the
- * user nor the model would see it happen. A rule that over-matches is corrected
- * on the publishing side, where the fix reaches every machine by itself — so the
- * escape hatch for a bad rule is the rule list, never a per-machine switch.
- */
-export interface Config {
-  /** Term list to load when nothing is cached. Defaults to the copy inside this package. */
-  termsPath?: string
-  /** Repository that publishes the list. An empty string keeps this build's copy in place. */
-  remote?: string
-  /** Branch whose tip is the published list. */
-  branch?: string
-  /** Path of the list inside that branch. */
-  file?: string
-  /** Directory holding this machine's copies of the list. */
-  cacheDirectory?: string
-  /** Minutes between refreshes. 0 loads the list once and never contacts the repository. */
-  refreshMinutes?: number
-  /** Per-request timeout, in milliseconds, for one refresh. */
-  timeoutMs?: number
-  /** Set to false to report no text for an image instead of reading it locally. */
-  vision?: boolean
-  /** How long one local recognition may take, in milliseconds. */
-  visionTimeoutMs?: number
-  /**
-   * Path to the optional `dsh-ocr` binary, which reads images with PaddleOCR.
-   *
-   * That binary carries a model and a runtime of its own, so it is published on
-   * the intranet rather than bundled; an empty path keeps the platform reader,
-   * and a machine that downloaded it points this at the file.
-   */
-  ocrPath?: string
-  /**
-   * Add every colleague and department from the shipped staff directory to the
-   * rules, and let an upload inherit its department from it.
-   *
-   * Per-machine rather than fixed, because the directory belongs to one
-   * deployment: a build that carries somebody else's staff list must be able to
-   * leave it out, and a user who would rather not have their own name rewritten
-   * needs a switch they can reach.
-   */
-  includeRoster?: boolean
-  /**
-   * Ciphertext of the staff directory. Defaults to the copy inside this package.
-   *
-   * Exposed so a deployment can point at its own directory without rebuilding,
-   * and so a test can reach one it sealed itself instead of reading the list
-   * that ships here.
-   */
-  rosterPath?: string
-  /** Persist the placeholder table to the local mappings directory when a session ends. */
-  mappings?: boolean
-  /** Deny the read-image tool to every agent of this deployment. Defaults to true: images go through local OCR, not the model. */
-  readImage?: boolean
-  /**
-   * Whether a picture the user attaches is read on arrival or on demand.
-   *
-   * `tool` keeps the image in the session and leaves reading it to the model,
-   * which calls the reader tool when it wants the text; `prompt` reads every
-   * image as the prompt arrives and appends the text beside it, which is what a
-   * deployment whose model has no tools needs.
-   */
-  ocrMode?: 'tool' | 'prompt'
-  /** Which device the optional reader uses: measured on first run, or pinned. */
-  ocrBackend?: 'auto' | 'cpu' | 'gpu'
-  /**
-   * Whether a file the model writes has its placeholders replaced by the originals.
-   *
-   * On by default: a document a model authors carries placeholders, and leaving
-   * them in a file the user opens is the failure this switch exists to prevent.
-   * Off means the reader decides per file, with the restore tool.
-   */
-  restoreOnWrite?: boolean
-  /**
-   * Multiplier applied to every quantity, one-way and marked in the text.
-   * `1` leaves numbers alone; the switch is off by default because a scaled
-   * session cannot answer a question about true magnitudes.
-   */
-  numberScale?: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-redaction -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-repeat-tool-reminder -->
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
@@ -4262,6 +4166,102 @@ export type ApprovalPolicy = 'ask' | 'never'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-user-approval -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-veil -->
+<a id="deepseek-aidsh-veil"></a>
+
+## `@deepseek-ai/dsh-veil`
+
+- `source`: [`packages/security/veil/src/plugin.ts:145`](../packages/security/veil/src/plugin.ts)
+
+```ts config-catalog
+/**
+ * Fields a deployment can set for this provider.
+ *
+ * There is deliberately no switch that turns the provider off. Redaction is the
+ * one feature whose failure is silent: a disabled provider writes the very
+ * values this feature exists to keep out of the session log, and neither the
+ * user nor the model would see it happen. A rule that over-matches is corrected
+ * on the publishing side, where the fix reaches every machine by itself — so the
+ * escape hatch for a bad rule is the rule list, never a per-machine switch.
+ */
+export interface Config {
+  /** Term list to load when nothing is cached. Defaults to the copy inside this package. */
+  termsPath?: string
+  /** Repository that publishes the list. An empty string keeps this build's copy in place. */
+  remote?: string
+  /** Branch whose tip is the published list. */
+  branch?: string
+  /** Path of the list inside that branch. */
+  file?: string
+  /** Directory holding this machine's copies of the list. */
+  cacheDirectory?: string
+  /** Minutes between refreshes. 0 loads the list once and never contacts the repository. */
+  refreshMinutes?: number
+  /** Per-request timeout, in milliseconds, for one refresh. */
+  timeoutMs?: number
+  /** Set to false to report no text for an image instead of reading it locally. */
+  vision?: boolean
+  /** How long one local recognition may take, in milliseconds. */
+  visionTimeoutMs?: number
+  /**
+   * Path to the optional `dsh-ocr` binary, which reads images with PaddleOCR.
+   *
+   * That binary carries a model and a runtime of its own, so it is published on
+   * the intranet rather than bundled; an empty path keeps the platform reader,
+   * and a machine that downloaded it points this at the file.
+   */
+  ocrPath?: string
+  /**
+   * Add every colleague and department from the shipped staff directory to the
+   * rules, and let an upload inherit its department from it.
+   *
+   * Per-machine rather than fixed, because the directory belongs to one
+   * deployment: a build that carries somebody else's staff list must be able to
+   * leave it out, and a user who would rather not have their own name rewritten
+   * needs a switch they can reach.
+   */
+  includeRoster?: boolean
+  /**
+   * Ciphertext of the staff directory. Defaults to the copy inside this package.
+   *
+   * Exposed so a deployment can point at its own directory without rebuilding,
+   * and so a test can reach one it sealed itself instead of reading the list
+   * that ships here.
+   */
+  rosterPath?: string
+  /** Persist the placeholder table to the local mappings directory when a session ends. */
+  mappings?: boolean
+  /** Deny the read-image tool to every agent of this deployment. Defaults to true: images go through local OCR, not the model. */
+  readImage?: boolean
+  /**
+   * Whether a picture the user attaches is read on arrival or on demand.
+   *
+   * `tool` keeps the image in the session and leaves reading it to the model,
+   * which calls the reader tool when it wants the text; `prompt` reads every
+   * image as the prompt arrives and appends the text beside it, which is what a
+   * deployment whose model has no tools needs.
+   */
+  ocrMode?: 'tool' | 'prompt'
+  /** Which device the optional reader uses: measured on first run, or pinned. */
+  ocrBackend?: 'auto' | 'cpu' | 'gpu'
+  /**
+   * Whether a file the model writes has its placeholders replaced by the originals.
+   *
+   * On by default: a document a model authors carries placeholders, and leaving
+   * them in a file the user opens is the failure this switch exists to prevent.
+   * Off means the reader decides per file, with the restore tool.
+   */
+  restoreOnWrite?: boolean
+  /**
+   * Multiplier applied to every quantity, one-way and marked in the text.
+   * `1` leaves numbers alone; the switch is off by default because a scaled
+   * session cannot answer a question about true magnitudes.
+   */
+  numberScale?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-veil -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-web -->
 <a id="deepseek-aidsh-web"></a>
 
@@ -4504,9 +4504,9 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-acp-app` | `cmdlineArgs` | [`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts) |
 | `@deepseek-ai/dsh-agent` | — | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
 | `@deepseek-ai/dsh-api-account-controller` | `deepseekAccount` · `agents` | [`packages/api/account-controller/src/index.ts`](../packages/api/account-controller/src/index.ts) |
-| `@deepseek-ai/dsh-api-redaction-controller` | `veil` · `deepseekAccount` · `agents` | [`packages/api/redaction-controller/src/index.ts`](../packages/api/redaction-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |
 | `@deepseek-ai/dsh-api-skill-repo-controller` | `skillRepo` | [`packages/api/skill-repo-controller/src/index.ts`](../packages/api/skill-repo-controller/src/index.ts) |
+| `@deepseek-ai/dsh-api-veil-controller` | `veil` · `deepseekAccount` · `agents` | [`packages/api/veil-controller/src/index.ts`](../packages/api/veil-controller/src/index.ts) |
 | `@deepseek-ai/dsh-authorization` | `credentials` | [`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts) |
 | `@deepseek-ai/dsh-browser-use` | — | [`packages/browser-use/browser-use/src/index.ts`](../packages/browser-use/browser-use/src/index.ts) |
 | `@deepseek-ai/dsh-client-file-upload` | `agents` · `attachments` · `commands` · `connection` | [`packages/client/file-upload/src/index.ts`](../packages/client/file-upload/src/index.ts) |
@@ -4542,11 +4542,11 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-settings-general` | — | [`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` | — | [`packages/client/ui-settings-plugin-inventory/src/index.ts`](../packages/client/ui-settings-plugin-inventory/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-plugins` | — | [`packages/client/ui-settings-plugins/src/index.ts`](../packages/client/ui-settings-plugins/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-settings-redaction` | — | [`packages/client/ui-settings-redaction/src/index.ts`](../packages/client/ui-settings-redaction/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-session-log` | — | [`packages/client/ui-settings-session-log/src/index.ts`](../packages/client/ui-settings-session-log/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-shell` | — | [`packages/client/ui-settings-shell/src/index.ts`](../packages/client/ui-settings-shell/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-skills` | — | [`packages/client/ui-settings-skills/src/index.ts`](../packages/client/ui-settings-skills/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-subagent` | — | [`packages/client/ui-settings-subagent/src/index.ts`](../packages/client/ui-settings-subagent/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-settings-veil` | — | [`packages/client/ui-settings-veil/src/index.ts`](../packages/client/ui-settings-veil/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-web-search` | — | [`packages/client/ui-settings-web-search/src/index.ts`](../packages/client/ui-settings-web-search/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-shortcuts` | — | [`packages/client/ui-shortcuts/src/index.ts`](../packages/client/ui-shortcuts/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-sidebar` | — | [`packages/client/ui-sidebar/src/index.ts`](../packages/client/ui-sidebar/src/index.ts) |

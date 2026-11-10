@@ -39,7 +39,7 @@ kind: "package-reference"
 ## 进一步探索
 
 - [skill-repo](../../skill/skill-repo/README.zh.md) —— 列出本机技能并发布其中一个的 provider。
-- [redaction-controller](../redaction-controller/README.zh.md) —— 相邻的 Remote 归属者，本包沿用它的形状。
+- [veil-controller](../veil-controller/README.zh.md) —— 相邻的 Remote 归属者，本包沿用它的形状。
 - [remotes](../remotes/README.zh.md) —— 挂载该命名空间的客户端装配。
 - [typert](../../typert/protocol/README.zh.md) —— 两侧面生成所依据的协议。
 

@@ -26,7 +26,7 @@ One package provides this family today. Its README covers the term-list format, 
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`redaction/`](redaction/README.md) | Rewrite matched identifiers and figures into stable placeholders before any caller appends text to a session | `ctx.redaction` |
+| [`redaction/`](veil/README.md) | Rewrite matched identifiers and figures into stable placeholders before any caller appends text to a session | `ctx.redaction` |
 
 -----
 

@@ -26,7 +26,7 @@ kind: "package-group"
 
 | 包 | 职责 | ctx key |
 |---|---|---|
-| [`redaction/`](redaction/README.zh.md) | 在任何调用方把文本写入会话之前，把命中的标识与数字改写成稳定占位符 | `ctx.redaction` |
+| [`redaction/`](veil/README.zh.md) | 在任何调用方把文本写入会话之前，把命中的标识与数字改写成稳定占位符 | `ctx.redaction` |
 
 -----
 

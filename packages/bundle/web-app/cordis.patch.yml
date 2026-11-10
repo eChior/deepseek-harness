@@ -148,8 +148,8 @@
     # Read-only status of the redaction provider, for the Settings page. The
     # provider itself is mounted by the base profile; this row only republishes
     # its record over Typert Remote.
-    - id: redaction-controller
-      name: '@deepseek-ai/dsh-api-redaction-controller'
+    - id: veil-controller
+      name: '@deepseek-ai/dsh-api-veil-controller'
 
     # Publishing a local skill into the department skill repository. The provider
     # is mounted by the base profile; this row republishes its file operations
@@ -322,8 +322,8 @@
     # Read-only redaction status tab in the same section: the term-list revision
     # the provider loaded, its compiled rule counts, and this process's
     # replacement counter.
-    - id: ui-settings-redaction
-      name: '@deepseek-ai/dsh-client-ui-settings-redaction'
+    - id: ui-settings-veil
+      name: '@deepseek-ai/dsh-client-ui-settings-veil'
 
     # Skill publishing tab in the same section: one row per skill this machine
     # holds, and the button that sends it to the department repository.
