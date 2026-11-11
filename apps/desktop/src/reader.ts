@@ -20,7 +20,7 @@ import { inflateRawSync } from 'node:zlib'
  * A machine outside the intranet simply fails here and keeps the
  * status the settings page already explains.
  */
-const READER_DOWNLOAD = 'http://10.151.5.175:3000/ITPublic/dsh-ocr/releases/download/v1.2.0'
+const READER_DOWNLOAD = 'http://10.151.5.175:3000/ITPublic/dsh-ocr/releases/download/v1.3.0'
 const DOWNLOAD_TIMEOUT_MS = 120_000
 
 /** Fetch one archive from the intranet, or nothing when it is out of reach. */

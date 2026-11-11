@@ -53,10 +53,10 @@ apps/desktop/resources/wps/wps2pdf
 
 # The optional image reader is compiled on demand and published on the intranet; only its
 # source lives here.
-packages/security/redaction/ocr/bin/
-packages/security/redaction/ocr/obj/
-packages/security/redaction/ocr/out/
-packages/security/redaction/ocr/*.zip
+packages/security/veil/ocr/bin/
+packages/security/veil/ocr/obj/
+packages/security/veil/ocr/out/
+packages/security/veil/ocr/*.zip
 
 # Per-department Qwen keys are deployment secrets: the packaging step writes this file from
 # the DSH_QWEN_KEYS secret, and a build without the secret ships an empty table.

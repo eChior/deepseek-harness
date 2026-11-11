@@ -321,11 +321,11 @@ using (source)
 
     if (fixedBackend is OcrBackend known)
     {
-        (PaddleOcrAll ocr, PaddleOcrResult result, double milliseconds) = LoadAndRun(bitmap, known);
+        (PaddleOcrAll ocr, OcrBackend used, PaddleOcrResult result, double milliseconds) = LoadOne(bitmap, known);
         using (ocr)
         {
-            Console.Error.WriteLine($"backend={FormatBackend(known)} ({milliseconds:F0} ms)");
-            Write(result, known, milliseconds, bitmap);
+            Console.Error.WriteLine($"backend={FormatBackend(used)} ({milliseconds:F0} ms)");
+            Write(result, used, milliseconds, bitmap);
         }
         return 0;
     }
@@ -336,11 +336,13 @@ using (source)
     {
         gpu = LoadAndRun(bitmap, OcrBackend.Vulkan);
     }
-    catch (Exception error) when (error is DllNotFoundException or InvalidOperationException or NotSupportedException or TypeInitializationException)
+    catch (Exception error) when (error is not OutOfMemoryException)
     {
-        // No Vulkan loader or no device that can run the kernels: the CPU result
-        // is what this machine reads images with, and that is not a failure.
-        Console.Error.WriteLine($"vulkan unavailable: {error.GetType().Name}");
+        // No Vulkan loader, no device that can run the kernels, or a driver
+        // that returns garbage (Kirin's Mali stack produces NaN logits): the
+        // CPU result is what this machine reads images with, and that is not a
+        // failure.
+        Console.Error.WriteLine($"vulkan unavailable: {error.GetType().Name}: {error.Message}");
     }
 
     if (gpu is { } faster && faster.Milliseconds < cpu.Milliseconds)
@@ -371,6 +373,29 @@ void Write(PaddleOcrResult result, OcrBackend backend, double milliseconds, SKBi
         : result.Text);
 }
 
+// A read on the requested device, with a CPU retry when that device cannot
+// deliver. An explicit `--backend=vulkan` on a machine whose driver produces
+// invalid output would otherwise turn every image into a crash; the answer is
+// still a correct OCR result, just one device slower.
+(PaddleOcrAll Ocr, OcrBackend Backend, PaddleOcrResult Result, double Milliseconds) LoadOne(
+    SKBitmap bitmap,
+    OcrBackend backend)
+{
+    try
+    {
+        (PaddleOcrAll ocr, PaddleOcrResult result, double ms) = LoadAndRun(bitmap, backend);
+        return (ocr, backend, result, ms);
+    }
+    catch (Exception error) when (error is not OutOfMemoryException && backend != OcrBackend.Cpu)
+    {
+        Console.Error.WriteLine(
+            $"backend {FormatBackend(backend)} failed ({error.GetType().Name}: {error.Message}); falling back to cpu");
+        Remember(OcrBackend.Cpu);
+        (PaddleOcrAll ocr, PaddleOcrResult result, double ms) = LoadAndRun(bitmap, OcrBackend.Cpu);
+        return (ocr, OcrBackend.Cpu, result, ms);
+    }
+}
+
 // Pick the device on the first image and keep the model that ran it. The
 // measurement and the first answer are the same run, so the first image does
 // not pay for a measurement it cannot use.
@@ -381,8 +406,7 @@ void Write(PaddleOcrResult result, OcrBackend backend, double milliseconds, SKBi
 {
     if (fixedBackend is OcrBackend known)
     {
-        (PaddleOcrAll ocr, PaddleOcrResult result, double ms) = LoadAndRun(bitmap, known);
-        return (ocr, known, result, ms);
+        return LoadOne(bitmap, known);
     }
 
     // A server reads many images, so the first one must not pay for a Vulkan
@@ -403,9 +427,9 @@ void Write(PaddleOcrResult result, OcrBackend backend, double milliseconds, SKBi
     {
         gpu = LoadAndRun(bitmap, OcrBackend.Vulkan);
     }
-    catch (Exception error) when (error is DllNotFoundException or InvalidOperationException or NotSupportedException or TypeInitializationException)
+    catch (Exception error) when (error is not OutOfMemoryException)
     {
-        Console.Error.WriteLine($"vulkan unavailable: {error.GetType().Name}");
+        Console.Error.WriteLine($"vulkan unavailable: {error.GetType().Name}: {error.Message}");
     }
 
     if (gpu is { } faster && faster.Milliseconds < cpu.Milliseconds)
