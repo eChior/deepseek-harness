@@ -177,13 +177,21 @@ jobs:
           if (-not (Test-Path (Join-Path $runtime 'pwsh\pwsh.exe'))) { throw 'the Windows 7 package has no bundled PowerShell' }
           $electron = Join-Path $root 'electron'
           New-Item -ItemType Directory -Force $electron | Out-Null
-          Copy-Item -Path (Join-Path $target '*') -Destination $electron -Recurse -Force
-          Rename-Item -Path (Join-Path $electron 'DeepSeek Harness.exe') -NewName 'electron.exe'
-          # The published installer carries this project's own app.asar; the Electron tree must
-          # keep only the bare runtime, or the packaging step finds two applications in one target.
-          Remove-Item -Recurse -Force (Join-Path $electron 'resources/app.asar')
-          Remove-Item -Recurse -Force (Join-Path $electron 'resources/app.asar.unpacked') -ErrorAction SilentlyContinue
-          Remove-Item -Force (Join-Path $electron 'resources/app-update.yml') -ErrorAction SilentlyContinue
+          # Copy only what Electron needs to start. The published installer also carries this
+          # project's own application and its runtime, and letting those through makes the
+          # packaging checks see two applications and a stray unpacked tree.
+          New-Item -ItemType Directory -Path $electron -Force | Out-Null
+          Copy-Item -Path (Join-Path $target 'DeepSeek Harness.exe') -Destination (Join-Path $electron 'electron.exe')
+          foreach ($pattern in @('*.dll', '*.pak', '*.bin', '*.dat', '*.json', '*.html')) {
+            Get-ChildItem -Path $target -Filter $pattern -File | Copy-Item -Destination $electron
+          }
+          Copy-Item -Path (Join-Path $target 'locales') -Destination $electron -Recurse
+          $resources = Join-Path $electron 'resources'
+          New-Item -ItemType Directory -Path $resources -Force | Out-Null
+          Copy-Item -Path (Join-Path $target 'resources/default_app.asar') -Destination $resources
+          Get-ChildItem -Path (Join-Path $target 'resources') -File |
+            Where-Object { $_.Extension -in @('.pak', '.bin', '.dat') } |
+            Copy-Item -Destination $resources
           "DSH_WIN7_ELECTRON_DIST=$electron" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "DSH_WIN7_RUNTIME_DIST=$runtime" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Package Windows x64
