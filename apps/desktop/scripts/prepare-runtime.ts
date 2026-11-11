@@ -117,7 +117,7 @@ async function main(): Promise<void> {
   const archive = localElectron !== undefined && localElectron !== ''
     ? localElectron
     : await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'download:electron',
-      () => downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads }))
+      () => downloadElectron(version, platform, arch))
 
   rmSync(BUILD_PATHS.electron, { recursive: true, force: true })
   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'extract:electron', () => extractZip(archive, { dir: BUILD_PATHS.electron }))
@@ -131,6 +131,7 @@ async function main(): Promise<void> {
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
   const pnpmVersion = preparePnpm()
+  const npmVersion = prepareNpm()
 
   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:win7-pwsh', prepareWin7Pwsh)
 
