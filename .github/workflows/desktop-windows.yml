@@ -160,6 +160,28 @@ jobs:
           ) | Set-Content -Path $path -Encoding utf8
           Get-Content $path
 
+      # The Windows 7 runtime is not published as a separate archive: the community
+      # build ships one installer, so unpack it and hand the pieces to the packaging
+      # scripts. Nothing is taken from a checked-in copy.
+      - name: Fetch the Windows 7 runtime
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'win7'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $installer = Join-Path $root 'win7.exe'
+          Invoke-WebRequest -Headers @{ 'User-Agent' = 'dsh-win7' } -OutFile $installer `
+            -Uri 'https://github.com/factfinding/dsh-win7/releases/download/dsh-v0.2.0-rc.2-win7.1/deepseek-harness-0.2.0-rc.2-win7-x64-unsigned.exe'
+          $target = Join-Path $root 'pkg'
+          $process = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$target" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "the Windows 7 package exited $($process.ExitCode)" }
+          $runtime = Join-Path $target 'resources\runtime'
+          if (-not (Test-Path (Join-Path $runtime 'pwsh\pwsh.exe'))) { throw 'the Windows 7 package has no bundled PowerShell' }
+          $electron = Join-Path $root 'electron'
+          New-Item -ItemType Directory -Force $electron | Out-Null
+          Copy-Item -Path (Join-Path $target '*') -Destination $electron -Recurse -Force
+          Rename-Item -Path (Join-Path $electron 'DeepSeek Harness.exe') -NewName 'electron.exe'
+          "DSH_WIN7_ELECTRON_DIST=$electron" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "DSH_WIN7_RUNTIME_DIST=$runtime" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Package Windows x64
         shell: pwsh
         # The stamp has to arrive as an argument. `package-target.ts` derives the version it
