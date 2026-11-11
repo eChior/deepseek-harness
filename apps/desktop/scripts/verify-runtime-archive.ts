@@ -24,6 +24,10 @@ export async function verifyRuntimeArchive(archivePath: string, expected: Deskto
   }
   const files: DesktopRuntimeFile[] = []
   const unpacked = new Set<string>()
+  // Electron Builder unpacks a directory as a whole, so a file can land on disk while its
+  // ASAR entry keeps no unpacked mark. Record every archived path and reject only files the
+  // archive never listed at all.
+  const archived = new Set<string>()
   async function visit(node: Node, path: string): Promise<void> {
     if (node.link !== undefined) throw new Error(`desktop runtime: unexpected ASAR link ${path}`)
     if (node.files !== undefined) {
@@ -34,6 +38,7 @@ export async function verifyRuntimeArchive(archivePath: string, expected: Deskto
     const physical = node.unpacked === true ? await lstat(join(`${archivePath}.unpacked`, name)) : undefined
     if (physical !== undefined && !physical.isFile()) throw new Error(`desktop runtime: unexpected unpacked entry ${path}`)
     if (node.unpacked === true) unpacked.add(join(`${archivePath}.unpacked`, name))
+    archived.add(join(`${archivePath}.unpacked`, name))
     if (path === 'desktop-runtime.json') return
     const body = await archive.readFile(name)
     // ASAR stores only owner-execute; group/other-only executable files fail the inventory comparison.
@@ -51,7 +56,7 @@ export async function verifyRuntimeArchive(archivePath: string, expected: Deskto
   for (const entry of entries) {
     if (entry.isDirectory()) continue
     const path = join(entry.parentPath, entry.name)
-    if (!entry.isFile() || !unpacked.has(path)) throw new Error(`desktop runtime: unexpected unpacked entry ${path}`)
+    if (!entry.isFile() || !archived.has(path)) throw new Error(`desktop runtime: unexpected unpacked entry ${path}`)
   }
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
   const retained = (items: readonly DesktopRuntimeFile[]): DesktopRuntimeFile[] =>
