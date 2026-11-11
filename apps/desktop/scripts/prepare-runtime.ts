@@ -112,15 +112,26 @@ async function main(): Promise<void> {
   const require = createRequire(import.meta.url)
   const { version } = require('electron/package.json') as { version: string }
 
-  // Windows 7 build: DSH_WIN7_ELECTRON_ARCHIVE names the locally built, Win7-patched Electron zip.
+  // Windows 7 build: DSH_WIN7_ELECTRON_ARCHIVE names a patched Electron zip, and
+  // DSH_WIN7_ELECTRON_DIST names an already unpacked tree; either one skips the download.
   const localElectron = process.env.DSH_WIN7_ELECTRON_ARCHIVE
-  const archive = localElectron !== undefined && localElectron !== ''
-    ? localElectron
-    : await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'download:electron',
-      () => downloadElectron(version, platform, arch))
+  const electronDist = process.env.DSH_WIN7_ELECTRON_DIST
+  const reuseElectron = (localElectron !== undefined && localElectron !== '')
+  const reuseDist = electronDist !== undefined && electronDist !== ''
+  const archive = reuseElectron
+    ? String(localElectron)
+    : reuseDist
+      ? ''
+      : await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'download:electron',
+        () => downloadElectron(version, platform, arch))
 
   rmSync(BUILD_PATHS.electron, { recursive: true, force: true })
-  await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'extract:electron', () => extractZip(archive, { dir: BUILD_PATHS.electron }))
+  if (reuseDist) {
+    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'copy:electron',
+      async () => { cpSync(electronDist, BUILD_PATHS.electron, { recursive: true }) })
+  } else {
+    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'extract:electron', () => extractZip(archive, { dir: BUILD_PATHS.electron }))
+  }
   const executable = join(BUILD_PATHS.electron, platform === 'win32' ? 'electron.exe'
     : platform === 'linux' ? 'electron' : 'Electron.app/Contents/MacOS/Electron')
   const nodeVersion = execFileSync(executable, ['-p', 'process.versions.node'], {
@@ -148,8 +159,15 @@ async function main(): Promise<void> {
   if (macosMinimumVersion !== undefined) prepareCommandLink(join(RUNTIME_ROOT, 'cli'), arch, macosMinimumVersion)
   cpSync(join(import.meta.dirname, '..', 'lib', 'command-manager-entry.js'), join(RUNTIME_ROOT, 'cli', 'command-manager.js'))
   cpSync(join(import.meta.dirname, 'command-path.ps1'), join(RUNTIME_ROOT, 'cli', 'command-path.ps1'))
-  await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
-    () => preparePrimaryRuntime({ deferSmoke: values['defer-primary-runtime-smoke'] }))
+  // DSH_WIN7_RUNTIME_DIST copies an already prepared runtime tree (primary-runtime + pwsh).
+  const runtimeDist = process.env.DSH_WIN7_RUNTIME_DIST
+  if (runtimeDist !== undefined && runtimeDist !== '') {
+    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'copy:primary-runtime',
+      async () => { cpSync(runtimeDist, RUNTIME_ROOT, { recursive: true }) })
+  } else {
+    await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
+      () => preparePrimaryRuntime({ deferSmoke: values['defer-primary-runtime-smoke'] }))
+  }
 }
 
 await main()

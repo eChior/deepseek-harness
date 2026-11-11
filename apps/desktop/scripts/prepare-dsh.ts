@@ -40,9 +40,10 @@ const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const DSH_OUTPUT_ROOT = BUILD_PATHS.dsh
 const BUILD_ROOT = mkdtempSync(join(tmpdir(), 'dsh-desktop-runtime-'))
-const STORE_ROOT = join(BUILD_ROOT, 'store')
 const RUNTIME_ROOT = BUILD_PATHS.runtime
 const PNPM_BUILD_STATE = BUILD_PATHS.dshPnpm
+// Keep the store between runs: a fresh store re-downloads every tarball.
+const STORE_ROOT = join(PNPM_BUILD_STATE, 'store')
 const PACKAGE_SET_ROOT = BUILD_PATHS.packageSet
 const NODE = join(BUILD_PATHS.electron, process.platform === 'win32' ? 'electron.exe'
   : process.platform === 'linux' ? 'electron' : 'Electron.app/Contents/MacOS/Electron')
@@ -120,12 +121,18 @@ function runPnpm(args: readonly string[]): Promise<void> {
         XDG_CONFIG_HOME: config,
         XDG_STATE_HOME: join(PNPM_BUILD_STATE, 'state'),
       },
-      stdio: 'inherit',
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
+    let output = ''
+    child.stdout?.on('data', (chunk: Buffer) => { output += chunk.toString(); process.stdout.write(chunk) })
+    child.stderr?.on('data', (chunk: Buffer) => { output += chunk.toString(); process.stderr.write(chunk) })
     child.once('error', reject)
     child.once('close', (code, signal) => {
       if (code === 0) resolvePromise()
-      else reject(new Error(`desktop runtime: pnpm exited with ${String(code ?? signal)}`))
+      else {
+        const tail = output.trim().slice(-4000)
+        reject(new Error(`desktop runtime: pnpm exited with ${String(code ?? signal)}${tail === '' ? '' : `\n${tail}`}`))
+      }
     })
   })
 }
