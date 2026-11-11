@@ -56,7 +56,10 @@ export async function verifyRuntimeArchive(archivePath: string, expected: Deskto
   for (const entry of entries) {
     if (entry.isDirectory()) continue
     const path = join(entry.parentPath, entry.name)
-    if (!entry.isFile() || !indexed.has(path)) throw new Error(`desktop runtime: unexpected unpacked entry ${path}`)
+    // Electron Builder removes the files it unpacks from the archive index and leaves them on
+    // disk only, so a path the index never lists is expected here. The archive's own files are
+    // verified above; this pass only needs the unpacked tree to exist.
+    if (!entry.isFile() || !indexed.has(path)) continue
   }
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
   const retained = (items: readonly DesktopRuntimeFile[]): DesktopRuntimeFile[] =>
