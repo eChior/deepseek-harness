@@ -211,6 +211,21 @@ jobs:
         run: |
           node scripts/verify-packaged-assets.mjs apps/desktop/.desktop-build/targets
 
+      # A release holds one asset per name, so these artifacts cannot share the names the
+      # ordinary Windows lane publishes: the nightly update feed would overwrite its own.
+      - name: Name the Windows 7 artifacts apart
+        shell: pwsh
+        run: |
+          $dir = 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'
+          Get-ChildItem -Path $dir -File | Where-Object { $_.Extension -in @('.exe', '.yml', '.blockmap') } | ForEach-Object {
+            $file = $_
+            if ($file.Extension -eq '.yml') {
+              $body = Get-Content -Path $file.FullName -Raw
+              $body -replace 'deepseek-harness-', 'win7-deepseek-harness-' | Set-Content -Path $file.FullName -NoNewline -Encoding utf8
+            }
+            Rename-Item -Path $file.FullName -NewName ('win7-' + $file.Name)
+          }
+
       - name: Upload installer
         if: always()
         uses: actions/upload-artifact@v4
