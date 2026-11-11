@@ -1,0 +1,293 @@
+name: Desktop Windows 7
+
+# Packages this distribution's unsigned Windows x64 NSIS installer on GitHub's Windows runner.
+#
+# Upstream ships no Desktop packaging lane: a signed release needs an EV token, SignTool, and a
+# PIN, so the only path a hosted runner can complete is the unsigned one described in
+# apps/desktop/README.md. `package:win:x64:unsigned` writes its installer to
+# apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/ and needs the same Windows x64
+# host, Python, and Visual C++ build tools that the signed lane does, minus the signing hardware.
+
+on:
+  workflow_dispatch:
+  # This fork ships both installers, so a desktop change rebuilds both. The paths stay narrow
+  # (shell, packages, and lockfile) so a documentation-only edit cannot burn a Windows runner.
+  push:
+    branches:
+      - win7
+    paths:
+      - 'apps/desktop/**'
+      - 'packages/**'
+      - '.github/workflows/desktop-windows.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      # allowBuilds lives here: flipping one entry changes what the install runs.
+      - 'pnpm-workspace.yaml'
+      # The packaging and release steps live here: `package-target.ts` runs
+      # `release:pack`, and a reader under scripts/ decided whether a lane could
+      # read the archives that step wrote.
+      - 'scripts/**'
+
+permissions:
+  contents: read
+
+env:
+  # CI runs must never report to the production telemetry endpoint baked into apps/cli/cordis.yml.
+  DSH_TELEMETRY_DISABLED: '1'
+  # tsdown hands every resolved workspace config to a single Promise.all, so peak memory grew with
+  # this fork's package count until it overflowed every heap ceiling we could ask for (4090 MB at
+  # the Node default, 8173 MB at 8 GB, 12275 MB at 12 GB). patches/tsdown@0.22.2.patch bounds that
+  # batch instead; the heap ceiling stays as headroom for one batch.
+  DSH_BUILD_CONCURRENCY: '8'
+  NODE_OPTIONS: '--max-old-space-size=12288'
+  PRIMARY_NODE_VERSION: '24'
+
+jobs:
+  package:
+    name: package win-x64 unsigned
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Packaging records the commit and the dirty flag in the artifact manifest.
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Set up Python for native modules
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Stamp the build version
+        shell: pwsh
+        run: |
+          # One product version can be built many times, and electron-updater compares versions
+          # before it downloads anything, so every run needs its own ordered version. The date
+          # keeps a day's builds adjacent in the feed and the commit count orders them.
+          $product = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $stamp = "$product.$(Get-Date -AsUTC -Format 'yyyyMMdd').$(git rev-list --count HEAD)"
+          "DSH_DESKTOP_BUILD_VERSION=$stamp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Write-Output "build version: $stamp"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --reporter=append-only
+
+      - name: Report install diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          # A failed install must leave its reason on the run summary: the failure log is
+          # only readable to a signed-in actor, and the job dies before any artifact exists.
+          "pnpm: $(pnpm --version)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          "node: $(node -v)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          $logs = Join-Path $env:LOCALAPPDATA 'pnpm-cache\_logs'
+          if (Test-Path $logs) {
+            Get-ChildItem $logs | Sort-Object LastWriteTime -Descending | Select-Object -First 2 | ForEach-Object {
+              "### $($_.Name)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+              Get-Content $_.FullName -Tail 300 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+            }
+          }
+
+      - name: Write the staff roster key
+        shell: pwsh
+        env:
+          DSH_ROSTER_KEY: ${{ secrets.DSH_ROSTER_KEY }}
+        # The roster travels as ciphertext inside the repository; the key that opens it is a
+        # secret, so the lane writes it beside the ciphertext before packaging. Without the secret
+        # packaging still succeeds: the client then reports that no directory is in force, which
+        # costs the department attribution and the colleague terms but breaks nothing.
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DSH_ROSTER_KEY)) {
+            'No DSH_ROSTER_KEY secret is set; packaging without a staff roster.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          $keyPath = Join-Path $PWD 'packages/security/veil/assets/roster.key'
+          ($env:DSH_ROSTER_KEY).Trim() | Set-Content -Path $keyPath -Encoding utf8
+          [string]::Format('Wrote the staff roster key to {0}', $keyPath) | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+      - name: Write the department Qwen keys
+        shell: pwsh
+        env:
+          DSH_QWEN_KEYS: ${{ secrets.DSH_QWEN_KEYS }}
+        # Each department authenticates against the Qwen gateway with its own key. The keys are
+        # secrets, so the lane materialises them into the account package before packaging. A build
+        # without the secret still packages: the route then only honours a key the colleague typed.
+        run: |
+          node scripts/gen-qwen-keys.mjs
+          if ([string]::IsNullOrWhiteSpace($env:DSH_QWEN_KEYS)) {
+            'No DSH_QWEN_KEYS secret is set; packaging without department keys.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          } else {
+            'Wrote the department Qwen keys.' | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          }
+      - name: Write the skills publishing token
+        shell: pwsh
+        env:
+          DSH_SKILLS_TOKEN: ${{ secrets.DSH_SKILLS_TOKEN }}
+        # Publishing a skill writes into the shared Gitea repository, so the build carries a token
+        # instead of asking every colleague for one. Without the secret the package simply cannot
+        # publish, and says so when somebody tries.
+        run: |
+          node scripts/gen-skills-token.mjs
+
+      - name: Write apps/desktop/.env.windows
+        shell: pwsh
+        run: |
+          # Git ignores this file, so the lane writes the release settings the packaging
+          # preflight reads: an application id, the update feed a `test` deployment requires,
+          # a mandatory-update policy, and the signature-cache concurrency. The download
+          # origin is a placeholder — the packaged application replaces the feed with the
+          # release listing it reads from Gitea. Unsigned packaging resolves no certificate.
+          $path = Join-Path $PWD 'apps/desktop/.env.windows'
+          @(
+            'DSH_DESKTOP_APP_ID=com.deepseek.harness'
+            'DSH_DESKTOP_AUTO_UPDATE_ENV=test'
+            'DOWNLOAD_TEST_ORIGIN=https://download.local.invalid'
+            'DOWNLOAD_TEST_RELEASE_ID=0123456789abcdef0123456789abcdef'
+            'DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://update.local.invalid'
+            'DSH_DESKTOP_MANDATORY_UPDATE_CONFIG={"allowedAuthOrigins":["https://login.local.invalid"]}'
+            'DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_CONCURRENCY=4'
+          ) | Set-Content -Path $path -Encoding utf8
+          Get-Content $path
+
+      # The Windows 7 runtime is not published as a separate archive: the community
+      # build ships one installer, so unpack it and hand the pieces to the packaging
+      # scripts. Nothing is taken from a checked-in copy.
+      - name: Fetch the Windows 7 runtime
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'win7'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $installer = Join-Path $root 'win7.exe'
+          Invoke-WebRequest -Headers @{ 'User-Agent' = 'dsh-win7' } -OutFile $installer `
+            -Uri 'https://github.com/factfinding/dsh-win7/releases/download/dsh-v0.2.0-rc.2-win7.1/deepseek-harness-0.2.0-rc.2-win7-x64-unsigned.exe'
+          $target = Join-Path $root 'pkg'
+          $process = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$target" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "the Windows 7 package exited $($process.ExitCode)" }
+          $runtime = Join-Path $target 'resources\runtime'
+          if (-not (Test-Path (Join-Path $runtime 'pwsh\pwsh.exe'))) { throw 'the Windows 7 package has no bundled PowerShell' }
+          $electron = Join-Path $root 'electron'
+          New-Item -ItemType Directory -Force $electron | Out-Null
+          Copy-Item -Path (Join-Path $target '*') -Destination $electron -Recurse -Force
+          Rename-Item -Path (Join-Path $electron 'DeepSeek Harness.exe') -NewName 'electron.exe'
+          "DSH_WIN7_ELECTRON_DIST=$electron" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "DSH_WIN7_RUNTIME_DIST=$runtime" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Package Windows x64
+        shell: pwsh
+        # The stamp has to arrive as an argument. `package-target.ts` derives the version it
+        # publishes from `--build-version` alone and then overwrites the environment variable with
+        # that result, so a stamp living only in `$GITHUB_ENV` never reaches electron-builder: the
+        # feed would advertise the product version, and electron-updater would report an already
+        # installed build as the newest one.
+        run: pnpm run package:desktop:win:x64:unsigned -- --build-version "$env:DSH_DESKTOP_BUILD_VERSION"
+
+      - name: Verify the packaged assets
+        shell: pwsh
+        # A lane without the secrets still passes: the check asserts only what this workspace
+        # produced, and it fails when a generated asset or a patched dependency never reached
+        # the archive.
+        run: |
+          node scripts/verify-packaged-assets.mjs apps/desktop/.desktop-build/targets
+
+      - name: Upload installer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows7-x64-unsigned
+          # Ship the installer, its update block map, and the channel metadata electron-updater
+          # reads out of the release directory: the unpacked application directory doubles the
+          # artifact without adding anything the installer does not already carry.
+          path: |
+            apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe
+            apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe.blockmap
+            apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.yml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Publish win-x64 to Gitea
+        if: always() && env.GITEA_TOKEN != ''
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $origin = if ($env:GITEA_ORIGIN) { $env:GITEA_ORIGIN } else { 'http://10.151.5.175:3000' }
+          $repo = if ($env:GITEA_REPOSITORY) { $env:GITEA_REPOSITORY } else { 'ITPublic/deepseek-harness' }
+          $version = (Get-Content 'apps/desktop/package.json' -Raw | ConvertFrom-Json).version
+          $tag = "v$version-hrzszy"
+          $artifacts = 'apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts'
+          $headers = @{ Authorization = "token $env:GITEA_TOKEN" }
+
+          # Reuse the release when this version was published before, so a rerun adds assets
+          # instead of failing on the tag that already exists.
+          $releases = Invoke-RestMethod -Uri "$origin/api/v1/repos/$repo/releases?limit=50" -Headers $headers
+          $existing = $releases | Where-Object { $_.tag_name -eq $tag } | Select-Object -First 1
+          if ($existing) {
+            $releaseId = $existing.id
+          } else {
+            $body = @{
+              tag_name = $tag
+              target_commitish = $env:GITHUB_REF_NAME
+              name = "DeepSeek Harness 增强版 $version"
+              draft = $false
+              prerelease = $false
+            } | ConvertTo-Json
+            $releaseId = (Invoke-RestMethod -Method Post -Uri "$origin/api/v1/repos/$repo/releases" `
+              -Headers $headers -ContentType 'application/json' -Body $body).id
+          }
+
+          $files = Get-ChildItem -Path $artifacts -File | Where-Object { $_.Extension -in @('.exe', '.yml') }
+          foreach ($file in $files) {
+            $assetName = $file.Name
+            # Replacing means deleting first: Gitea rejects a second asset with the same name.
+            try {
+              Invoke-RestMethod -Method Delete -Uri "$origin/api/v1/repos/$repo/releases/$releaseId/assets?name=$assetName" `
+                -Headers $headers | Out-Null
+            } catch {
+              Write-Output "no existing asset $assetName"
+            }
+            Invoke-RestMethod -Method Post -Uri "$origin/api/v1/repos/$repo/releases/$releaseId/assets?name=$assetName" `
+              -Headers $headers -ContentType 'application/octet-stream' -InFile $file.FullName | Out-Null
+            Write-Output "published $assetName to $tag"
+          }
+
+      - name: Summarize the packaging failure
+        if: failure()
+        shell: pwsh
+        # Reading a job log needs a repository admin token, so a failed package step writes
+        # what it recorded into the summary instead: `package-target.ts` appends one JSON line
+        # per step to `packaging-runs/<stamp>/events.jsonl`, and the last lines name the error.
+        run: |
+          $summary = $env:GITHUB_STEP_SUMMARY
+          $runs = Get-ChildItem 'apps/desktop/.desktop-build/packaging-runs' -Directory -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
+          if ($null -eq $runs) {
+            'No packaging record was written.' | Out-File -Append -Encoding utf8 $summary
+            exit 0
+          }
+          $events = Join-Path $runs[0].FullName 'events.jsonl'
+          if (-not (Test-Path $events)) {
+            [string]::Format('No events.jsonl under {0}.', $runs[0].FullName) | Out-File -Append -Encoding utf8 $summary
+            exit 0
+          }
+          [string]::Format('Newest packaging record: {0}', $runs[0].Name) | Out-File -Append -Encoding utf8 $summary
+          '```json' | Out-File -Append -Encoding utf8 $summary
+          Get-Content $events -Tail 60 | Out-File -Append -Encoding utf8 $summary
+          '```' | Out-File -Append -Encoding utf8 $summary
+
+      - name: Upload packaging logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-x64-packaging-runs
+          path: apps/desktop/.desktop-build/packaging-runs/**
+          if-no-files-found: ignore
+          retention-days: 7
