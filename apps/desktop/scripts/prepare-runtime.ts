@@ -164,6 +164,11 @@ async function main(): Promise<void> {
   if (runtimeDist !== undefined && runtimeDist !== '') {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'copy:primary-runtime',
       async () => { cpSync(runtimeDist, RUNTIME_ROOT, { recursive: true }) })
+    // The copied tree carries the Win7 third-party skills only; our own office scripts (check_office.py)
+    // ship with the skill package, so lay them over the copy.
+    const officeRequire = createRequire(import.meta.url)
+    cpSync(join(dirname(officeRequire.resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets'),
+      join(RUNTIME_ROOT, 'office-skills'), { recursive: true, force: true })
   } else {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
       () => preparePrimaryRuntime({ deferSmoke: values['defer-primary-runtime-smoke'] }))
