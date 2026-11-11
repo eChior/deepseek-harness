@@ -18,7 +18,7 @@ on:
     paths:
       - 'apps/desktop/**'
       - 'packages/**'
-      - '.github/workflows/desktop-windows.yml'
+      - '.github/workflows/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       # allowBuilds lives here: flipping one entry changes what the install runs.
