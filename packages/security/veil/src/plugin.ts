@@ -611,9 +611,26 @@ export class RedactionService extends Service {
                   },
                 },
               },
+              skipped: {
+                type: 'array', required: true,
+                items: {
+                  type: 'object', additionalProperties: false,
+                  properties: {
+                    path: { type: 'string', required: true },
+                    reason: { type: 'string', required: true },
+                  },
+                },
+              },
             },
           },
-          render: (_args, value) => [{ type: 'text', text: `Restored ${value.restored} placeholder(s) across ${value.files.length} file(s)` }],
+          // A file the pass left alone is part of the answer, not a silent detail: a model that
+          // only sees "0 restored" keeps trying the same call.
+          render: (_args, value) => {
+            const head = `Restored ${value.restored} placeholder(s) across ${value.files.length} file(s)`
+            if (value.skipped.length === 0) return [{ type: 'text', text: head }]
+            const lines = value.skipped.slice(0, 8).map(item => `- ${basename(item.path)}: ${item.reason}`)
+            return [{ type: 'text', text: `${head}\nLeft alone ${value.skipped.length} file(s):\n${lines.join('\n')}` }]
+          },
         },
         async execute(args) {
           const directory = directoryOf(agent)
@@ -622,6 +639,7 @@ export class RedactionService extends Service {
           return {
             restored: outcome?.restored ?? 0,
             files: (outcome?.files ?? []).map(file => ({ path: file.path, hits: file.hits })),
+            skipped: (outcome?.skipped ?? []).map(item => ({ path: item.path, reason: item.reason })),
           }
         },
       }))
