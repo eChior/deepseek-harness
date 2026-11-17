@@ -3551,9 +3551,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'The rewritten text, or the input when no rule matched.',
       },
       {
-        signature: 'redactValue(value: JsonValue): JsonValue',
+        signature: 'redactValue(value: JsonValue, key?: string): JsonValue',
         description: 'Rewrite every string inside a presentation payload.\n\nA UI renders the call from this payload and the session log keeps it, so a value that survives here is readable in a transcript even when the model never saw it.',
-        parameters: [{ name: 'value', description: 'The payload, as the tool projected it.' }],
+        parameters: [{ name: 'value', description: 'The payload, as the tool projected it.' }, { name: 'key', description: 'The argument name that holds the value, so a path can be left alone.' }],
         returns: 'The same shape with every string rewritten.',
       },
       {

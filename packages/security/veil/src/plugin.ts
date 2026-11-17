@@ -40,6 +40,7 @@ import {
   DOCUMENT_EXTENSIONS,
   documentsInDirectory,
   documentPaths,
+  PATH_KEYS,
   type Confine,
   restoreDocuments,
   type DocumentMapping,
@@ -996,14 +997,17 @@ export class RedactionService extends Service {
    * value that survives here is readable in a transcript even when the model
    * never saw it.
    * @param value The payload, as the tool projected it.
+   * @param key The argument name that holds the value, so a path can be left alone.
    * @returns The same shape with every string rewritten.
    */
-  redactValue(value: JsonValue): JsonValue {
-    if (typeof value === 'string') return this.redactText(value)
+  redactValue(value: JsonValue, key?: string): JsonValue {
+    // A path is not prose: rewriting a name in it produces a file that cannot be
+    // opened again, so the keys that hold one are passed through untouched.
+    if (typeof value === 'string') return key !== undefined && PATH_KEYS.has(key) ? value : this.redactText(value)
     if (Array.isArray(value)) return value.map(item => this.redactValue(item))
     if (typeof value === 'object' && value !== null) {
       const rewritten: Record<string, JsonValue> = {}
-      for (const [key, item] of Object.entries(value)) rewritten[key] = this.redactValue(item)
+      for (const [name, item] of Object.entries(value)) rewritten[name] = this.redactValue(item, name)
       return rewritten
     }
     return value

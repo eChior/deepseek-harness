@@ -39,6 +39,8 @@ export const onboardingCopy = {
   onboardingSaveFailed: '未能保存设置，请重试。',
   onboardingRetry: '重试',
   onboardingLoading: '正在加载设置…',
+  onboardingSignInRequired: '请先登录益办公，完成后才能进入工作区。',
+  onboardingSignInAction: '登录',
 } as const
 
 /** English first-run copy with the same keys as the Chinese dictionary. */
@@ -82,4 +84,6 @@ export const onboardingEnglishCopy: Record<keyof typeof onboardingCopy, string> 
   onboardingSaveFailed: 'Could not save settings. Try again.',
   onboardingRetry: 'Retry',
   onboardingLoading: 'Loading settings…',
+  onboardingSignInRequired: 'Sign in to 益办公 before the workspace opens.',
+  onboardingSignInAction: 'Sign in',
 }

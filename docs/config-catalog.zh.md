@@ -4173,7 +4173,7 @@ export type ApprovalPolicy = 'ask' | 'never'
 
 ## `@deepseek-ai/dsh-veil`
 
-- `source`: [`packages/security/veil/src/plugin.ts:145`](../packages/security/veil/src/plugin.ts)
+- `source`: [`packages/security/veil/src/plugin.ts:146`](../packages/security/veil/src/plugin.ts)
 
 ```ts config-catalog
 /**

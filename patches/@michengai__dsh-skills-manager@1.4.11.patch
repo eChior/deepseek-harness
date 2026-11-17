@@ -1,0 +1,12 @@
+diff --git a/lib/repositories.js b/lib/repositories.js
+index e76a5b792c5c3d01dbdd245d79070e8511816565..0c5f63aaddc2ba023eaaa339eb3ce33d90cfa6be 100644
+--- a/lib/repositories.js
++++ b/lib/repositories.js
+@@ -209,6 +209,7 @@ function createRepositoryManager({
+   }
+   async function cacheDirectory() {
+     const dir = join(managerHomePath(), "repository-cache");
++    await fs.mkdir(managerHomePath(), { recursive: true });
+     if ((await fs.lstat(managerHomePath())).isSymbolicLink()) throw failure("\u7F13\u5B58\u76EE\u5F55\u4E0D\u80FD\u662F\u94FE\u63A5");
+     await fs.mkdir(dir, { recursive: true });
+     if ((await fs.lstat(dir)).isSymbolicLink()) throw failure("\u7F13\u5B58\u76EE\u5F55\u4E0D\u80FD\u662F\u94FE\u63A5");

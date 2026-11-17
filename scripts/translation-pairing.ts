@@ -145,6 +145,9 @@ export const TRANSLATION_SCOPE_GLOB_EXCLUDES = [
   '.artifacts/**',
   'python/sdk-runtime/src/deepseek_harness_runtime/runtime/**',
   'vendor/**',
+  // The Windows 7 rollout ships one Chinese handout for administrators who install the
+  // machine; it is not part of the bilingual product docs.
+  'win7-patches/**',
 ]
 
 /** Whether a repository-relative path belongs to a dependency or generated tree. */

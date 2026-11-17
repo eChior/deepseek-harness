@@ -91,6 +91,7 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   // manifest carries no `repository` field, and there is no registry entry to
   // fall back to.
   'superpowers-dsh': { repo: 'https://github.com/LayneChai/superpowers-dsh' },
+  'dsh-weknora-panel': { repo: 'https://github.com/eChior/dsh-weknora-panel' },
   // No `license` field in the published manifest; the tarball's LICENSE.txt is the MIT text.
 }
 

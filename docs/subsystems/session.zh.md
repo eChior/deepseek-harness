@@ -1194,9 +1194,10 @@ redactText(text: string): string
  * value that survives here is readable in a transcript even when the model
  * never saw it.
  * @param value The payload, as the tool projected it.
+ * @param key The argument name that holds the value, so a path can be left alone.
  * @returns The same shape with every string rewritten.
  */
-redactValue(value: JsonValue): JsonValue
+redactValue(value: JsonValue, key?: string): JsonValue
 
 /**
  * Read the text out of one encoded image on this machine and redact it.
