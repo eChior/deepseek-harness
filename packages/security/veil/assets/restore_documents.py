@@ -154,7 +154,9 @@ def unmapped_note(payload):
     found = SHAPE.findall(text)
     if not found:
         return 'no placeholder'
-    return 'unmapped: ' + ', '.join(sorted(set(found))[:4])
+    # The caller shows this to the user, so it says what happened to the file rather
+    # than only naming the spans the map could not resolve.
+    return 'unmapped: ' + ', '.join(sorted(set(found))[:4]) + ' (not in the map; the file was left unchanged)'
 
 def restore_file(path, pairs):
     """Return how many placeholders this file held, or 0 when it was left alone."""
