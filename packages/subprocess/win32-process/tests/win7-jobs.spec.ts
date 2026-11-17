@@ -63,7 +63,7 @@ function api(results: number[], lastError = 5): { bindings: Bindings; creationFl
     closeHandle: vi.fn(() => 1),
     getLastError: vi.fn(() => error),
     formatMessageW: vi.fn(() => 0),
-  } satisfies Partial<Bindings> as Bindings
+  } as unknown as Bindings
   return { bindings, creationFlags, jobLimits }
 }
 
