@@ -574,6 +574,9 @@ async function main(): Promise<void> {
   const updateOverlays = new DesktopUpdateOverlays()
   const updateDialog = new DesktopUpdateDialog(fileURLToPath(new URL('./preload-update-dialog.cjs', import.meta.url)), () => locale, updateOverlays)
   const isMandatory = (): boolean => mandatoryPolicy?.state.blocking === true
+    // An update that finished downloading cannot be ignored either: the next launch would
+    // run the old build against a release the server already replaced.
+    || (updateState.phase === 'ready' && updateState.version !== undefined)
   const ordinaryMessageBox = async (options: UpdateDialogOptions): Promise<Electron.MessageBoxReturnValue> => {
     const controller = new AbortController()
     ordinaryDialogs.add(controller)
@@ -802,15 +805,25 @@ async function main(): Promise<void> {
         message: active ? locale.messages.updateActiveTasks : ready.message,
         detail: active ? locale.messages.updateActiveTasksDetail : ready.detail,
         buttons: active ? [locale.messages.updateStopTasks, locale.messages.updateLater] : [locale.messages.installAndRestart],
-        defaultId: 1, cancelId: 1,
+        // Closing this dialog must not mean "keep running the old build": the only button
+        // both defaults and cancels into is the one that installs.
+        defaultId: active ? 1 : 0, cancelId: isMandatory() ? 0 : 1,
       }
-      if (isMandatory()) {
-        if (!await mandatoryUI?.confirm(updates.state.version ?? '', active)) return false
+      if (isMandatory() && mandatoryUI !== undefined) {
+        if (!await mandatoryUI.confirm(updates.state.version ?? '', active)) return false
       } else {
         const parent = currentDialogWindow()
         if (parent === undefined) return false
-        const result = await updateDialog.show(parent, confirmation)
-        if (result.response !== 0 || isMandatory()) return false
+        // While an update is mandatory the only way out is quitting: closing the box is
+        // the same as choosing to leave, so the old build never keeps running.
+        const forcing = isMandatory()
+        const result = await updateDialog.show(parent, forcing
+          ? { ...confirmation, buttons: [locale.messages.installAndRestart, locale.messages.updateQuit], defaultId: 0, cancelId: 1 }
+          : confirmation)
+        if (result.response !== 0) {
+          if (forcing) app.quit()
+          return false
+        }
       }
       // The update lock rejects new HTTP requests, including analytics intake.
       await track('desktop_upgrade_install_restart_click', {})
@@ -1073,7 +1086,7 @@ async function main(): Promise<void> {
             buttons: [locale.messages.updateDownload], cancelId: 1 })
           if (result.response !== 0) return
         }
-        if (!isMandatory() && state.version !== undefined) {
+        if (state.version !== undefined) {
           controller?.abort()
           failedOperation = 'download'
           await showUpdateFailure(await downloadUpdate(state.version))

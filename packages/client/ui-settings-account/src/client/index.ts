@@ -303,6 +303,7 @@ export function apply(ctx: Context): void {
         update: (change: OnboardingChange) => controller.update(change),
         complete: (reason: 'completed' | 'skipped') => controller.complete(reason),
         retry: () => controller.retry(),
+        showLogin: (visible: boolean) => { operations.showLogin(visible) },
         track: (name, attributes) => ctx.get('productAnalytics')?.track(name, attributes),
       }),
     }, DesktopOnboardingEntry))

@@ -14,7 +14,7 @@ patchedDependencies:
   '@electron/osx-sign@1.3.3': 280e7b2816caf01423097d24e79107a66afeb563a348630ce9928ae8499a5861
   '@fortune-sheet/core@1.0.4': 8791a230763dbf853fd65d627c68c31de37209992851377855e16cf08ea70532
   '@fortune-sheet/react@1.0.4': 2932e52e79afcd4ced08cfa123b5eded786c85043da32f622f3e80af6fc96c37
-  '@michengai/dsh-skills-manager@1.2.33': c5d35587894f0243acdde4ceee07b8a8825188ecdb8876845a717639007505fb
+  '@michengai/dsh-skills-manager@1.4.11': 67d0e168cec2a0d1417b03337c64dbe8237a43eefe6567000f01c240870fe47c
   '@yao-pkg/pkg@6.21.0': 75891fc22b277c145cafeab83e41baf4a70f5b8fe6dc0801c6a0b922d7ee88c7
   exceljs@4.4.0: c1bf8ac8f319dab382f08e3a669b715e691d46c703ac5a4163eb383fbedd1d48
   node-pty@1.2.0-beta.15: b40ae545608897914bd25fb009c97eeac478c34e8a910298ddcb01b746534bb0
@@ -2806,11 +2806,11 @@ importers:
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
       '@michengai/dsh-archive-manager':
-        specifier: 1.2.8
-        version: 1.2.8(00b58db9240dc01adcf46d8098992a28)
+        specifier: 1.3.6
+        version: 1.3.6(00b58db9240dc01adcf46d8098992a28)
       '@michengai/dsh-skills-manager':
-        specifier: 1.2.33
-        version: 1.2.33(patch_hash=c5d35587894f0243acdde4ceee07b8a8825188ecdb8876845a717639007505fb)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-client-locale@packages+client+locale)(@deepseek-ai/dsh-client-ui-primitives@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-skill@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))))(@deepseek-ai/dsh-tools@0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87))(@deepseek-ai/dsh-web-app@0.2.0-rc.2(5dd7a6b54c0fba07e6bd321a69afd0ed))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: 1.4.11
+        version: 1.4.11(patch_hash=67d0e168cec2a0d1417b03337c64dbe8237a43eefe6567000f01c240870fe47c)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-client-locale@packages+client+locale)(@deepseek-ai/dsh-client-ui-primitives@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-skill@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))))(@deepseek-ai/dsh-tools@0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87))(@deepseek-ai/dsh-web-app@0.2.0-rc.2(5dd7a6b54c0fba07e6bd321a69afd0ed))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -2818,23 +2818,23 @@ importers:
         specifier: 0.26.1
         version: 0.26.1(93b0ef9bcac7f78c52fb1677b63e9c7f)
       dsh-notify-me:
-        specifier: 1.17.0
-        version: 1.17.0(@deepseek-ai/dsh-client-locale@packages+client+locale)
+        specifier: 1.21.3
+        version: 1.21.3(@deepseek-ai/dsh-client-locale@packages+client+locale)
       dsh-rewind-plugin:
         specifier: 0.15.3
         version: 0.15.3(1fb73eb99037e55c6fb1475070acb4ec)
-      dsh-zh-thinking:
-        specifier: git+https://github.com/yingjian666/dsh-zh-thinking.git#ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe
-        version: https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)
+      dsh-weknora-panel:
+        specifier: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/2d85719f4a6baa4f21187e962d87ccb9ea293593
+        version: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/2d85719f4a6baa4f21187e962d87ccb9ea293593
       dshmarket:
-        specifier: 1.73.12
-        version: 1.73.12(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery))(@deepseek-ai/schemastery@vendor+schemastery)
+        specifier: 1.73.20
+        version: 1.73.20(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery))(@deepseek-ai/schemastery@vendor+schemastery)
       open:
         specifier: ^11.0.0
         version: 11.0.4
       superpowers-dsh:
-        specifier: 0.4.0
-        version: 0.4.0
+        specifier: 0.5.0
+        version: 0.5.0
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
@@ -18077,8 +18077,8 @@ packages:
   '@mermaid-js/parser@1.2.1':
     resolution: {integrity: sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==}
 
-  '@michengai/dsh-archive-manager@1.2.8':
-    resolution: {integrity: sha512-0dcHWvJuBOQg9DMKhOI6n1tgwsGvpttM/gP8ISlt4Ltyv48GQGTcDPJPDwIGYAjMztjarSW4NMqgk6n66us5Ww==}
+  '@michengai/dsh-archive-manager@1.3.6':
+    resolution: {integrity: sha512-FqXhe/mYLBix+LKmidSvZvSoqOPkaBo5kVkPf7C7+foJBIW4/Rr5PDnUjwd8Kt18zENoilFJ0nj0KTYEsFW4wg==}
     engines: {dsh: '>=0.2.0-rc.1 <0.3.0-0', node: ^22.19.0 || >=24.0.0}
     peerDependencies:
       '@deepseek-ai/cordis': '>=4.0.1 <5.0.0'
@@ -18101,8 +18101,8 @@ packages:
       '@deepseek-ai/dsh-session-format-catalog':
         optional: true
 
-  '@michengai/dsh-skills-manager@1.2.33':
-    resolution: {integrity: sha512-dZS8sXIGHygUxrfqAwlIpa1q7KzBjThOxGytZESkI1ouc10LvkuJoeLRpfg24wLy2XhNgLUr8mUwEqFDEz8d2A==}
+  '@michengai/dsh-skills-manager@1.4.11':
+    resolution: {integrity: sha512-N8xVhLHysJrh+n24OxHJ8cWi/7vtsv68r6g6XpYqn/Txk/l1mk8bFvwJUJL8BRSfgnZMTx1Y0xggZrRpInYTQQ==}
     engines: {dsh: '>=0.2.0-rc.1 <0.3.0-0', node: ^22.19.0 || >=24.0.0}
     peerDependencies:
       '@deepseek-ai/cordis': '>=4.0.1 <5.0.0'
@@ -20748,8 +20748,8 @@ packages:
       '@huanlin/dsh-plugin-better-locale':
         optional: true
 
-  dsh-notify-me@1.17.0:
-    resolution: {integrity: sha512-l2+MBrO1WH/kcYFUBI4+HviVe9W4+Jy2li2xoKDaYYZ38dHrooUVKIuDgKEjoS6QygZlTzHHE+42sQvEcyZx9w==}
+  dsh-notify-me@1.21.3:
+    resolution: {integrity: sha512-B3f3shus/SuHXOF1DhJtQ2vFYThgholq7mmK7C6lDst/lfmHlrvvdTXA7uGdSVpgUV4gietSVVwutG4+pQg30A==}
     engines: {node: '>=18'}
     peerDependencies:
       '@deepseek-ai/dsh-client-locale': ^0.1.0-rc.6 || ^0.1.1-rc.2 || ^0.1.2-rc.1 || ^0.1.5-rc.1 || >=0.1.6-alpha.2 <0.2.0-0 || >=0.2.0-rc.1 <0.3.0-0
@@ -20811,21 +20811,13 @@ packages:
       '@deepseek-ai/schemastery':
         optional: true
 
-  dsh-zh-thinking@https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe}
-    version: 0.1.2
-    engines: {node: ^22.19.0 || >=24.0.0}
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1
-      '@deepseek-ai/dsh-system-prompt': '>=0.1.6-alpha.1'
-    peerDependenciesMeta:
-      '@deepseek-ai/cordis':
-        optional: true
-      '@deepseek-ai/dsh-system-prompt':
-        optional: true
+  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/2d85719f4a6baa4f21187e962d87ccb9ea293593:
+    resolution: {gitHosted: true, integrity: sha512-aRvElWfBX0U60ym3fLsDfPVxIdXPX7putPiYlNnt2SqvG0M2fZd9UxGs9gvoAVjOxgl6NAx3TiQAiEGGZTnA1A==, tarball: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/2d85719f4a6baa4f21187e962d87ccb9ea293593}
+    version: 1.1.3
+    engines: {node: '>=18.0.0'}
 
-  dshmarket@1.73.12:
-    resolution: {integrity: sha512-Us3qHfp3FLMvMyLvj+VYdA3K90DGGXikwODQheSC00BCWIxLIYBjA9ZCknWhxgUwT5L9N3Nf3ndKit0QUECO6Q==}
+  dshmarket@1.73.20:
+    resolution: {integrity: sha512-rK5vfarRJa4hRoU4TiDkX8Wdr36Miu5WVrM8yQxV4uA+uogyKn1o7/PGSsxxEFFQCx5PARWmvrotRX3HEuVwJw==}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.1
       '@deepseek-ai/dsh-settings': ^0.1.0-rc.7 || ^0.1.1-rc.2 || ^0.1.2-alpha.2 || ^0.2.0-rc.1 || ^0.2.1-alpha.3 || ^0.2.1-rc.1
@@ -23447,8 +23439,8 @@ packages:
     resolution: {integrity: sha512-H+ue8Zo4vJmV2nRjpx86P35lzwDT3nItnIsocgumgr0hHMQ+ZGq5vrERg9kJBo5AWGmxZDhzDo+WVIJqkB0cGA==}
     engines: {node: '>=16'}
 
-  superpowers-dsh@0.4.0:
-    resolution: {integrity: sha512-1F8W6mc26ic9N5HjjoKJDO1LWWFJAqGEda2pNetmiqgkrjYC1lP9L4udFGBGGre7C6uC+feLokNsobepQnH15Q==}
+  superpowers-dsh@0.5.0:
+    resolution: {integrity: sha512-M/bSEu93jpmYnhM2I996rZ+8eH8uNFzm6c0PwimsnxiYtj3Yjr/iahgfaw2jud9CBGXOc4BBDkRJtt/HRu1eZw==}
 
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
@@ -25037,7 +25029,7 @@ snapshots:
       '@deepseek-ai/dsh-tools': 0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87)
       '@deepseek-ai/dsh-typert-protocol': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
       '@deepseek-ai/schemastery': link:vendor/schemastery
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       zod: 4.4.3
     transitivePeerDependencies:
       - '@deepseek-ai/cordis-plugin-group'
@@ -25198,7 +25190,7 @@ snapshots:
       '@deepseek-ai/dsh-system-prompt': link:packages/core/system-prompt
       '@eslint-community/regexpp': 4.12.2
       ajv: 8.20.0
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       node-addon-require-builtin: 0.1.6
       resolve.exports: 2.0.3
       semver: 7.8.5
@@ -25582,8 +25574,8 @@ snapshots:
       '@deepseek-ai/cordis-plugin-loader': 1.0.6(@deepseek-ai/cordis@vendor+cordis)
       '@deepseek-ai/dsh-app-boot': link:packages/boot/app-boot
       '@deepseek-ai/dsh-atomic-write': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
-      js-yaml: 4.3.1
-      yaml: 2.9.0
+      js-yaml: 4.3.2
+      yaml: 2.9.1
     optionalDependencies:
       '@deepseek-ai/dsh-hmr': 0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline)
 
@@ -25594,8 +25586,8 @@ snapshots:
       '@deepseek-ai/cordis-plugin-loader': link:vendor/loader
       '@deepseek-ai/dsh-app-boot': link:packages/boot/app-boot
       '@deepseek-ai/dsh-atomic-write': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
-      js-yaml: 4.3.1
-      yaml: 2.9.0
+      js-yaml: 4.3.2
+      yaml: 2.9.1
     optionalDependencies:
       '@deepseek-ai/dsh-hmr': 0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline)
 
@@ -25895,7 +25887,7 @@ snapshots:
       '@deepseek-ai/dsh-util-values': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
       '@deepseek-ai/schemastery': link:vendor/schemastery
       execa: 10.0.0
-      yaml: 2.9.0
+      yaml: 2.9.1
       zod: 4.4.3
     optionalDependencies:
       '@deepseek-ai/dsh-hmr': 0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline)
@@ -26094,7 +26086,7 @@ snapshots:
       '@deepseek-ai/dsh-session': link:packages/core/session
       '@deepseek-ai/dsh-util-values': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)
       '@deepseek-ai/schemastery': link:vendor/schemastery
-      yaml: 2.9.0
+      yaml: 2.9.1
     transitivePeerDependencies:
       - '@deepseek-ai/cordis-plugin-include'
       - '@deepseek-ai/dsh-app-boot'
@@ -26115,7 +26107,7 @@ snapshots:
       '@deepseek-ai/dsh-skill': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)))
       '@deepseek-ai/schemastery': link:vendor/schemastery
       chokidar: 5.0.0
-      yaml: 2.9.0
+      yaml: 2.9.1
 
   '@deepseek-ai/dsh-skill@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)))':
     dependencies:
@@ -27731,7 +27723,7 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@michengai/dsh-archive-manager@1.2.8(00b58db9240dc01adcf46d8098992a28)':
+  '@michengai/dsh-archive-manager@1.3.6(00b58db9240dc01adcf46d8098992a28)':
     dependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       '@deepseek-ai/dsh-client-connection': link:packages/client/connection
@@ -27751,7 +27743,7 @@ snapshots:
     optionalDependencies:
       '@deepseek-ai/dsh-session-format-catalog': 0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-agent@packages+core+agent)(@deepseek-ai/dsh-compaction@0.2.0-rc.2(b5d236ddd6a1ee5fe1180a6239c0b185))(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)
 
-  '@michengai/dsh-skills-manager@1.2.33(patch_hash=c5d35587894f0243acdde4ceee07b8a8825188ecdb8876845a717639007505fb)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-client-locale@packages+client+locale)(@deepseek-ai/dsh-client-ui-primitives@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-skill@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))))(@deepseek-ai/dsh-tools@0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87))(@deepseek-ai/dsh-web-app@0.2.0-rc.2(5dd7a6b54c0fba07e6bd321a69afd0ed))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@michengai/dsh-skills-manager@1.4.11(patch_hash=67d0e168cec2a0d1417b03337c64dbe8237a43eefe6567000f01c240870fe47c)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-client-locale@packages+client+locale)(@deepseek-ai/dsh-client-ui-primitives@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-skill@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))))(@deepseek-ai/dsh-tools@0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87))(@deepseek-ai/dsh-web-app@0.2.0-rc.2(5dd7a6b54c0fba07e6bd321a69afd0ed))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       '@deepseek-ai/dsh-client-locale': link:packages/client/locale
@@ -30222,7 +30214,7 @@ snapshots:
       app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
       builder-util: 26.15.3
       fs-extra: 10.1.0
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
     transitivePeerDependencies:
       - electron-builder-squirrel-windows
       - supports-color
@@ -30300,7 +30292,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  dsh-notify-me@1.17.0(@deepseek-ai/dsh-client-locale@packages+client+locale):
+  dsh-notify-me@1.21.3(@deepseek-ai/dsh-client-locale@packages+client+locale):
     optionalDependencies:
       '@deepseek-ai/dsh-client-locale': link:packages/client/locale
 
@@ -30323,12 +30315,9 @@ snapshots:
       '@deepseek-ai/dsh-tools': 0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87)
       '@deepseek-ai/schemastery': link:vendor/schemastery
 
-  dsh-zh-thinking@https://codeload.github.com/yingjian666/dsh-zh-thinking/tar.gz/ce5bc5b786d4a2925552b2b03d218a0e80d9d8fe(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt):
-    optionalDependencies:
-      '@deepseek-ai/cordis': link:vendor/cordis
-      '@deepseek-ai/dsh-system-prompt': link:packages/core/system-prompt
+  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/2d85719f4a6baa4f21187e962d87ccb9ea293593: {}
 
-  dshmarket@1.73.12(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery))(@deepseek-ai/schemastery@vendor+schemastery):
+  dshmarket@1.73.20(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery))(@deepseek-ai/schemastery@vendor+schemastery):
     dependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       js-yaml: 4.3.2
@@ -33371,7 +33360,7 @@ snapshots:
     dependencies:
       copy-anything: 4.0.5
 
-  superpowers-dsh@0.4.0: {}
+  superpowers-dsh@0.5.0: {}
 
   supports-color@7.2.0:
     dependencies:

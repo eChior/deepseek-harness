@@ -31,6 +31,8 @@ export interface DesktopOnboardingProps {
   update(this: void, change: OnboardingChange): Promise<boolean>
   complete(this: void, reason: 'completed' | 'skipped'): Promise<boolean>
   retry(this: void): Promise<boolean>
+  /** Desktop-only: open the shared sign-in surface, which the flow cannot skip. */
+  showLogin?: (visible: boolean) => void
   /** Active interface language selects the matching illustration artwork. */
   locale: string
   t: (key: AccountKey) => string

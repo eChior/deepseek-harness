@@ -55,6 +55,9 @@ const PLACEHOLDER_PROMPT = [
  * @param ctx - Context the service is registered on.
  * @param config - Term list, refresh, and image-recognition settings.
  */
+/** Reasoning language, kept in the client so no per-machine prompt plugin is needed. */
+const LANGUAGE_PROMPT = '语言要求（本机已内置）：你的全部内部思考（思维链、逐步规划、工具调用前后的推理、自我审查与自我纠正）都必须使用简体中文撰写，禁止以英文或其它语言进行内部思考。最终回答中如需保留英文专有名词、代码标识符或用户原文，允许原样保留；除此之外的表达一律为简体中文。'
+
 export function apply(ctx: Context, config: Config = {}): void {
   ctx.plugin(RedactionService, config)
   // Scoped to this plugin, so the section disappears with it. The provider has no
@@ -65,6 +68,11 @@ export function apply(ctx: Context, config: Config = {}): void {
       name: 'redaction:placeholders',
       order: scope.systemPrompt.getSectionOrder('REDACTION_PLACEHOLDERS'),
       text: PLACEHOLDER_PROMPT,
+    })
+    scope.systemPrompt.section({
+      name: 'language:zh-thinking',
+      order: 20,
+      text: LANGUAGE_PROMPT,
     })
   })
 }

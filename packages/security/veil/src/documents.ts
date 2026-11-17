@@ -41,7 +41,7 @@ const RESTORE_TIMEOUT_MS = 30_000
 const GRANT_TIMEOUT_MS = 120_000
 
 /** The argument names that hold a path rather than prose about one. */
-const PATH_KEYS: ReadonlySet<string> = new Set(['path', 'file_path', 'filePath', 'filepath'])
+export const PATH_KEYS: ReadonlySet<string> = new Set(['path', 'file_path', 'filePath', 'filepath', 'cwd', 'directory', 'workdir'])
 
 /** How deep a nested argument payload is walked before it is ignored. */
 const MAX_DEPTH = 6

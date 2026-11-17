@@ -89,7 +89,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar) | MIT |
 | [`dsh-notify-me`](https://github.com/chromoany/dsh-notify-me) | MIT |
 | [`dsh-rewind-plugin`](https://github.com/SiriLee/dsh-rewind) | MIT |
-| [`dsh-zh-thinking`](https://github.com/yingjian666/dsh-zh-thinking) | MIT |
+| [`dsh-weknora-panel`](https://github.com/eChior/dsh-weknora-panel) | MIT |
 | [`dshmarket`](https://github.com/dsh-market/dsh-market) | MIT |
 | [`electron-updater`](https://github.com/electron-userland/electron-builder) | MIT |
 | [`eventsource-parser`](https://github.com/rexxars/eventsource-parser) | MIT |
@@ -151,7 +151,7 @@ pnpm applies local patches to the following packages at install time, so shipped
 - `@electron/osx-sign@1.3.3` — [`patches/@electron__osx-sign@1.3.3.patch`](patches/@electron__osx-sign@1.3.3.patch)
 - `@fortune-sheet/core@1.0.4` — [`patches/@fortune-sheet__core@1.0.4.patch`](patches/@fortune-sheet__core@1.0.4.patch)
 - `@fortune-sheet/react@1.0.4` — [`patches/@fortune-sheet__react@1.0.4.patch`](patches/@fortune-sheet__react@1.0.4.patch)
-- `@michengai/dsh-skills-manager@1.2.33` — [`patches/@michengai__dsh-skills-manager@1.2.33.patch`](patches/@michengai__dsh-skills-manager@1.2.33.patch)
+- `@michengai/dsh-skills-manager@1.4.11` — [`patches/@michengai__dsh-skills-manager@1.4.11.patch`](patches/@michengai__dsh-skills-manager@1.4.11.patch)
 - `@yao-pkg/pkg@6.21.0` — [`patches/@yao-pkg__pkg@6.21.0.patch`](patches/@yao-pkg__pkg@6.21.0.patch)
 - `exceljs@4.4.0` — [`patches/exceljs@4.4.0.patch`](patches/exceljs@4.4.0.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)

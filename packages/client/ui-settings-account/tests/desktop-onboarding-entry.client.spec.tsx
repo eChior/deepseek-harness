@@ -141,9 +141,11 @@ it.each([false, true])('removes onboarding immediately on sign-out, including du
   const view = mount()
   if (exiting) view.finish()
   view.signOut()
-  expect(screen.queryByRole('heading')).toBeNull()
-  expect(appRoot.inert).toBe(false)
-  expect(appRoot.style.opacity).toBe('')
+  // Signing out no longer drops the user into the workspace: the entry holds the
+  // workspace shut until a credential is stored again.
+  expect(screen.getByRole('button', { name: zh.onboardingSignInAction })).toBeTruthy()
+  // The workspace stays covered: the gate is a surface, not a hint.
+  expect(appRoot.inert).toBe(true)
   expect(vi.getTimerCount()).toBe(0)
 })
 

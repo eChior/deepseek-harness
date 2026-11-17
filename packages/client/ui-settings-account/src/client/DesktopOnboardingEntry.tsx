@@ -53,8 +53,18 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   }, [exiting])
 
   const displayed = state.visible ? state : exiting || pendingCompletion ? lastVisible : null
-  if (displayed === null) return state.status === 'loading'
-    ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null
+  if (displayed === null) {
+    // Without a stored credential the workspace never opens: the flow has no skip path,
+    // and a sign-out lands here again instead of on an empty session list.
+    if (account.view?.status !== 'credential-stored') {
+      return <OnboardingSurface><div role="status" style={{ display: 'grid', gap: '12px', padding: '32px', textAlign: 'center' }}>
+        <p>{props.t('onboardingSignInRequired')}</p>
+        <button type="button" onClick={() => { props.showLogin?.(true) }}>{props.t('onboardingSignInAction')}</button>
+      </div></OnboardingSurface>
+    }
+    return state.status === 'loading'
+      ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null
+  }
   return <DesktopOnboarding {...props} locale={locale} state={pendingCompletion ? { ...displayed, status: 'saving' } : displayed}
     account={account} exiting={exiting} />
 }
