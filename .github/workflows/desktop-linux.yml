@@ -42,11 +42,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Native runners only: cross-building either architecture on the other silently produces
-          # native modules built for the wrong architecture. Both are listed because the deployment
-          # target (Kylin/UOS desktop) is x64 while arm64 machines install the same release.
-          - arch: x64
-            runner: ubuntu-24.04
+          # Native runners only: cross-building the other architecture silently produces native
+          # modules built for the wrong machine. This distribution only ships the arm64 build,
+          # which is what the Kylin/UOS desktops in the group run.
           - arch: arm64
             runner: ubuntu-24.04-arm
     steps:
