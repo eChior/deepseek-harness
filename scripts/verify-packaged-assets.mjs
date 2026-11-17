@@ -24,7 +24,7 @@ const ASSETS = [
 ]
 
 /** Patches that leave a marker inside a packed dependency, keyed by the package they patch. */
-const PATCH_MARKERS = new Map([['@michengai/dsh-skills-manager', 'DSH_SKILLS_MANAGER_ORIGIN']])
+const PATCH_MARKERS = new Map([['@michengai/dsh-skills-manager', 'fs.mkdir(managerHomePath()']])
 
 /** Bytes read per pass while scanning the archive. */
 const CHUNK = 4 * 1024 * 1024
