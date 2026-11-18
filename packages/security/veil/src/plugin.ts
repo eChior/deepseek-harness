@@ -241,6 +241,23 @@ export const Config: z<Config> = z.object({
 })
 
 /** What the provider has loaded and how much it has replaced so far. */
+/** What one write-back pass restored, reported on the tool result. */
+interface RestoredCount {
+  readonly files: number
+  readonly hits: number
+}
+
+const EMPTY_RESTORE: RestoredCount = { files: 0, hits: 0 }
+
+/**
+ * Say what a pass restored, in the words a reader of the transcript expects.
+ * @param restored - the counts the pass produced.
+ * @returns the one line appended to the tool result.
+ */
+function restoreSummary(restored: RestoredCount): string {
+  return `已还原 ${String(restored.files)} 份文件、${String(restored.hits)} 处占位符。`
+}
+
 export interface RedactionStatus {
   /** Always true: this provider has no off switch. */
   readonly enabled: boolean
@@ -535,7 +552,7 @@ export class RedactionService extends Service {
       // A model cannot do this: it never has the map.
       const directory = this.sessionDirectory(exec.agent)
       if (directory !== undefined) this.lastDirectory = directory
-      await this.restoreWrittenDocuments(exec.arguments, directory, exec.agent?.session.header.id)
+      const restored = await this.restoreWrittenDocuments(exec.arguments, directory, exec.agent?.session.header.id)
       if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
       if (decision.value !== undefined) return decision
       const content = this.redact(decision.content ?? result.content)
@@ -546,7 +563,12 @@ export class RedactionService extends Service {
       const meta = payload === undefined ? undefined : this.redactValue(payload)
       return {
         kind: 'accept',
-        content,
+        // The model cannot see the file after the swap, so the pass says what it
+        // did; otherwise a turn that restored three files reads exactly like one
+        // that restored none, and nothing in the transcript tells them apart.
+        content: restored.files === 0
+          ? content
+          : [...content, { type: 'text', text: restoreSummary(restored) }],
         ...meta === undefined ? {} : { meta },
         ...decision.additionalContexts === undefined ? {} : { additionalContexts: decision.additionalContexts },
       }
@@ -1336,10 +1358,10 @@ export class RedactionService extends Service {
     return undefined
   }
 
-  private async restoreWrittenDocuments(seeded: unknown, cwd?: string, sessionId?: string): Promise<void> {
-    if (!this.mappingsOn || !this.restoreOnWrite) return
+  private async restoreWrittenDocuments(seeded: unknown, cwd?: string, sessionId?: string): Promise<RestoredCount> {
+    if (!this.mappingsOn || !this.restoreOnWrite) return EMPTY_RESTORE
     const paths = documentPaths(seeded)
-    if (paths.length === 0) return
+    if (paths.length === 0) return EMPTY_RESTORE
     if (sessionId !== undefined && cwd !== undefined) this.remember(sessionId, paths, cwd)
     const outcome = await restoreDocuments(paths, this.documentMappings(), cwd, target => this.confiner(target))
       .catch((error: unknown) => ({ restored: 0, files: [], skipped: [], error: String(error) }))
@@ -1360,6 +1382,10 @@ export class RedactionService extends Service {
         lastResult: blocked === undefined ? null : `${basename(blocked.path)}: ${blocked.reason}`,
         files: this.current.restore.files + outcome.restored,
       },
+    }
+    return {
+      files: outcome.restored,
+      hits: outcome.files.reduce((total, file) => total + file.hits, 0),
     }
   }
 
