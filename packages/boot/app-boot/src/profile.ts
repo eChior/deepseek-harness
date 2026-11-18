@@ -48,7 +48,7 @@ export const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
  * installation. Removing the name here is what clears that row; nothing else
  * reads the list for this purpose.
  */
-const RETIRED_BUNDLES: ReadonlySet<string> = new Set(['dsh-ops', 'billion-context'])
+const RETIRED_BUNDLES: ReadonlySet<string> = new Set(['dsh-ops', 'billion-context', 'dsh-zh-thinking'])
 
 /** Installation-owned defaults used when a shipped profile is first opened. */
 export interface ProfileTemplate {
