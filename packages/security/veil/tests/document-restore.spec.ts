@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { zipSync } from 'fflate'
+import { unzipSync, zipSync } from 'fflate'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { RedactionService } from '../src/index.ts'
 
@@ -96,6 +96,30 @@ describe.skipIf(!interpreter)('documents a tool call wrote', () => {
 
     const bytes = await readFile(path)
     expect(Buffer.from(bytes).includes(Buffer.from('[产品-1]', 'utf8'))).toBe(false)
+  })
+
+  it('reads a part whose Chinese arrived as numeric character references', async () => {
+    const { directory, cache, termsPath } = await scratch()
+    onTestFinished(() => rm(directory, { recursive: true, force: true }))
+    const ctx = await mount(cache, termsPath)
+
+    const placeholder = ctx.veil.redactText('红霉素肠溶胶囊')
+    const path = join(directory, '表格.xlsx')
+    const archive = zipSync({
+      '[Content_Types].xml': new TextEncoder().encode('<Types/>'),
+      'xl/sharedStrings.xml': new TextEncoder().encode(
+        `<sst><si><t>&#20135;&#21697;&#26159;${placeholder}</t></si></sst>`,
+      ),
+    })
+    await writeFile(path, archive)
+
+    await call(ctx, { path })
+
+    const members = unzipSync(await readFile(path))
+    const shared = members['xl/sharedStrings.xml'] ?? new Uint8Array()
+    const text = new TextDecoder().decode(shared)
+    expect(text).toContain('红霉素肠溶胶囊')
+    expect(text).not.toContain('[产品-1]')
   })
 
   it('leaves the file alone when the write-back switch is off', async () => {

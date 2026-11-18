@@ -107,6 +107,34 @@ def swap(text, pairs):
     return text, hits
 
 
+NUMERIC_ENTITY = re.compile(r'&#(?:x([0-9a-fA-F]+)|(\d+));')
+
+
+def decode_numeric(text):
+    """Turn numeric character references back into characters.
+
+    Some writers serialise non-ASCII as ``&#20135;`` instead of the literal
+    character. Only references that decode to a code point XML allows are
+    touched, so the structural entities keep the member well formed.
+    """
+
+    def replace(match):
+        value = match.group(1)
+        try:
+            point = int(value, 16) if value else int(match.group(2))
+            character = chr(point)
+        except ValueError:
+            return match.group(0)
+        allowed = (
+            point in (9, 10, 13)
+            or 0x20 <= point <= 0xD7FF
+            or 0xE000 <= point <= 0xFFFD
+        )
+        return character if allowed else match.group(0)
+
+    return NUMERIC_ENTITY.sub(replace, text)
+
+
 def restore_archive(payload, pairs):
     """Rewrite the XML members of a container; return (bytes, hits) or (None, 0)."""
     try:
@@ -125,6 +153,10 @@ def restore_archive(payload, pairs):
                     text = None
                 if text is not None:
                     replaced, hits = swap(text, pairs)
+                    if not hits:
+                        decoded = decode_numeric(text)
+                        if decoded != text:
+                            replaced, hits = swap(decoded, pairs)
                     if hits:
                         data = replaced.encode('utf-8')
                         total += hits
