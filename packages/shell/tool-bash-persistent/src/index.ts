@@ -222,14 +222,18 @@ class CommandFollower {
     return partialOutput(latest, this.marker, this.fallback, this.fallbackTruncated)
   }
 
-  /** Give a cancelled send a bounded chance to settle before the job reports killed. */
-  async settleWithin(ms: number): Promise<void> {
+  /** Give a cancelled send a bounded chance to settle before the job reports killed.
+   * @param ms - how long to wait for the shell to come back to its prompt.
+   * @returns true when the send settled inside the budget, false when it is still winding down.
+   */
+  async settleWithin(ms: number): Promise<boolean> {
     const done = this.currentDone
-    if (done === undefined) return
-    await Promise.race([
-      done.then(() => undefined, () => undefined),
-      new Promise<void>((resolve) => { setTimeout(resolve, ms) }),
-    ])
+    if (done === undefined) return true
+    const settled = new Promise<boolean>((resolve) => { done.then(() => { resolve(true) }, () => { resolve(true) }) })
+    const expired = new Promise<boolean>((resolve) => {
+      setTimeout(() => { resolve(false) }, ms)
+    })
+    return await Promise.race([settled, expired])
   }
 
   /** Poll one step; never writes the command more than once. */
@@ -365,7 +369,12 @@ async function runBackgroundCommand(
       const step = await follower.step()
       switch (step.kind) {
         case 'cancelled': {
-          await follower.settleWithin(1_000)
+          handle.updateProgress('stopping')
+          if (!await follower.settleWithin(1_000)) {
+            // The foreground process group ignored the interrupt: reset before settling so the
+            // next command never starts against a shell that is still winding down.
+            await shells.reset(owner, 'persistent bash command cancelled')
+          }
           resolve({ status: 'killed', detail: follower.cancelDetail ?? 'cancelled by request' })
           return
         }
@@ -379,7 +388,10 @@ async function runBackgroundCommand(
           return
         }
         case 'aborted': {
-          await follower.settleWithin(1_000)
+          handle.updateProgress('stopping')
+          if (!await follower.settleWithin(1_000)) {
+            await shells.reset(owner, 'persistent bash command cancelled')
+          }
           resolve({ status: 'killed', detail: 'cancelled by request' })
           return
         }

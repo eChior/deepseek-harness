@@ -121,6 +121,7 @@ type StubMode =
   | 'paged-scrollback'
   | 'exit-after-send'
   | 'slow'
+  | 'deaf-cancel'
 
 class StubPtySession implements TerminalBackendSession {
   readonly motd = 'stub> '
@@ -173,6 +174,14 @@ class StubPtySession implements TerminalBackendSession {
           finish?.(this.result('', 'stdin_read'))
           return true
         },
+      }
+    }
+    if (this.mode === 'deaf-cancel') {
+      const done = new Promise<ReturnType<StubPtySession['result']>>(() => { /* never settles */ })
+      return {
+        done,
+        readOutput: () => ({ delta: '', truncated: false }),
+        cancel: () => true,
       }
     }
     if (this.mode === 'wait-for-abort' || this.mode === 'end-on-abort') {
@@ -861,6 +870,17 @@ describe('tool-bash-persistent', () => {
     expect(settled.detail).toContain('no longer needed')
     expect(stub.sessions).toHaveLength(1)
     expect(stub.sessions[0]?.closed).not.toContain('persistent bash command timed out')
+  }, 20_000)
+
+  it('resets the shell when a cancelled command ignores the interrupt', async () => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub' }, 'deaf-cancel')
+    await call(ctx, owner, 'sleep forever')
+    const jobId = ctx.jobs.list(owner.id)[0]!.id
+
+    await callTool(ctx, owner, 'job_kill', { job_id: jobId, reason: 'no longer needed' })
+    const settled = await ctx.jobs.wait(jobId, 10_000, owner.id)
+    expect(settled.status).toBe('killed')
+    expect(stub.sessions[0]?.closed ?? '').toContain('persistent bash command cancelled')
   }, 20_000)
 
   it('fails a promoted job with a timeout-only detail when the hard deadline expires', async () => {
