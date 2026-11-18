@@ -40,6 +40,7 @@ export const onboardingCopy = {
   onboardingRetry: '重试',
   onboardingLoading: '正在加载设置…',
   onboardingSignInRequired: '请先登录益办公，完成后才能进入工作区。',
+  onboardingSignInDescription: '登录后即可开始使用；所有对话与文件都留在内网。',
   onboardingSignInAction: '登录',
 } as const
 
@@ -85,5 +86,6 @@ export const onboardingEnglishCopy: Record<keyof typeof onboardingCopy, string> 
   onboardingRetry: 'Retry',
   onboardingLoading: 'Loading settings…',
   onboardingSignInRequired: 'Sign in to 益办公 before the workspace opens.',
+  onboardingSignInDescription: 'Sign in to start; every conversation and file stays on the intranet.',
   onboardingSignInAction: 'Sign in',
 }

@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { AccountSnapshot } from './AccountSection.tsx'
 import type { DesktopOnboardingProps, DesktopOnboardingState } from './onboarding-contract.ts'
 import { OnboardingSurface } from './OnboardingSurface.tsx'
+import css from './DesktopOnboarding.module.css'
 import { DesktopOnboarding } from './DesktopOnboarding.tsx'
 
 /** Observable sources and actions supplied by the account plugin's apply closure. */
@@ -57,10 +58,23 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
     // Without a stored credential the workspace never opens: the flow has no skip path,
     // and a sign-out lands here again instead of on an empty session list.
     if (account.view?.status !== 'credential-stored') {
-      return <OnboardingSurface><div role="status" style={{ display: 'grid', gap: '12px', padding: '32px', textAlign: 'center' }}>
-        <p>{props.t('onboardingSignInRequired')}</p>
-        <button type="button" onClick={() => { props.showLogin?.(true) }}>{props.t('onboardingSignInAction')}</button>
-      </div></OnboardingSurface>
+      return (
+        <OnboardingSurface>
+          <div className={css.page}>
+            <div className={css.welcome}>
+              <div className={css.copy}>
+                <h2>{props.t('onboardingSignInRequired')}</h2>
+                <p>{props.t('onboardingSignInDescription')}</p>
+                <div className={css.primaryAction}>
+                  <button type="button" onClick={() => { props.showLogin?.(true) }}>
+                    {props.t('onboardingSignInAction')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </OnboardingSurface>
+      )
     }
     return state.status === 'loading'
       ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null
