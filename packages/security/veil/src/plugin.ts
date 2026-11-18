@@ -245,16 +245,25 @@ export const Config: z<Config> = z.object({
 interface RestoredCount {
   readonly files: number
   readonly hits: number
+  /** Why the pass could not run at all, when the interpreter refused. */
+  readonly error?: string
+  /** A file the pass examined and could not finish, with the reason. */
+  readonly problem?: string
 }
 
 const EMPTY_RESTORE: RestoredCount = { files: 0, hits: 0 }
 
 /**
- * Say what a pass restored, in the words a reader of the transcript expects.
- * @param restored - the counts the pass produced.
- * @returns the one line appended to the tool result.
+ * Say how a write-back pass ended, in the words a reader of the transcript
+ * expects. A pass that found nothing to do says nothing: the earlier pass
+ * already restored that file, so silence is the honest answer there.
+ * @param restored - the counts and the failure the pass reported.
+ * @returns the line to append, or undefined when there is nothing to say.
  */
-function restoreSummary(restored: RestoredCount): string {
+function restoreSummary(restored: RestoredCount): string | undefined {
+  if (restored.error !== undefined) return `回写失败：${restored.error}`
+  if (restored.problem !== undefined) return `回写未完成：${restored.problem}`
+  if (restored.files === 0) return undefined
   return `已还原 ${String(restored.files)} 份文件、${String(restored.hits)} 处占位符。`
 }
 
@@ -553,6 +562,7 @@ export class RedactionService extends Service {
       const directory = this.sessionDirectory(exec.agent)
       if (directory !== undefined) this.lastDirectory = directory
       const restored = await this.restoreWrittenDocuments(exec.arguments, directory, exec.agent?.session.header.id)
+      const summary = restoreSummary(restored)
       if (decision.kind === 'block') return { ...decision, feedback: this.redact(decision.feedback) }
       if (decision.value !== undefined) return decision
       const content = this.redact(decision.content ?? result.content)
@@ -566,9 +576,9 @@ export class RedactionService extends Service {
         // The model cannot see the file after the swap, so the pass says what it
         // did; otherwise a turn that restored three files reads exactly like one
         // that restored none, and nothing in the transcript tells them apart.
-        content: restored.files === 0
+        content: summary === undefined
           ? content
-          : [...content, { type: 'text', text: restoreSummary(restored) }],
+          : [...content, { type: 'text', text: summary }],
         ...meta === undefined ? {} : { meta },
         ...decision.additionalContexts === undefined ? {} : { additionalContexts: decision.additionalContexts },
       }
@@ -1386,6 +1396,8 @@ export class RedactionService extends Service {
     return {
       files: outcome.restored,
       hits: outcome.files.reduce((total, file) => total + file.hits, 0),
+      ...outcome.error === undefined ? {} : { error: outcome.error },
+      ...blocked === undefined ? {} : { problem: `${basename(blocked.path)}: ${blocked.reason}` },
     }
   }
 
