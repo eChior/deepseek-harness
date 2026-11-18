@@ -312,8 +312,13 @@ export function dropRetiredBundles(manifestPath: string): string[] {
   if (typeof profile !== 'object' || profile === null) return []
   const bundles = (profile as Record<string, unknown>).bundles
   if (!Array.isArray(bundles)) return []
-  const kept = bundles.filter((name: unknown) => typeof name !== 'string' || !RETIRED_BUNDLES.has(name))
-  const dropped = bundles.filter((name: unknown) => typeof name === 'string' && RETIRED_BUNDLES.has(name))
+  // A name that still resolves under the profile is something the user installed
+  // on purpose; only drop the ones this build no longer ships.
+  const profileRoot = dirname(manifestPath)
+  const installed = (name: string): boolean => existsSync(join(profileRoot, 'node_modules', name, 'package.json'))
+  const retired = (name: unknown): boolean => typeof name === 'string' && RETIRED_BUNDLES.has(name) && !installed(name)
+  const kept = bundles.filter((name: unknown) => !retired(name))
+  const dropped = bundles.filter(retired)
   if (dropped.length === 0) return []
   const nextProfile: Record<string, unknown> = { ...(profile as Record<string, unknown>), bundles: kept }
   const nextDsh: Record<string, unknown> = { ...(dsh as Record<string, unknown>), profile: nextProfile }
