@@ -349,10 +349,11 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',
     dir: 'tool-bash-persistent',
     source: 'packages/shell/tool-bash-persistent/src/index.ts',
-    requires: ['ctx.tools', 'ctx.terminals', 'an owning Agent at execution time'],
+    requires: ['ctx.tools', 'ctx.terminals', 'ctx.jobs', 'an owning Agent at execution time'],
     writes: ['tool/call', 'PTY shell state', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(TerminalSessionService)
+      await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(ToolBashPersistent)
     },
     note:

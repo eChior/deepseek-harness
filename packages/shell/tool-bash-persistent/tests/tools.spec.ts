@@ -17,6 +17,8 @@ import type {
 } from '@deepseek-ai/dsh-terminal'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
+import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
@@ -76,6 +78,22 @@ function call(
   })
 }
 
+function callTool(
+  ctx: Context,
+  owner: Agent,
+  name: string,
+  args: Record<string, unknown>,
+  signal = new AbortController().signal,
+) {
+  return ctx.tools.execute({
+    signal,
+    callId: ToolCallId(`persistent-bash-${++callNumber}`),
+    name,
+    arguments: args,
+    agent: owner,
+  })
+}
+
 type StubMode =
   | 'normal'
   | 'prompt-only'
@@ -102,6 +120,7 @@ type StubMode =
   | 'empty-page-after-latest'
   | 'paged-scrollback'
   | 'exit-after-send'
+  | 'slow'
 
 class StubPtySession implements TerminalBackendSession {
   readonly motd = 'stub> '
@@ -115,6 +134,9 @@ class StubPtySession implements TerminalBackendSession {
   historyTruncated = false
   throwOnSend = false
   largeOutput = 'x'.repeat(100)
+  slowDone: ((result: ReturnType<StubPtySession['result']>) => void) | undefined
+  slowStart = ''
+  slowEnd = ''
 
   constructor(mode: StubMode) {
     this.mode = mode
@@ -134,6 +156,25 @@ class StubPtySession implements TerminalBackendSession {
     }
     if (this.mode === 'send-error') throw new Error('stub send failed')
     if (this.throwOnSend) throw new Error('PTY session has exited')
+    if (this.mode === 'slow') {
+      if (request.text.length > 0) {
+        this.slowStart = /__DSH_PERSISTENT_BASH_START_[^_]+(?:-[^_]+)*__/.exec(request.text)?.[0] ?? ''
+        this.slowEnd = /__DSH_PERSISTENT_BASH_END_[^:]+:/.exec(request.text)?.[0] ?? ''
+      }
+      const done = new Promise<ReturnType<StubPtySession['result']>>((resolve) => {
+        this.slowDone = resolve
+      })
+      return {
+        done,
+        readOutput: () => ({ delta: '', truncated: false }),
+        cancel: () => {
+          const finish = this.slowDone
+          this.slowDone = undefined
+          finish?.(this.result('', 'stdin_read'))
+          return true
+        },
+      }
+    }
     if (this.mode === 'wait-for-abort' || this.mode === 'end-on-abort') {
       const done = new Promise<ReturnType<StubPtySession['result']>>((resolve) => {
         request.signal?.addEventListener('abort', () => {
@@ -271,6 +312,14 @@ class StubPtySession implements TerminalBackendSession {
     this.statusValue = { kind: 'exited', exitCode: 0, signal: null }
   }
 
+  completeSlow(): void {
+    const output = `${this.slowStart}\nslow output\n${this.slowEnd}0\n${this.motd}`
+    this.scrollback += output
+    const finish = this.slowDone
+    this.slowDone = undefined
+    finish?.(this.result(output, 'stdin_read'))
+  }
+
   private result(viewport: string, waitReason: TerminalWaitReason) {
     return { viewport, waitReason, sessionStatus: this.statusValue, truncated: false }
   }
@@ -308,6 +357,8 @@ async function setup(
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(TerminalSessionService)
+  await ctx.plugin(LocalJobRegistry)
+  await ctx.plugin(ToolJobs, { completionDelivery: 'quiet' })
   const stub = stubBackend(initialMode)
   ctx.terminals.registerBackend(stub.backend)
   const fiber = await ctx.plugin(ToolBashPersistent, config)
@@ -320,8 +371,8 @@ describe('tool-bash-persistent', () => {
       backendType: 'stub',
       description: 'deployment-specific persistent shell',
     })
-    const schema = ctx.tools.schemas()[0]
-    expect(ctx.tools.schemas().map(item => item.name)).toEqual(['bash'])
+    const schema = ctx.tools.schemas().find(item => item.name === 'bash')
+    expect(ctx.tools.schemas().map(item => item.name)).toContain('bash')
     expect(schema?.description).toBe('deployment-specific persistent shell')
     expect(schema?.parameters).toMatchObject({
       required: ['command'],
@@ -340,7 +391,6 @@ describe('tool-bash-persistent', () => {
     expect(stub.sessions).toHaveLength(2)
 
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toEqual([])
     expect(ctx.tools.get('bash')).toBeUndefined()
   })
 
@@ -720,6 +770,8 @@ describe('tool-bash-persistent', () => {
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TerminalSessionService)
+    await ctx.plugin(LocalJobRegistry)
+    await ctx.plugin(ToolJobs, { completionDelivery: 'quiet' })
     const spawnStarted = Promise.withResolvers<undefined>()
     const spawnAborted = Promise.withResolvers<undefined>()
     ctx.terminals.registerBackend({
@@ -768,4 +820,59 @@ describe('tool-bash-persistent', () => {
       ToolBashPersistent.apply(new Context(), { description: ' ' })
     }).toThrow('description must be non-empty')
   })
+
+  it('promotes a command past the foreground window into a background job', async () => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub' }, 'slow')
+    const promoted = text(await call(ctx, owner, 'sleep forever'))
+    expect(promoted).toContain('foreground window')
+    const jobs = ctx.jobs.list(owner.id)
+    expect(jobs).toHaveLength(1)
+    const jobId = jobs[0]!.id
+    expect(promoted).toContain(jobId)
+    expect(jobs[0]?.status).toBe('running')
+
+    const duplicate = text(await call(ctx, owner, 'sleep forever'))
+    expect(duplicate).toContain('command_started: false')
+    expect(duplicate).toContain(jobId)
+    expect(stub.sessions).toHaveLength(1)
+
+    const busy = text(await call(ctx, owner, 'echo different'))
+    expect(busy).toContain('requested_command_not_executed: true')
+    expect(stub.sessions[0]?.sends).toBe(2)
+
+    stub.sessions[0]!.completeSlow()
+    const settled = await ctx.jobs.wait(jobId, 5_000, owner.id)
+    expect(settled.status).toBe('completed')
+
+    const output = await callTool(ctx, owner, 'job_output', { job_id: jobId })
+    expect(text(output)).toContain('slow output')
+  }, 20_000)
+
+  it('settles a promoted job as killed when the model cancels it', async () => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub' }, 'slow')
+    await call(ctx, owner, 'sleep forever')
+    const jobId = ctx.jobs.list(owner.id)[0]!.id
+
+    const killed = await callTool(ctx, owner, 'job_kill', { job_id: jobId, reason: 'no longer needed' })
+    expect(text(killed)).toContain('requested cancellation')
+
+    const settled = await ctx.jobs.wait(jobId, 5_000, owner.id)
+    expect(settled.status).toBe('killed')
+    expect(settled.detail).toContain('no longer needed')
+    expect(stub.sessions).toHaveLength(1)
+    expect(stub.sessions[0]?.closed).not.toContain('persistent bash command timed out')
+  }, 20_000)
+
+  it('fails a promoted job with a timeout-only detail when the hard deadline expires', async () => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub', timeoutMs: 3_000 }, 'slow')
+    const promoted = text(await call(ctx, owner, 'sleep forever'))
+    expect(promoted).toContain('foreground window')
+    const jobId = ctx.jobs.list(owner.id)[0]!.id
+
+    const settled = await ctx.jobs.wait(jobId, 10_000, owner.id)
+    expect(settled.status).toBe('failed')
+    expect(settled.detail).toContain('timed out after 3 seconds')
+    expect(settled.detail).not.toContain('OOM')
+    expect(stub.sessions[0]?.closed).toContain('persistent bash command timed out')
+  }, 20_000)
 })

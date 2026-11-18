@@ -267,6 +267,7 @@ function restoreSummary(restored: RestoredCount): string | undefined {
   return `已还原 ${String(restored.files)} 份文件、${String(restored.hits)} 处占位符。`
 }
 
+/** What the badge and the settings page render about the current vocabulary. */
 export interface RedactionStatus {
   /** Always true: this provider has no off switch. */
   readonly enabled: boolean
