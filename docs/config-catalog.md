@@ -3574,8 +3574,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-bash-persistent`
 
-- `inject`: `tools` · `terminals`
-- `source`: [`packages/shell/tool-bash-persistent/src/index.ts:444`](../packages/shell/tool-bash-persistent/src/index.ts)
+- `inject`: `tools` · `terminals` · `jobs`
+- `source`: [`packages/shell/tool-bash-persistent/src/index.ts:886`](../packages/shell/tool-bash-persistent/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the persistent Bash tool. */

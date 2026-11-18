@@ -19,6 +19,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
+import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
@@ -97,6 +99,8 @@ suite('persistent Bash through a real cordis.yml Loader composition', () => {
       '    scrollbackLines: 20000',
       '    timeoutMs: 2000',
       '    disposeGraceMs: 500',
+      "- name: '@deepseek-ai/dsh-jobs-local'",
+      "- name: '@deepseek-ai/dsh-tool-jobs'",
       "- name: '@deepseek-ai/dsh-tool-bash-persistent'",
       '  config:',
       '    timeoutMs: 5000',
@@ -117,6 +121,8 @@ suite('persistent Bash through a real cordis.yml Loader composition', () => {
       ['@deepseek-ai/dsh-sandbox-policy', SandboxPolicyService],
       ['@deepseek-ai/dsh-subprocess-local', LocalSubprocessRuntime],
       ['@deepseek-ai/dsh-terminal-bash', TerminalLocal],
+      ['@deepseek-ai/dsh-jobs-local', LocalJobRegistry],
+      ['@deepseek-ai/dsh-tool-jobs', ToolJobs],
       ['@deepseek-ai/dsh-tool-bash-persistent', ToolBashPersistent],
     ])
     context.loader.internal = {
@@ -139,7 +145,7 @@ suite('persistent Bash through a real cordis.yml Loader composition', () => {
       agent: owner,
     })
 
-    expect(context.tools.schemas().map(schema => schema.name)).toEqual(['bash'])
+    expect(context.tools.schemas().map(schema => schema.name)).toContain('bash')
     await execute('state', 'export KEEP=loader; mkdir -p nested; cd nested')
     const observed = text(await execute('observe', 'printf "cwd=%s keep=%s\\n" "$PWD" "$KEEP"'))
     expect(observed).toContain(`cwd=${join(root, 'nested')} keep=loader`)

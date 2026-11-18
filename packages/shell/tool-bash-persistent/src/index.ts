@@ -8,8 +8,14 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-retention'
-import type { TerminalReadResult, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
-import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import type { JobHandle, JobId, JobOutcome } from '@deepseek-ai/dsh-jobs'
+import type {
+  TerminalReadResult,
+  TerminalSendOperation,
+  TerminalSendResult,
+  TerminalSessionId,
+} from '@deepseek-ai/dsh-terminal'
+import { deadline, timeoutOf, type Deadline } from '@deepseek-ai/dsh-timeout'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 // TODO: Replace the file-search advice; arbitrary command output need not come from a searchable file.
@@ -24,6 +30,9 @@ const TIMEOUT_CODE = 'PERSISTENT_BASH_TIMEOUT'
 // scrollback is assembled only when a command settles or needs partial output.
 const SCROLLBACK_PAGE_LINES = 1_000
 const POLL_INTERVAL_MS = 25
+// A command still running after this window stops blocking the model's turn:
+// it becomes a background job that keeps polling the same PTY.
+const FOREGROUND_WINDOW_MS = 2_000
 
 const DEFAULT_DESCRIPTION = 'Run commands in a persistent bash shell. State, including the current directory and exported environment variables, persists across calls for this agent.'
 
@@ -53,6 +62,414 @@ interface CapturedOutput {
 interface PersistentShells {
   get(owner: Agent, signal: AbortSignal): Promise<TerminalSessionId>
   reset(owner: Agent, reason: string): Promise<void>
+}
+
+
+/** The command one owner's persistent shell is currently executing in the background. */
+interface ActiveShellCommand {
+  readonly command: string
+  readonly jobId: JobId
+}
+
+/** One observation of a command still running in its persistent shell. */
+type FollowStep =
+  | { kind: 'complete'; latest: TerminalReadResult; output: CapturedOutput }
+  | { kind: 'timedOut'; latest: TerminalReadResult; timeoutMs: number }
+  | { kind: 'aborted'; latest: TerminalReadResult }
+  | { kind: 'cancelled' }
+  | { kind: 'windowExpired' }
+  | { kind: 'shellExit'; latest: TerminalReadResult; status: ShellExitStatus }
+  | { kind: 'stdinRead'; latest: TerminalReadResult }
+  | { kind: 'pending'; latest: TerminalReadResult }
+  | { kind: 'failed'; error: unknown }
+
+interface ShellExitStatus {
+  exitCode: number | null
+  signal: NodeJS.Signals | null
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'unknown error'
+}
+
+function duplicateCommandResult(active: ActiveShellCommand): string {
+  return [
+    'command_started: false',
+    `The persistent bash shell is still running this exact command as background job ${active.jobId}: ${active.command}`,
+    `Collect that job's output with job_output (job_id: ${active.jobId}). The command was not started again.`,
+  ].join('\n')
+}
+
+function busyCommandResult(active: ActiveShellCommand): string {
+  return [
+    'requested_command_not_executed: true',
+    `The persistent bash shell is busy with background job ${active.jobId}, which is still running a different command: ${active.command}`,
+    'This command was not started and was not queued; it shares the same shell, so collect that job with job_output or stop it with job_kill and retry.',
+  ].join('\n')
+}
+
+function promotedCommandResult(command: string, jobId: JobId): string {
+  return [
+    `Command exceeded the ${FOREGROUND_WINDOW_MS}ms foreground window and continues in the same persistent shell as background job ${jobId}.`,
+    `Its command was not restarted, and the shell keeps its process id, working directory, and exported environment. Collect its output with job_output (job_id: ${jobId}) or stop it with job_kill.`,
+    command,
+  ].join('\n')
+}
+
+/**
+ * Follows one already-written command to completion over its persistent shell.
+ *
+ * The first step writes the wrapped command; later steps only poll the session
+ * with an empty send, so promoting the command to a background job never
+ * re-runs it. The foreground window closes the model's turn without touching
+ * the shell, while the hard deadline keeps running for both phases.
+ */
+class CommandFollower {
+  private first = true
+  private fallback = ''
+  private fallbackTruncated = false
+  private current: TerminalSendOperation | undefined
+  private currentDone: Promise<TerminalSendResult> | undefined
+  private cancelled = false
+  private cancelReason: string | undefined
+  private readonly cancelGate = Promise.withResolvers<void>()
+  private readonly upstreamGate: Promise<'abort'>
+  private upstreamActive = true
+  private windowGate: Promise<'window'> | undefined
+  private windowTimer: ReturnType<typeof setTimeout> | undefined
+  private readonly deadlineGate: Promise<'expired'>
+
+  constructor(
+    private readonly ctx: Context,
+    private readonly owner: Agent,
+    readonly sessionId: TerminalSessionId,
+    readonly marker: CommandMarkers,
+    private readonly wrapped: string,
+    private readonly deadlineSignal: AbortSignal,
+    upstreamSignal: AbortSignal,
+  ) {
+    this.upstreamGate = new Promise<'abort'>((resolve) => {
+      if (upstreamSignal.aborted) {
+        resolve('abort')
+        return
+      }
+      upstreamSignal.addEventListener('abort', () => { resolve('abort') }, { once: true })
+    })
+    // The hard deadline aborts the send so the backend cancels the foreground
+    // process group; observing it here also guarantees the follower reports
+    // timedOut even if a backend settles the send late.
+    this.deadlineGate = new Promise<'expired'>((resolve) => {
+      if (deadlineSignal.aborted) {
+        resolve('expired')
+        return
+      }
+      deadlineSignal.addEventListener('abort', () => { resolve('expired') }, { once: true })
+    })
+  }
+
+  /** Start the foreground window; after it expires the command belongs to a job. */
+  openWindow(ms: number): void {
+    this.windowGate = new Promise<'window'>((resolve) => {
+      this.windowTimer = setTimeout(() => { resolve('window') }, ms)
+    })
+  }
+
+  /** Close the foreground window and stop observing caller cancellation. */
+  promote(): void {
+    this.upstreamActive = false
+    this.closeWindow()
+  }
+
+  /** Restore foreground cancellation observation after a failed promotion. */
+  resumeForeground(): void {
+    this.upstreamActive = true
+  }
+
+  /** Clear the foreground window timer; safe to call repeatedly. */
+  closeWindow(): void {
+    this.windowGate = undefined
+    if (this.windowTimer !== undefined) clearTimeout(this.windowTimer)
+    this.windowTimer = undefined
+  }
+
+  /** Request cancellation of the in-flight send; idempotent. */
+  requestCancel(reason?: string): void {
+    if (this.cancelled) return
+    this.cancelled = true
+    this.cancelReason = reason
+    this.current?.cancel()
+    this.cancelGate.resolve()
+  }
+
+  get cancelDetail(): string | undefined {
+    return this.cancelReason
+  }
+
+  private isCancelled(): boolean {
+    return this.cancelled
+  }
+
+  get fallbackText(): string {
+    return this.fallback
+  }
+
+  get fallbackWasTruncated(): boolean {
+    return this.fallbackTruncated
+  }
+
+  /** Partially captured output from the start marker through the newest chunk. */
+  visible(latest: TerminalReadResult): CapturedOutput {
+    return partialOutput(latest, this.marker, this.fallback, this.fallbackTruncated)
+  }
+
+  /** Give a cancelled send a bounded chance to settle before the job reports killed. */
+  async settleWithin(ms: number): Promise<void> {
+    const done = this.currentDone
+    if (done === undefined) return
+    await Promise.race([
+      done.then(() => undefined, () => undefined),
+      new Promise<void>((resolve) => { setTimeout(resolve, ms) }),
+    ])
+  }
+
+  /** Poll one step; never writes the command more than once. */
+  async step(): Promise<FollowStep> {
+    if (this.isCancelled()) return { kind: 'cancelled' }
+    const status = this.ctx.terminals.list(this.owner)
+      .find(session => session.sessionId === this.sessionId)?.status
+    if (status?.kind === 'exited') {
+      return {
+        kind: 'shellExit',
+        latest: this.readLatest(),
+        status: { exitCode: status.exitCode, signal: status.signal },
+      }
+    }
+    if (this.current === undefined) {
+      try {
+        const operation = this.ctx.terminals.startSend(this.owner, this.sessionId, {
+          text: this.first ? this.wrapped : '',
+          submit: this.first,
+          signal: this.deadlineSignal,
+        })
+        this.first = false
+        this.current = operation
+        this.currentDone = operation.done
+      } catch (error: unknown) {
+        return { kind: 'failed', error }
+      }
+    }
+    const done = this.currentDone
+    if (done === undefined) {
+      return { kind: 'failed', error: new Error('persistent bash send has no completion promise') }
+    }
+    const waits: Array<Promise<TerminalSendResult | 'cancel' | 'window' | 'abort' | 'expired'>> = [
+      done,
+      this.cancelGate.promise.then(() => 'cancel' as const),
+      this.deadlineGate,
+    ]
+    if (this.upstreamActive) waits.push(this.upstreamGate)
+    if (this.windowGate !== undefined) waits.push(this.windowGate)
+    let raced: TerminalSendResult | 'cancel' | 'window' | 'abort' | 'expired'
+    try {
+      raced = await Promise.race(waits)
+    } catch (error: unknown) {
+      this.current = undefined
+      this.currentDone = undefined
+      return { kind: 'failed', error }
+    }
+    // The send may settle at the same moment cancellation arrives; the
+    // cancellation gate wins so job_kill reports killed, never completed.
+    if (this.isCancelled() || raced === 'cancel') return { kind: 'cancelled' }
+    if (raced === 'window') {
+      this.closeWindow()
+      const latest = this.readLatest()
+      const timedOut = timeoutOf(this.deadlineSignal, TIMEOUT_CODE)
+      if (timedOut !== undefined) return { kind: 'timedOut', latest, timeoutMs: timedOut.timeoutMs }
+      if (this.deadlineSignal.aborted) return { kind: 'aborted', latest }
+      return { kind: 'windowExpired' }
+    }
+    if (raced === 'expired') {
+      const latest = this.readLatest()
+      const timedOut = timeoutOf(this.deadlineSignal, TIMEOUT_CODE)
+      return { kind: 'timedOut', latest, timeoutMs: timedOut?.timeoutMs ?? 0 }
+    }
+    if (raced === 'abort') {
+      const latest = this.readLatest()
+      const timedOut = timeoutOf(this.deadlineSignal, TIMEOUT_CODE)
+      if (timedOut !== undefined) return { kind: 'timedOut', latest, timeoutMs: timedOut.timeoutMs }
+      return { kind: 'aborted', latest }
+    }
+    const operation = this.current
+    this.current = undefined
+    this.currentDone = undefined
+    const incremental = operation.readOutput()
+    this.fallback = incremental.delta.length > 0 ? this.fallback + incremental.delta : raced.viewport
+    this.fallbackTruncated ||= incremental.truncated || raced.truncated
+    const latest = this.readLatest()
+    const timedOut = timeoutOf(this.deadlineSignal, TIMEOUT_CODE)
+    if (timedOut !== undefined) return { kind: 'timedOut', latest, timeoutMs: timedOut.timeoutMs }
+    if (this.deadlineSignal.aborted) return { kind: 'aborted', latest }
+    if (latest.text.includes(this.marker.end)) {
+      const complete = commandOutput(
+        retainedScrollback(this.ctx, this.owner, this.sessionId, latest),
+        this.marker,
+      )
+      if (complete !== undefined) return { kind: 'complete', latest, output: complete }
+    }
+    if (raced.sessionStatus.kind === 'exited') {
+      return {
+        kind: 'shellExit',
+        latest,
+        status: { exitCode: raced.sessionStatus.exitCode, signal: raced.sessionStatus.signal },
+      }
+    }
+    if (raced.waitReason === 'stdin_read') return { kind: 'stdinRead', latest }
+    return { kind: 'pending', latest }
+  }
+
+  private readLatest(): TerminalReadResult {
+    return this.ctx.terminals.read(this.owner, this.sessionId, {
+      offset: 0,
+      count: SCROLLBACK_PAGE_LINES,
+    })
+  }
+}
+
+/**
+ * Drive a promoted command to settlement on the job's producer face.
+ * Output chunks are appended incrementally; every terminal outcome is
+ * reported as a `JobOutcome` so `job_output` sees a structured result.
+ */
+async function runBackgroundCommand(
+  ctx: Context,
+  shells: PersistentShells,
+  owner: Agent,
+  config: ResolvedConfig,
+  follower: CommandFollower,
+  handle: JobHandle,
+  resolve: (outcome: JobOutcome) => void,
+): Promise<void> {
+  let emitted = ''
+  const append = (output: CapturedOutput): void => {
+    if (output.text === emitted) return
+    if (output.text.startsWith(emitted)) {
+      const chunk = output.text.slice(emitted.length)
+      if (chunk.length > 0) handle.append(chunk)
+    } else if (output.text.length > 0) {
+      handle.append(output.text, { gapBefore: true })
+    }
+    emitted = output.text
+  }
+  try {
+    while (true) {
+      const step = await follower.step()
+      switch (step.kind) {
+        case 'cancelled': {
+          await follower.settleWithin(1_000)
+          resolve({ status: 'killed', detail: follower.cancelDetail ?? 'cancelled by request' })
+          return
+        }
+        case 'timedOut': {
+          append(follower.visible(step.latest))
+          await shells.reset(owner, 'persistent bash command timed out')
+          resolve({
+            status: 'failed',
+            detail: `timed out after ${Math.round(step.timeoutMs / 1000)} seconds; the persistent shell was reset`,
+          })
+          return
+        }
+        case 'aborted': {
+          await follower.settleWithin(1_000)
+          resolve({ status: 'killed', detail: 'cancelled by request' })
+          return
+        }
+        case 'failed': {
+          await shells.reset(owner, 'persistent bash send failed')
+          resolve({ status: 'failed', detail: errorMessage(step.error) })
+          return
+        }
+        case 'shellExit': {
+          append(follower.visible(step.latest))
+          const text = await respondToSessionExit(
+            ctx, shells, owner, follower.sessionId, step.status, follower.marker,
+            follower.fallbackText, follower.fallbackWasTruncated, config,
+          )
+          resolve({ status: 'failed', detail: text })
+          return
+        }
+        case 'complete': {
+          append(step.output)
+          if (step.output.exitCode !== undefined && step.output.exitCode !== 0) {
+            resolve({
+              status: 'failed',
+              detail: `command finished with exit code ${step.output.exitCode}`,
+            })
+          } else {
+            resolve({ status: 'completed', detail: 'command finished' })
+          }
+          return
+        }
+        case 'stdinRead': {
+          append(follower.visible(step.latest))
+          resolve({
+            status: 'completed',
+            detail: 'the shell returned to its prompt before reporting an exit code',
+          })
+          return
+        }
+        case 'pending': {
+          append(follower.visible(step.latest))
+          break
+        }
+        case 'windowExpired':
+          // A promoted follower never reports another window.
+          break
+      }
+      await pause()
+    }
+  } catch (error: unknown) {
+    resolve({ status: 'failed', detail: errorMessage(error) })
+  }
+}
+
+/** Register the promoted command as a job and hand it the remaining deadline. */
+function startBackgroundCommand(
+  ctx: Context,
+  shells: PersistentShells,
+  owner: Agent,
+  command: string,
+  config: ResolvedConfig,
+  follower: CommandFollower,
+  busy: WeakMap<Agent, ActiveShellCommand>,
+  hardDeadline: Deadline,
+): JobId {
+  const outcome = Promise.withResolvers<JobOutcome>()
+  follower.promote()
+  let jobId: JobId
+  try {
+    jobId = ctx.jobs.start({
+      kind: 'bash',
+      label: command,
+      owner: owner.id,
+      run: (handle) => {
+        void runBackgroundCommand(ctx, shells, owner, config, follower, handle, outcome.resolve)
+        return {
+          done: outcome.promise,
+          cancel: (reason?: string) => { follower.requestCancel(reason) },
+        }
+      },
+    })
+  } catch (error: unknown) {
+    follower.resumeForeground()
+    throw error
+  }
+  busy.set(owner, { command, jobId })
+  const clearBusy = (): void => {
+    if (busy.get(owner)?.jobId === jobId) busy.delete(owner)
+  }
+  void outcome.promise.then(clearBusy, clearBusy)
+  void outcome.promise.finally(() => { hardDeadline[Symbol.dispose]() })
+  return jobId
 }
 
 function maybeTruncate(content: string, maxOutputChars: number, incomplete = false): string {
@@ -307,90 +724,109 @@ async function executeCommand(
   command: string,
   config: ResolvedConfig,
   upstream: AbortSignal,
+  busy: WeakMap<Agent, ActiveShellCommand>,
 ): Promise<string> {
-  using commandDeadline = deadline(upstream, config.timeoutMs, TIMEOUT_CODE)
-  let id: TerminalSessionId
-  try {
-    id = await shells.get(owner, commandDeadline.signal)
-  } catch (error: unknown) {
-    // Initialization owns rollback; only this caller's cancellation becomes ABORTED.
-    if (upstream.aborted && error === upstream.reason) return ''
-    throw error
+  const active = busy.get(owner)
+  if (active !== undefined) {
+    return active.command === command
+      ? duplicateCommandResult(active)
+      : busyCommandResult(active)
   }
-  const marker = markers()
-  const wrapped = wrapCommand(command, marker)
-  let first = true
-  let fallback = ''
-  let fallbackTruncated = false
-
-  while (true) {
-    // The shell may flip to exited between iterations (a fast `exit` can
-    // settle the previous send while its exit event is still in flight);
-    // re-observing status before the next send closes that gap.
-    const status = ctx.terminals.list(owner).find(session => session.sessionId === id)?.status
-    if (status?.kind === 'exited') {
-      return await respondToSessionExit(
-        ctx, shells, owner, id, status, marker, fallback, fallbackTruncated, config,
-      )
-    }
-    let operation
-    let result
+  // The hard deadline is timer-only so the promoted job keeps it while the
+  // foreground tool call is already gone; caller cancellation is observed
+  // separately and stops applying once the command is promoted.
+  const hardDeadline = deadline(undefined, config.timeoutMs, TIMEOUT_CODE)
+  const frontSignal = AbortSignal.any([upstream, hardDeadline.signal])
+  let handedOff = false
+  try {
+    let id: TerminalSessionId
     try {
-      operation = ctx.terminals.startSend(owner, id, {
-        text: first ? wrapped : '',
-        submit: first,
-        signal: commandDeadline.signal,
-      })
-      first = false
-      result = await operation.done
+      id = await shells.get(owner, frontSignal)
     } catch (error: unknown) {
-      await shells.reset(owner, 'persistent bash send failed')
+      // Initialization owns rollback; only this caller's cancellation becomes ABORTED.
+      if (upstream.aborted && error === upstream.reason) return ''
       throw error
     }
-    const incremental = operation.readOutput()
-    fallback = incremental.delta.length > 0 ? fallback + incremental.delta : result.viewport
-    fallbackTruncated ||= incremental.truncated || result.truncated
-    const latest = ctx.terminals.read(owner, id, { offset: 0, count: SCROLLBACK_PAGE_LINES })
-    const timedOut = timeoutOf(commandDeadline.signal, TIMEOUT_CODE)
-    if (timedOut !== undefined) {
-      const snapshot = retainedScrollback(ctx, owner, id, latest)
-      const partial = renderCaptured(
-        partialOutput(snapshot, marker, fallback, fallbackTruncated),
-        config.maxOutputChars,
-      )
-      await shells.reset(owner, 'persistent bash command timed out')
-      throw new Error([
-        `Your command timed out after ${Math.round(timedOut.timeoutMs / 1000)} seconds. Below is partial output:`,
-        appendStatusMarker(partial, TIMEOUT_STATUS_MARKER),
-        SHELL_RESET_MESSAGE,
-      ].join('\n'))
+    const marker = markers()
+    const follower = new CommandFollower(
+      ctx, owner, id, marker, wrapCommand(command, marker), hardDeadline.signal, frontSignal,
+    )
+    // A deadline that already fits inside the foreground window needs no
+    // promotion: the turn simply waits for the hard timeout as before.
+    if (config.timeoutMs > FOREGROUND_WINDOW_MS) follower.openWindow(FOREGROUND_WINDOW_MS)
+
+    while (true) {
+      const step = await follower.step()
+      switch (step.kind) {
+        case 'complete': {
+          follower.closeWindow()
+          return settle(step.output, config.maxOutputChars)
+        }
+        case 'timedOut': {
+          follower.closeWindow()
+          const snapshot = retainedScrollback(ctx, owner, id, step.latest)
+          const partial = renderCaptured(
+            partialOutput(snapshot, marker, follower.fallbackText, follower.fallbackWasTruncated),
+            config.maxOutputChars,
+          )
+          await shells.reset(owner, 'persistent bash command timed out')
+          throw new Error([
+            `Your command timed out after ${Math.round(step.timeoutMs / 1000)} seconds. Below is partial output:`,
+            appendStatusMarker(partial, TIMEOUT_STATUS_MARKER),
+            SHELL_RESET_MESSAGE,
+          ].join('\n'))
+        }
+        case 'aborted': {
+          follower.closeWindow()
+          await shells.reset(owner, 'persistent bash command aborted')
+          // ToolRuntime publishes ABORTED after this cancelled invocation settles.
+          return ''
+        }
+        case 'cancelled': {
+          follower.closeWindow()
+          return ''
+        }
+        case 'failed': {
+          follower.closeWindow()
+          await shells.reset(owner, 'persistent bash send failed')
+          throw step.error instanceof Error ? step.error : new Error(errorMessage(step.error))
+        }
+        case 'windowExpired': {
+          let jobId: JobId
+          try {
+            jobId = startBackgroundCommand(ctx, shells, owner, command, config, follower, busy, hardDeadline)
+          } catch (error: unknown) {
+            // Registration failed; keep waiting in the foreground under the hard
+            // deadline instead of pretending the command runs in the background.
+            ctx.logger.warn(`persistent bash could not start a background job: ${errorMessage(error)}`)
+            await pause()
+            continue
+          }
+          handedOff = true
+          return promotedCommandResult(command, jobId)
+        }
+        case 'shellExit': {
+          follower.closeWindow()
+          return await respondToSessionExit(
+            ctx, shells, owner, id, step.status, marker,
+            follower.fallbackText, follower.fallbackWasTruncated, config,
+          )
+        }
+        case 'stdinRead': {
+          follower.closeWindow()
+          const snapshot = retainedScrollback(ctx, owner, id, step.latest)
+          return renderCaptured(
+            partialOutput(snapshot, marker, follower.fallbackText, follower.fallbackWasTruncated),
+            config.maxOutputChars,
+          )
+        }
+        case 'pending':
+          break
+      }
+      await pause()
     }
-    if (commandDeadline.signal.aborted) {
-      await shells.reset(owner, 'persistent bash command aborted')
-      // ToolRuntime publishes ABORTED after this cancelled invocation settles.
-      return ''
-    }
-    if (latest.text.includes(marker.end)) {
-      const complete = commandOutput(retainedScrollback(ctx, owner, id, latest), marker)
-      if (complete !== undefined) return settle(complete, config.maxOutputChars)
-    }
-    if (result.sessionStatus.kind === 'exited') {
-      return await respondToSessionExit(
-        ctx, shells, owner, id, result.sessionStatus, marker, fallback, fallbackTruncated, config,
-      )
-    }
-    // The shell reads stdin again (its prompt, or a foreground child's own
-    // read) without having printed the end marker — e.g. `exec`, an interrupt,
-    // or an interactive child. Return what was captured instead of spinning
-    // until the command deadline.
-    if (result.waitReason === 'stdin_read') {
-      const snapshot = retainedScrollback(ctx, owner, id, latest)
-      return renderCaptured(
-        partialOutput(snapshot, marker, fallback, fallbackTruncated),
-        config.maxOutputChars,
-      )
-    }
-    await pause()
+  } finally {
+    if (!handedOff) hardDeadline[Symbol.dispose]()
   }
 }
 
@@ -402,6 +838,7 @@ async function executeCommand(
 function registerPersistentBash(ctx: Context, config: ResolvedConfig): void {
   const shells = persistentShells(ctx, config)
   const queues = new WeakMap<Agent, Promise<void>>()
+  const busy = new WeakMap<Agent, ActiveShellCommand>()
 
   const serialized = async <T>(owner: Agent, operation: () => Promise<T>): Promise<T> => {
     const prior = queues.get(owner) ?? Promise.resolve()
@@ -435,7 +872,7 @@ function registerPersistentBash(ctx: Context, config: ResolvedConfig): void {
       if (owner === undefined) throw new Error('bash requires an owning agent session')
       return serialized(owner, async () => {
         if (exec.signal.aborted) return '' // ToolRuntime publishes ABORTED after settlement.
-        return executeCommand(ctx, shells, owner, args.command, config, exec.signal)
+        return executeCommand(ctx, shells, owner, args.command, config, exec.signal, busy)
       })
     },
     presentCall: args => ({ card: 'terminal', title: args.command }),
@@ -443,7 +880,7 @@ function registerPersistentBash(ctx: Context, config: ResolvedConfig): void {
 }
 
 export const name = 'tool-bash-persistent'
-export const inject = ['tools', 'terminals']
+export const inject = ['tools', 'terminals', 'jobs']
 
 /** Configuration for the persistent Bash tool. */
 export interface Config {
