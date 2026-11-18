@@ -18,7 +18,7 @@ const LOST_PREFIX_MESSAGE = '<response clipped><NOTE>The beginning of this comma
 const SHELL_RESET_MESSAGE = 'The persistent bash shell was reset; the next bash call starts from the workspace with a fresh current directory and environment.'
 // Status trailer for a command that never reported an exit code; settled
 // commands append `[Command finished with exit code N]` instead (see renderCaptured).
-const TIMEOUT_STATUS_MARKER = '[Command timed out or OOM]'
+const TIMEOUT_STATUS_MARKER = '[Command timed out]'
 const TIMEOUT_CODE = 'PERSISTENT_BASH_TIMEOUT'
 // One page is enough to find a just-emitted completion marker; the full
 // scrollback is assembled only when a command settles or needs partial output.
@@ -159,6 +159,12 @@ function retainedScrollback(
     offset = next
   }
   return { text: pages.join('\n'), truncated }
+}
+
+function settle(output: CapturedOutput, maxOutputChars: number): string {
+  const text = renderCaptured(output, maxOutputChars)
+  if (output.exitCode !== undefined && output.exitCode !== 0) throw new Error(text)
+  return text
 }
 
 function renderCaptured(output: CapturedOutput, maxOutputChars: number): string {
@@ -353,12 +359,11 @@ async function executeCommand(
         config.maxOutputChars,
       )
       await shells.reset(owner, 'persistent bash command timed out')
-      return [
-        // TODO: Report a timeout only; this signal does not establish an OOM.
-        `Your command timed out after ${Math.round(timedOut.timeoutMs / 1000)} seconds or experienced an OOM error. Below is partial output:`,
+      throw new Error([
+        `Your command timed out after ${Math.round(timedOut.timeoutMs / 1000)} seconds. Below is partial output:`,
         appendStatusMarker(partial, TIMEOUT_STATUS_MARKER),
         SHELL_RESET_MESSAGE,
-      ].join('\n')
+      ].join('\n'))
     }
     if (commandDeadline.signal.aborted) {
       await shells.reset(owner, 'persistent bash command aborted')
@@ -367,7 +372,7 @@ async function executeCommand(
     }
     if (latest.text.includes(marker.end)) {
       const complete = commandOutput(retainedScrollback(ctx, owner, id, latest), marker)
-      if (complete !== undefined) return renderCaptured(complete, config.maxOutputChars)
+      if (complete !== undefined) return settle(complete, config.maxOutputChars)
     }
     if (result.sessionStatus.kind === 'exited') {
       return await respondToSessionExit(

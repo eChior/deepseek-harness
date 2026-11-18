@@ -379,7 +379,9 @@ describe('tool-bash-persistent', () => {
     expect(text(await call(ctx, owner, 'large'))).toContain('<response clipped>')
 
     session.mode = 'nonzero'
-    expect(text(await call(ctx, owner, 'false'))).toBe('[Command finished with exit code 7]')
+    const failed = await call(ctx, owner, 'false')
+    expect(failed.isError).toBe(true)
+    expect(text(failed)).toContain('[Command finished with exit code 7]')
 
     session.mode = 'exit'
     const exited = text(await call(ctx, owner, 'exit'))
@@ -425,7 +427,9 @@ describe('tool-bash-persistent', () => {
     stub.sessions[0]!.mode = 'torn-status'
     stub.sessions[0]!.scrollback = ''
 
-    expect(text(await call(ctx, owner, 'torn status'))).toBe('hello from stub\n[Command finished with exit code 7]')
+    const torn = await call(ctx, owner, 'torn status')
+    expect(torn.isError).toBe(true)
+    expect(text(torn)).toContain('hello from stub\n[Command finished with exit code 7]')
   })
 
   it('reports the exit path when the shell exits between send settlement and the next poll', async () => {
@@ -510,9 +514,10 @@ describe('tool-bash-persistent', () => {
     await call(ctx, owner, 'warm up')
     stub.sessions[0]!.mode = 'wait-for-abort'
     const result = await call(ctx, owner, 'hang')
-    expect(text(result)).toContain('timed out after 0 seconds or experienced an OOM error')
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('timed out after 0 seconds')
     expect(text(result)).toContain('partial output')
-    expect(text(result)).toContain('[Command timed out or OOM]')
+    expect(text(result)).toContain('[Command timed out]')
     expect(text(result)).toContain('next bash call starts from the workspace')
     expect(stub.sessions[0]?.closed).toContain('persistent bash command timed out')
   })
