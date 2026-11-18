@@ -1,8 +1,28 @@
 diff --git a/lib/repositories.js b/lib/repositories.js
-index e76a5b792c5c3d01dbdd245d79070e8511816565..0c5f63aaddc2ba023eaaa339eb3ce33d90cfa6be 100644
+index e76a5b792c5c3d01dbdd245d79070e8511816565..9da7a4b6dcaa495736ad97bc6adf67b7f718df1f 100644
 --- a/lib/repositories.js
-+++ b/lib/repositories.js
-@@ -209,6 +209,7 @@ function createRepositoryManager({
++++ b/lib/repositories.js	
+@@ -85,6 +85,10 @@ function validateStoredState(input) {
+     }
+   }
+ }
++function seededState() {
++  const source = parseRepositoryInput({ url: "http://10.151.5.175:3000/ITPublic/dsh-skills", ref: "main", subdirectory: "skills" });
++  return { version: 1, repositories: [{ ...source, id: hash(JSON.stringify(source)).slice(0, 24), skills: [], commit: null }], installs: [] };
++}
+ function parseRepositoryInput(input = {}) {
+   return parseGitUrl(input);
+ }
+@@ -162,7 +166,7 @@ function createRepositoryManager({
+       return value;
+     } catch (caught) {
+       const error = caught;
+-      if (error.code === "ENOENT") return { version: 1, repositories: [], installs: [] };
++      if (error.code === "ENOENT") return seededState();
+       throw failure("\u4ED3\u5E93\u72B6\u6001\u6587\u4EF6\u635F\u574F\u6216\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u8BF7\u4FDD\u7559\u6587\u4EF6\u5E76\u4FEE\u590D\u540E\u91CD\u8BD5", "error.repo.state");
+     }
+   }
+@@ -209,6 +213,7 @@ function createRepositoryManager({
    }
    async function cacheDirectory() {
      const dir = join(managerHomePath(), "repository-cache");
