@@ -37,9 +37,9 @@ function debugPort(name: string, fallback: number): number {
   return port
 }
 
-async function run(command: string, args: readonly string[], cwd: string, environment = process.env): Promise<void> {
+async function run(command: string, args: readonly string[], cwd: string, environment = process.env, shell = false): Promise<void> {
   await new Promise<void>((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd, env: environment, stdio: 'inherit' })
+    const child = spawn(command, args, { cwd, env: environment, stdio: 'inherit', shell })
     child.once('error', reject)
     child.once('exit', (code, signal) => {
       if (code === 0) resolvePromise()
@@ -49,11 +49,10 @@ async function run(command: string, args: readonly string[], cwd: string, enviro
 }
 
 async function runPackageScript(script: string, cwd: string): Promise<void> {
-  const packageManager = process.env.npm_execpath
-  if (packageManager === undefined || packageManager === '') {
-    throw new Error('desktop development: invoke this launcher through pnpm run dev:desktop or start:desktop')
-  }
-  await run(process.execPath, [packageManager, 'run', script], cwd)
+  // Windows ships pnpm as a .cmd shim or an @pnpm/exe PE image; node cannot load either
+  // as a module, so let the shell resolve the command by name instead of npm_execpath.
+  const shell = process.platform === 'win32'
+  await run(shell ? 'pnpm.cmd' : 'pnpm', ['run', script], cwd, process.env, shell)
 }
 
 async function launchElectron(): Promise<void> {
