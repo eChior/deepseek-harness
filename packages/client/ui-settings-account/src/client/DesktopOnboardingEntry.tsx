@@ -1,5 +1,5 @@
 /** Framework-hook projection into the desktop introduction's pure view. */
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { AccountSnapshot } from './AccountSection.tsx'
@@ -26,6 +26,7 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   const locale = props.t('onboardingArtworkLocale')
   const state = useOnboarding(value => value)
   const account = useAccount(value => value)
+  const storedOnce = useRef(false)
   useLayoutEffect(() => {
     if (!state.visible) return
     const bridge = (globalThis as typeof globalThis & {
@@ -57,6 +58,15 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   if (displayed === null) {
     // Without a stored credential the workspace never opens: the flow has no skip path,
     // and a sign-out lands here again instead of on an empty session list.
+    // The account view arrives one tick after the first paint. Rendering the sign-in page
+    // before it lands is what made every launch flash the login screen for a stored credential.
+    // Switching a model or a mode remounts this entry while the account view reloads.
+    // Once a credential was stored, a missing view means “reading”, not “signed out”:
+    // painting the gate again would flash the sign-in page over a working workspace.
+    if (account.view?.status === 'credential-stored') storedOnce.current = true
+    if (account.view === undefined) {
+      return storedOnce.current ? null : <OnboardingSurface><div className={css.page} aria-busy="true" /></OnboardingSurface>
+    }
     if (account.view?.status !== 'credential-stored') {
       return (
         <OnboardingSurface>

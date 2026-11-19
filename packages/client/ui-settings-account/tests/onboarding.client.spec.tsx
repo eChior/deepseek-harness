@@ -16,7 +16,7 @@ const theme: ThemeSnapshot = {
   active: { id: 'light', colorScheme: 'light', tokens: {} }, themes: [], revision: 0,
 }
 
-it('claims onboarding while loading, offers API key fallback, and completes after login', () => {
+it('claims onboarding while loading and completes after login', () => {
   let account: AccountSnapshot = { view: undefined, details: undefined, failed: false }
   const unused = (): never => { throw new Error('AccountOnboarding does not consume global hooks') }
   const globals: GlobalStandardProps = {
@@ -38,9 +38,6 @@ it('claims onboarding while loading, offers API key fallback, and completes afte
   expect(screen.queryByRole('dialog')).toBeNull()
   account = { ...account, view: { status: 'signed-out', attempt: null, links: { usageUrl: '', topUpUrl: '' } } }
   view.rerender(<AccountOnboarding {...props} />)
-  fireEvent.click(screen.getByRole('button', { name: en.addApiKey }))
-  expect(props.showLogin).toHaveBeenLastCalledWith(false)
-  expect(props.useApiKey).toHaveBeenCalledOnce()
   fireEvent.click(screen.getByRole('button', { name: en.close }))
   expect(props.complete).toHaveBeenCalledOnce()
   account = { ...account, view: { ...account.view!, status: 'credential-stored' } }
