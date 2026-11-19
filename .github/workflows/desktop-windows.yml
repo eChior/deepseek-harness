@@ -80,6 +80,7 @@ jobs:
           Write-Output "build version: $stamp"
 
       - name: Write the knowledge-base configuration
+        if: ${{ !inputs.skip_weknora }}
         run: node scripts/write-weknora-config.mjs
         env:
           WEKNORA_BASE_URL: ${{ secrets.WEKNORA_BASE_URL }}
