@@ -26,9 +26,15 @@ const baseUrl = value('WEKNORA_BASE_URL')
 const apiKey = value('WEKNORA_API_KEY')
 const maskerUrl = value('WEKNORA_MASKER_URL')
 
-if (baseUrl === undefined || apiKey === undefined) {
-  console.log('No WeKnora secrets are set; the knowledge-base panel stays unconfigured.')
-  process.exit(0)
+const missing = [
+  ['WEKNORA_BASE_URL', baseUrl],
+  ['WEKNORA_API_KEY', apiKey],
+].filter(([, present]) => present === undefined).map(([name]) => name)
+if (missing.length > 0) {
+  console.error(`write-weknora-config: missing ${missing.join(', ')}`)
+  console.error('The knowledge-base panel ships unconfigured without them; set the repository secrets.')
+  console.error('re-run the packaging lane with skip_weknora enabled when that is deliberate.')
+  process.exit(1)
 }
 
 const config = {
