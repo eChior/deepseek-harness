@@ -82,6 +82,9 @@ async function launchElectron(): Promise<void> {
     return
   }
   await run(electron, [
+    // Windows will not start the sandbox for an unpackaged app on this host
+    // (the GPU process dies with STATUS_BREAKPOINT); the packaged build is unaffected.
+    ...(process.platform === 'win32' ? ['--no-sandbox'] : []),
     `--inspect=127.0.0.1:${String(mainPort)}`,
     `--remote-debugging-port=${String(rendererPort)}`,
     `--user-data-dir=${userData}`,
