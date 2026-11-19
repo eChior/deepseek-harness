@@ -78,3 +78,9 @@ apps/desktop/resources/ocr/*.zip
 packages/security/redaction/out/
 
 dev-desktop.log
+
+# 本地双击启动器
+启动开发版.bat
+
+# The knowledge-base panel's address and API key — a build artefact, never committed.
+packages/bundle/web-app/node_modules/dsh-weknora-panel/config.json

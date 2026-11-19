@@ -51,7 +51,8 @@ function mount(initiallyDone = false, initiallyLoading = false) {
     failed: false, details: undefined,
   }
   // This entry consumes only its injected selectors; the shell owns the global hooks.
-  const globals = {} as GlobalStandardProps
+  const showLogin = vi.fn()
+  const globals = { showLogin } as unknown as GlobalStandardProps
   const element = () => <DesktopOnboardingEntry {...globals}
     useOnboarding={select => select(state)} useAccount={select => select(account)}
     update={async () => true} complete={async () => true} retry={async () => true}
@@ -59,6 +60,7 @@ function mount(initiallyDone = false, initiallyLoading = false) {
   const view = render(element())
   act(() => { vi.runOnlyPendingTimers() })
   return {
+    showLogin,
     unmount: view.unmount,
     resolve() {
       state = { ...state, status: 'ready', visible: !initiallyDone }
@@ -143,7 +145,7 @@ it.each([false, true])('removes onboarding immediately on sign-out, including du
   view.signOut()
   // Signing out no longer drops the user into the workspace: the entry holds the
   // workspace shut until a credential is stored again.
-  expect(screen.getByRole('button', { name: zh.onboardingSignInAction })).toBeTruthy()
+  expect(view.showLogin).toHaveBeenCalledWith(true)
   // The workspace stays covered: the gate is a surface, not a hint.
   expect(appRoot.inert).toBe(true)
   expect(vi.getTimerCount()).toBe(0)

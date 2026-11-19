@@ -27,6 +27,10 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   const state = useOnboarding(value => value)
   const account = useAccount(value => value)
   const storedOnce = useRef(false)
+  // Opening the dialog is the gate: closing it without signing in opens it again.
+  useEffect(() => {
+    if (account.view !== undefined && account.view?.status !== 'credential-stored') props.showLogin?.(true)
+  }, [account.view, props.showLogin])
   useLayoutEffect(() => {
     if (!state.visible) return
     const bridge = (globalThis as typeof globalThis & {
@@ -67,24 +71,9 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
     if (account.view === undefined) {
       return storedOnce.current ? null : <OnboardingSurface><div className={css.page} aria-busy="true" /></OnboardingSurface>
     }
-    if (account.view?.status !== 'credential-stored') {
-      return (
-        <OnboardingSurface>
-          <div className={css.page}>
-            <div className={css.welcome}>
-              <div className={css.copy}>
-                <h2>{props.t('onboardingSignInRequired')}</h2>
-                <p>{props.t('onboardingSignInDescription')}</p>
-                <div className={css.primaryAction}>
-                  <button type="button" onClick={() => { props.showLogin?.(true) }}>
-                    {props.t('onboardingSignInAction')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </OnboardingSurface>
-      )
+    if (account.view !== undefined && account.view.status !== 'credential-stored') {
+      // The gate is the sign-in dialog itself, not a page offering to open one.
+      return <OnboardingSurface><div className={css.page} aria-busy="true" /></OnboardingSurface>
     }
     return state.status === 'loading'
       ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null
