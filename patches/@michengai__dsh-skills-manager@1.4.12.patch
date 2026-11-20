@@ -1,7 +1,7 @@
 diff --git a/lib/repositories.js b/lib/repositories.js
-index e76a5b792c5c3d01dbdd245d79070e8511816565..9da7a4b6dcaa495736ad97bc6adf67b7f718df1f 100644
+index e76a5b7..12b7031 100644
 --- a/lib/repositories.js
-+++ b/lib/repositories.js	
++++ b/lib/repositories.js
 @@ -85,6 +85,10 @@ function validateStoredState(input) {
      }
    }
@@ -22,11 +22,3 @@ index e76a5b792c5c3d01dbdd245d79070e8511816565..9da7a4b6dcaa495736ad97bc6adf67b7
        throw failure("\u4ED3\u5E93\u72B6\u6001\u6587\u4EF6\u635F\u574F\u6216\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u8BF7\u4FDD\u7559\u6587\u4EF6\u5E76\u4FEE\u590D\u540E\u91CD\u8BD5", "error.repo.state");
      }
    }
-@@ -209,6 +213,7 @@ function createRepositoryManager({
-   }
-   async function cacheDirectory() {
-     const dir = join(managerHomePath(), "repository-cache");
-+    await fs.mkdir(managerHomePath(), { recursive: true });
-     if ((await fs.lstat(managerHomePath())).isSymbolicLink()) throw failure("\u7F13\u5B58\u76EE\u5F55\u4E0D\u80FD\u662F\u94FE\u63A5");
-     await fs.mkdir(dir, { recursive: true });
-     if ((await fs.lstat(dir)).isSymbolicLink()) throw failure("\u7F13\u5B58\u76EE\u5F55\u4E0D\u80FD\u662F\u94FE\u63A5");

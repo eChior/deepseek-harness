@@ -1,0 +1,25 @@
+diff --git a/lib/index.js b/lib/index.js
+index 70c1c9e..ce6fc1f 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -445,8 +445,20 @@ async function pipeUpstream(res, upstream, { fileName, fallbackType, inline } =
+ }
+ 
+ // ── 插件主体 ─────────────────────────────────────────────
++const z = require('@deepseek-ai/schemastery')
++
+ module.exports = {
+   name: 'dsh-weknora-panel',
++  Config: z.object({
++    baseUrl: z.string().default('').description('知识库地址，例如 http://10.151.5.175:8080'),
++    apiKey: z.string().role('secret').default('').description('知识库 API Key'),
++    tenantId: z.string().default('').description('租户 ID，留空使用默认租户'),
++    maskerUrl: z.string().default('').description('脱敏服务地址，留空表示不脱敏'),
++    contextMode: z
++      .union([z.const('once'), z.const('always'), z.const('off')])
++      .default('once')
++      .description('知识库说明注入时机'),
++  }),
+   // 故意不声明 webServer：headless / tui 里没有网页服务，但工具仍应可用。
+   inject: ['tools', 'agents'],
+ 
