@@ -5,7 +5,7 @@
   "targets": {
     "win-x64": {
       "nodeArchive": "win-x64.zip",
-      "nodeSha256": "3309fc6441bc8c5f14d92ebfed058738c252f2c4caa18c52839b080b04610162",
+      "nodeSha256": "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541",
       "pythonTarget": "x86_64-pc-windows-msvc",
       "pythonSha256": "7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14",
       "pythonNupkg": {
