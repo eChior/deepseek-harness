@@ -51,14 +51,18 @@ function mount(initiallyDone = false, initiallyLoading = false) {
     failed: false, details: undefined,
   }
   // This entry consumes only its injected selectors; the shell owns the global hooks.
+  const showLogin = vi.fn()
   const globals = {} as GlobalStandardProps
   const element = () => <DesktopOnboardingEntry {...globals}
+    showLogin={showLogin}
     useOnboarding={select => select(state)} useAccount={select => select(account)}
     update={async () => true} complete={async () => true} retry={async () => true}
+    start={async () => {}} cancel={async () => {}}
     t={key => key in zh ? zh[key as AccountKey] : key} />
   const view = render(element())
   act(() => { vi.runOnlyPendingTimers() })
   return {
+    showLogin,
     unmount: view.unmount,
     resolve() {
       state = { ...state, status: 'ready', visible: !initiallyDone }
@@ -143,10 +147,12 @@ it.each([false, true])('removes onboarding immediately on sign-out, including du
   view.signOut()
   // Signing out no longer drops the user into the workspace: the entry holds the
   // workspace shut until a credential is stored again.
-  expect(screen.getByRole('button', { name: zh.onboardingSignInAction })).toBeTruthy()
+  expect(view.showLogin).toHaveBeenCalledWith(true)
   // The workspace stays covered: the gate is a surface, not a hint.
   expect(appRoot.inert).toBe(true)
-  expect(vi.getTimerCount()).toBe(0)
+  // The gate renders the real sign-in dialog now, so its modal owns one short-lived
+  // timer; what matters here is that no completion teardown is left pending.
+  expect(document.querySelector('[data-exiting]')).toBeNull()
 })
 
 it('cancels pending completion teardown when the entry unmounts', () => {

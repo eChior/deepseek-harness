@@ -79,14 +79,15 @@ jobs:
           "DSH_DESKTOP_BUILD_VERSION=$stamp" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           Write-Output "build version: $stamp"
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --reporter=append-only
       - name: Write the knowledge-base configuration
+        if: ${{ !inputs.skip_weknora }}
         run: node scripts/write-weknora-config.mjs
         env:
           WEKNORA_BASE_URL: ${{ secrets.WEKNORA_BASE_URL }}
           WEKNORA_API_KEY: ${{ secrets.WEKNORA_API_KEY }}
           WEKNORA_MASKER_URL: ${{ secrets.WEKNORA_MASKER_URL }}
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --reporter=append-only
 
       - name: Report install diagnostics
         if: failure()

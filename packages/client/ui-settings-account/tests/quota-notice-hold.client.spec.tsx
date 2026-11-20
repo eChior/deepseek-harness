@@ -162,6 +162,7 @@ async function bench() {
       hooks: { onboarding, account },
       openPlatformPage: pages.open,
       update: async () => true, complete: async () => true, retry: async () => true,
+      start: async () => {}, cancel: async () => {},
     }),
   }, DesktopOnboardingEntry))
   // Retaining the Session subscribes the Chat source, so live failures publish.

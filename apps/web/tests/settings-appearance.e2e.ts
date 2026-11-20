@@ -70,7 +70,8 @@ it('shares settings card materials and control sizes in both palettes', async ()
 
     await dialog.getByRole('button', { name: '账号与余额', exact: true }).click()
     const section = dialog.getByRole('region', { name: '账号与余额', exact: true })
-    await expect.poll(() => section.innerText()).toContain('¥128.50')
+    // The recharge balance is gone by design: the card keeps the identity line, the
+    // staff directory line and the granted balance only.
     const cards = section.locator(':scope > div')
     expect(await cards.count()).toBe(2)
     const profile = await appearance(cards.nth(0))
@@ -79,10 +80,10 @@ it('shares settings card materials and control sizes in both palettes', async ()
     expect(material.radius).toBe('20px')
     expect(material.fill).not.toBe('rgba(0, 0, 0, 0)')
     expect(balance).toMatchObject(material)
-    const usage = await appearance(section.getByRole('link', { name: '查询用量', exact: true }))
-    const topUp = await appearance(section.getByRole('link', { name: '充值', exact: true }))
-    expect(usage).toMatchObject({ radius: '12px', height: 36 })
-    expect(topUp).toMatchObject({ radius: '12px', height: 36 })
+    // The balance card keeps one entry point into Platform; the old 更多 / 查询用量 / 充值
+    // row was removed, so that link is what the card offers now.
+    const accountInfo = await appearance(section.getByRole('link', { name: '更多账号信息', exact: true }))
+    expect(accountInfo.height).toBeGreaterThan(0)
     await compareOrRefreshGolden(join(EXPECTED, 'account.expected.md'),
       await captureStableAria(page, 'section[aria-label="账号与余额"]', scaffold.workspaceCwd), webSnapshotMode())
 
@@ -105,7 +106,7 @@ it('shares settings card materials and control sizes in both palettes', async ()
     const save = await appearance(dialog.getByRole('button', { name: '保存', exact: true }))
     expect(save).toMatchObject({ radius: '12px', height: 36 })
     await compareOrRefreshGolden(join(EXPECTED, `${palette}.expected.md`),
-      JSON.stringify({ card: material, selector, usage, topUp, save }, null, 2), webSnapshotMode())
+      JSON.stringify({ card: material, selector, save }, null, 2), webSnapshotMode())
     await dialog.getByRole('button', { name: '取消', exact: true }).click()
   }
 })

@@ -258,6 +258,15 @@ interface AssetEmitter {
   }): string
 }
 
+/**
+ * Browsers have no `process.env`; every client artifact that reports its build to the
+ * Host needs the value inlined at build time, otherwise `account.startSignIn` aborts with
+ * "this client build carries no DSH_CLIENT_VERSION".
+ */
+const CLIENT_BUILD_VERSION: string = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+).version as string
+
 function staticLinkedConfig(id: string, entry: string, outputName = basename(entry, '.js')): UserConfig {
   const emitted = new Set<string>()
   const isolation = clientInputIsolation(id)
@@ -520,7 +529,7 @@ function clientConfig(id: string, entry: string, clientBanner?: (fileName: strin
     // key: zustand probes `import.meta.env ? import.meta.env.MODE : ...`, and
     // the truthiness probe would otherwise survive as an empty import.meta.
     define: {
-      ...clientBuildEnvironmentDefines(process.env),
+      ...clientBuildEnvironmentDefines({ ...process.env, DSH_CLIENT_VERSION: process.env.DSH_CLIENT_VERSION ?? CLIENT_BUILD_VERSION }),
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
       'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),
       'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),

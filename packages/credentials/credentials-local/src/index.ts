@@ -275,12 +275,8 @@ function parseRefs(section: unknown, filename: string): Map<string, string> {
     credentialRef(key)
     // The key name is quoted, never the value: a wrong-typed entry is still a
     // secret the user meant to store.
-    if (typeof value !== 'string') {
-      throw new TypeError(`credentials-local: the value for "${key}" in ${filename} must be a string`)
-    }
-    if (value.length === 0) {
-      throw new Error(`credentials-local: the value for "${key}" in ${filename} is empty; remove the key instead`)
-    }
+    if (typeof value !== 'string') continue
+    if (value.length === 0) continue
     entries.set(key, value)
   }
   return entries

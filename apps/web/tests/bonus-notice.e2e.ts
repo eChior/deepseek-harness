@@ -3,6 +3,15 @@
 // and the real client renders the card in a real Chromium. The loopback Platform double
 // is the observation point: the scenario asserts what the product sent and what the user
 // could read on screen.
+//
+// SKIPPED in this distribution. The scenario exercises the Platform account provider:
+// the stored credential is a Platform grant and the double answers the Platform bonus
+// endpoints. This build ships `@deepseek-ai/dsh-hrzszy-account` as the account provider
+// (`packages/bundle/base/cordis.patch.yml`), which stores an RWork cookie grant under
+// `hrzszy-account/default` and answers `getBalance` with empty wallets and
+// `getUnnotifiedBonuses` with null, so no bonus notice exists to observe. Restoring the
+// Platform provider is what makes the run meaningful again: drop the `.skip` below, then
+// re-record `expected/bonus-notice/notice-flow.expected.md`.
 import { createServer, type Server } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -27,7 +36,6 @@ const ORDER_LATER = '33333333-3333-4333-8333-333333333333'
 const ORDER_EN = '44444444-4444-4444-8444-444444444444'
 const ORDER_RETRY = '55555555-5555-4555-8555-555555555555'
 const ORDER_REPEAT = '66666666-6666-4666-8666-666666666666'
-const ORDER_TOPUP = '77777777-7777-4777-8777-777777777777'
 
 const CLAIM_DAYS = 30
 
@@ -213,7 +221,11 @@ async function platformCalls(page: Page): Promise<readonly string[]> {
     .__bonusPlatformCalls ?? [])
 }
 
-describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
+/**
+ * Skipped because this distribution has no bonus notice to observe; see the file header
+ * for the provider that would restore it.
+ */
+describe.skip('web e2e: bonus notice', () => {
   let root: string | undefined
   let scaffold: WebScaffold
   let browser: Browser
@@ -348,7 +360,7 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
 
     const openGet = platform.served.at(-1)!
     const panel = (await settings.textContent()) ?? ''
-    const usage = await settings.getByRole('link', { name: '查询用量', exact: true }).getAttribute('href')
+    const usage = await settings.getByRole('link', { name: '更多账号信息', exact: true }).getAttribute('href')
     observations.push(`open.get locale=${String(openGet.locale)} query=${openGet.query} served=true gets=${String(platform.gets.length - getsBefore)}`)
     observations.push(`open.balance bonus-row=${String(panel.includes('赠金余额'))} amount=${String(panel.includes('¥13.00'))} dated=${String(/\d{4}-\d{2}-\d{2}/.test(panel))}`)
     observations.push(`open.cards-while-open=${String(await noticeCards(page).count())} acks=${String(platform.acks.length)}`)
@@ -410,57 +422,6 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     observations.push(`reopen.closed cards=${String(await noticeCards(page).count())} acks=${String(platform.acks.length)}`)
     expect(await noticeCards(page).count()).toBe(0)
     expect(platform.acks).toHaveLength(2)
-
-    // Returning from the native top-up view refreshes balance and notice once each, without
-    // holding the panel open.
-    const zhTopUp = '已赠送您 11.00 元 DSH 体验赠金。'
-    const topUpGetsBefore = platform.gets.length
-    const topUpSummariesBefore = platform.summaries.length
-    await openSettings(page, 'zh')
-    const topUpSettings = page.getByRole('dialog', { name: '设置', exact: true })
-    await topUpSettings.waitFor()
-    await expect.poll(() => platform.gets.length, { timeout: 30_000 }).toBe(topUpGetsBefore + 1)
-    await expect.poll(() => platform.summaries.length, { timeout: 30_000 }).toBe(topUpSummariesBefore + 1)
-    observations.push(`topup.open gets=${String(platform.gets.length - topUpGetsBefore)} summaries=${String(platform.summaries.length - topUpSummariesBefore)}`)
-    const callsBefore = (await platformCalls(page)).length
-    await topUpSettings.getByRole('link', { name: '充值', exact: true }).click()
-    const topUpOverlay = page.getByRole('dialog', { name: '返回 DeepSeek Harness', exact: true })
-    await topUpOverlay.waitFor()
-    // Opening the native view reads nothing by itself.
-    expect(platform.gets.length).toBe(topUpGetsBefore + 1)
-    expect(platform.summaries.length).toBe(topUpSummariesBefore + 1)
-    // The user pays while the view is open; Platform reports both balances in scientific
-    // notation, so the refresh must render plain currency.
-    platform.setNormalBalance('0E-16')
-    platform.setBonusBalance('2.4E+1')
-    platform.grant(ORDER_TOPUP, '11.00')
-    // Holding the notice read proves the return does not wait for the refresh it starts.
-    platform.holdNextGet()
-    await topUpOverlay.getByRole('button', { name: '返回 DeepSeek Harness', exact: true }).click()
-    await topUpOverlay.waitFor({ state: 'detached', timeout: 30_000 })
-    const topUpCalls = (await platformCalls(page)).slice(callsBefore).join(',')
-    observations.push(`topup.returned bridge=${topUpCalls} cards=${String(await noticeCards(page).count())}`)
-    expect(topUpCalls).toBe('open:top-up,close')
-    expect(await noticeCards(page).count()).toBe(0)
-    platform.releaseGet()
-    observations.push(`topup.notice=${await shownNotice(page, zhTopUp)}`)
-    const topUpAttempts = (): AckRecord[] => platform.acks.filter(item => item.orderId === ORDER_TOPUP)
-    await expect.poll(() => topUpAttempts().length, { timeout: 30_000 }).toBe(1)
-    await expect.poll(() => platform.gets.length, { timeout: 30_000 }).toBe(topUpGetsBefore + 2)
-    await expect.poll(() => platform.summaries.length, { timeout: 30_000 }).toBe(topUpSummariesBefore + 2)
-    const topUpPanel = (await topUpSettings.textContent()) ?? ''
-    const topUpAmounts = { recharge: topUpPanel.includes('¥0.00'), bonus: topUpPanel.includes('¥24.00') }
-    observations.push(`topup.refresh gets=${String(platform.gets.length - topUpGetsBefore)} summaries=${String(platform.summaries.length - topUpSummariesBefore)} acks=${String(topUpAttempts().length)} recharge=${String(topUpAmounts.recharge)} bonus=${String(topUpAmounts.bonus)}`)
-    expect(topUpAmounts).toEqual({ recharge: true, bonus: true })
-    expect(await topUpSettings.getByRole('button', { name: '刷新余额', exact: true }).count()).toBe(0)
-    // The card survives closing the panel, and the acknowledgement is not repeated.
-    await page.keyboard.press('Escape')
-    await topUpSettings.waitFor({ state: 'detached', timeout: 30_000 })
-    observations.push(`topup.closed cards=${String(await noticeCards(page).count())} acks=${String(topUpAttempts().length)}`)
-    expect(await noticeCards(page).count()).toBe(1)
-    expect(topUpAttempts()).toHaveLength(1)
-    await noticeCards(page).getByRole('button', { name: '关闭', exact: true }).click()
-    expect(await noticeCards(page).count()).toBe(0)
 
     // A transient acknowledgement failure keeps the card and retries the same order after
     // the backoff; the pending retry is page state, not browser storage.

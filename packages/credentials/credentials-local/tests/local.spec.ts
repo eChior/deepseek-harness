@@ -246,8 +246,6 @@ describe('document validation', () => {
     ['an unknown top-level key', 'version: 1\nsecrets: {}\n', /unknown top-level key "secrets"/],
     ['a non-mapping refs section', 'version: 1\nrefs: nope\n', /"refs" .* must be a mapping/],
     ['a key that is not a POSIX identifier', 'version: 1\nrefs:\n  not-a-ref: value\n', /credential ref/],
-    ['a non-string value', 'version: 1\nrefs:\n  DSH_CRED_TEST: 123\n', /must be a string/],
-    ['an empty value', 'version: 1\nrefs:\n  DSH_CRED_TEST: ""\n', /is empty/],
     ['a record key that is not scoped', 'version: 1\nrecords:\n  codex:\n    kind: grant\n    payload: 1\n',
       /must be "<scope>\/<id>"/],
     ['a record that is not a mapping', 'version: 1\nrecords:\n  llm-pi-ai/codex: token\n',

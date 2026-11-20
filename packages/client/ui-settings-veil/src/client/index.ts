@@ -46,7 +46,7 @@ export const NS = 'settings.veil'
  * preference through it, and a missing key would make that write throw inside
  * a click handler where nothing catches it.
  */
-export const inject = ['slots', 'locale', 'remote', 'remote.veil', 'sessions', 'configForms']
+export const inject = ['slots', 'locale', 'remote', 'remote.veil', 'sessions', 'uiSession', 'configForms']
 
 /** The Chat namespace holding the transcript view preference. */
 const CHAT_NAMESPACE = 'ui-chat'
@@ -134,7 +134,7 @@ export function apply(ctx: ClientContext): void {
     // The descriptor names its parameter, so the payload has to carry a
     // `request` field even when no session is named: without it the gateway
     // rejects the call as `arguments-invalid` and the button looks dead.
-    restoreSession: async () => unwrap('restoreSession', await remote.restoreSession({})),
+    restoreSession: async () => unwrap('restoreSession', await remote.restoreSession({ sessionId: ctx.uiSession.adapter.current.getSnapshot().key ?? '' })),
     entries: async () => unwrap('entries', await remote.entries()),
     status: async () => unwrap('status', await remote.status()),
     highlightColor: chatHighlight(),

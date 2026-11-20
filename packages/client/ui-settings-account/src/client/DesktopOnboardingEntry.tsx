@@ -1,11 +1,14 @@
 /** Framework-hook projection into the desktop introduction's pure view. */
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { AccountSnapshot } from './AccountSection.tsx'
+import type { SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { DesktopOnboardingProps, DesktopOnboardingState } from './onboarding-contract.ts'
 import { OnboardingSurface } from './OnboardingSurface.tsx'
+import css from './DesktopOnboarding.module.css'
 import { DesktopOnboarding } from './DesktopOnboarding.tsx'
+import { SignInDialog } from './SignInDialog.tsx'
 
 /** Observable sources and actions supplied by the account plugin's apply closure. */
 export interface DesktopOnboardingInjected extends Omit<DesktopOnboardingProps, 'state' | 'account' | 't' | 'exiting' | 'locale'> {
@@ -13,6 +16,9 @@ export interface DesktopOnboardingInjected extends Omit<DesktopOnboardingProps, 
     onboarding: HostObservable<DesktopOnboardingState>
     account: HostObservable<AccountSnapshot>
   }
+  /** Starting and cancelling an authorisation attempt is what the sign-in dialog needs. */
+  start: () => Promise<void>
+  cancel: (id: SignInAttemptId) => Promise<void>
 }
 
 /**
@@ -25,6 +31,11 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   const locale = props.t('onboardingArtworkLocale')
   const state = useOnboarding(value => value)
   const account = useAccount(value => value)
+  const storedOnce = useRef(false)
+  // Opening the dialog is the gate: closing it without signing in opens it again.
+  useEffect(() => {
+    if (account.view !== undefined && account.view?.status !== 'credential-stored') props.showLogin?.(true)
+  }, [account.view, props.showLogin])
   useLayoutEffect(() => {
     if (!state.visible) return
     const bridge = (globalThis as typeof globalThis & {
@@ -56,11 +67,24 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   if (displayed === null) {
     // Without a stored credential the workspace never opens: the flow has no skip path,
     // and a sign-out lands here again instead of on an empty session list.
-    if (account.view?.status !== 'credential-stored') {
-      return <OnboardingSurface><div role="status" style={{ display: 'grid', gap: '12px', padding: '32px', textAlign: 'center' }}>
-        <p>{props.t('onboardingSignInRequired')}</p>
-        <button type="button" onClick={() => { props.showLogin?.(true) }}>{props.t('onboardingSignInAction')}</button>
-      </div></OnboardingSurface>
+    // The account view arrives one tick after the first paint. Rendering the sign-in page
+    // before it lands is what made every launch flash the login screen for a stored credential.
+    // Switching a model or a mode remounts this entry while the account view reloads.
+    // Once a credential was stored, a missing view means “reading”, not “signed out”:
+    // painting the gate again would flash the sign-in page over a working workspace.
+    if (account.view?.status === 'credential-stored') storedOnce.current = true
+    if (account.view === undefined) {
+      return storedOnce.current ? null : <OnboardingSurface><div className={css.page} aria-busy="true" /></OnboardingSurface>
+    }
+    if (account.view !== undefined && account.view.status !== 'credential-stored') {
+      // The gate is the sign-in dialog itself: `showLogin` only flips a flag that the
+      // settings page consumes, so the overlay has to render the dialog to show anything.
+      return (
+        <OnboardingSurface>
+          <SignInDialog account={account} colorScheme='light' start={props.start} cancel={props.cancel}
+            t={props.t} close={() => { props.showLogin?.(true) }} useApiKey={() => {}} />
+        </OnboardingSurface>
+      )
     }
     return state.status === 'loading'
       ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null

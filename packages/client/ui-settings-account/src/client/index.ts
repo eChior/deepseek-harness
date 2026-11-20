@@ -107,7 +107,7 @@ export function apply(ctx: Context): void {
    * @returns after the directory answered, or immediately when it did not.
    */
   const readAttribution = async (generation: number): Promise<void> => {
-    const directory = ctx.get('remote.veil') as StaffDirectory | undefined
+    const directory = ctx.get?.('remote.veil') as StaffDirectory | undefined
     if (directory === undefined) return
     let person: AccountAttribution | undefined
     try {
@@ -259,6 +259,7 @@ export function apply(ctx: Context): void {
           'desktop')
         if (!result.ok) throw new Error('account start failed')
       } catch (error) {
+        console.error('[account] startSignIn failed', error)
         publish({ ...snapshot, loginFailed: true })
         throw error
       }
@@ -304,7 +305,9 @@ export function apply(ctx: Context): void {
         complete: (reason: 'completed' | 'skipped') => controller.complete(reason),
         retry: () => controller.retry(),
         showLogin: (visible: boolean) => { operations.showLogin(visible) },
-        track: (name, attributes) => ctx.get('productAnalytics')?.track(name, attributes),
+        start: () => operations.start(),
+        cancel: id => operations.cancel(id),
+        track: (name, attributes) => ctx.get?.('productAnalytics')?.track(name, attributes),
       }),
     }, DesktopOnboardingEntry))
   }

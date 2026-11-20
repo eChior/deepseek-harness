@@ -42,6 +42,7 @@ async function bench() {
   // The badge registration declares 'sessions' and reads the shared chat
   // preference namespace; neither needs a real provider in this bench.
   ctx.provide('sessions', {})
+  ctx.provide('uiSession', { adapter: { current: { getSnapshot: () => ({ key: undefined }) } } })
   ctx.provide('configForms', {
     get: () => ({ set: () => Promise.resolve() }),
   })
@@ -79,7 +80,7 @@ describe('ui-settings-veil browser plugin', () => {
 
   it('declares only the services the Settings contribution reads', () => {
     // `configForms` carries the transcript view preference the badge writes.
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.veil', 'sessions', 'configForms'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.veil', 'sessions', 'uiSession', 'configForms'])
   })
 
   it('registers a localized tab without reading the Remote eagerly', async () => {
