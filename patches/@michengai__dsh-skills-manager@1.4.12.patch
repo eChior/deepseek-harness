@@ -22,3 +22,16 @@ index e76a5b7..12b7031 100644
        throw failure("\u4ED3\u5E93\u72B6\u6001\u6587\u4EF6\u635F\u574F\u6216\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u8BF7\u4FDD\u7559\u6587\u4EF6\u5E76\u4FEE\u590D\u540E\u91CD\u8BD5", "error.repo.state");
      }
    }
+diff --git a/lib/repository-git.js b/lib/repository-git.js
+index 0000000..1111111 100644
+--- a/lib/repository-git.js
++++ b/lib/repository-git.js
+@@ -299,7 +299,7 @@ async function probeGitRemote(repoUrl, options = {}) {
+   try {
+     await runGit(["ls-remote", "--heads", "-q", "--", repoUrl], process.cwd(), { timeoutMs, gitBinary });
+   } catch (caught) {
+     const err = caught;
+-    if (err?.code === "error.repo.noGit") throw err;
++    if (err?.code === "error.repo.noGit") return;
+     throw failure(err.message || "\u4ED3\u5E93\u65E0\u6CD5\u8BBF\u95EE\u6216\u4E0D\u5B58\u5728\uFF0C\u8BF7\u68C0\u67E5\u5730\u5740\u6216\u6743\u9650", "error.repo.network");
+   }

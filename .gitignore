@@ -84,3 +84,5 @@ dev-desktop.log
 
 # The knowledge-base panel's address and API key — a build artefact, never committed.
 packages/bundle/web-app/node_modules/dsh-weknora-panel/config.json
+# The desktop carries the deployed knowledge-base settings the first start seeds.
+apps/desktop/resources/weknora.json

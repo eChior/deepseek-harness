@@ -107,6 +107,7 @@ export function apply(ctx: Context): void {
    * @returns after the directory answered, or immediately when it did not.
    */
   const readAttribution = async (generation: number): Promise<void> => {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- a composition without the accessor must still boot
     const directory = ctx.get?.('remote.veil') as StaffDirectory | undefined
     if (directory === undefined) return
     let person: AccountAttribution | undefined
@@ -307,6 +308,7 @@ export function apply(ctx: Context): void {
         showLogin: (visible: boolean) => { operations.showLogin(visible) },
         start: () => operations.start(),
         cancel: id => operations.cancel(id),
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- analytics is optional in the test composition
         track: (name, attributes) => ctx.get?.('productAnalytics')?.track(name, attributes),
       }),
     }, DesktopOnboardingEntry))

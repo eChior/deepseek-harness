@@ -177,6 +177,12 @@ export function createElectronBuilderConfig(
     asarUnpack: unpack,
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
+      // Deployed knowledge-base settings the first start copies into the user's home;
+      // the plugin's public package ships none of its own.
+      ...(existsSync(fileURLToPath(new URL('../resources/weknora.json', import.meta.url)))
+        ? [{ from: fileURLToPath(new URL('../resources/weknora.json', import.meta.url)), to: 'weknora.json' }]
+        : []),
+
       // The About panel reads resources/icon.png at runtime; Linux builds must ship the Linux icon
       // instead of the Windows one used for tray and taskbar assets.
       { from: fileURLToPath(new URL(packagesLinux ? '../resources/icon.png' : '../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },

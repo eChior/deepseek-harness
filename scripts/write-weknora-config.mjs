@@ -16,6 +16,9 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const TARGET = join(ROOT, 'packages', 'bundle', 'web-app', 'node_modules', 'dsh-weknora-panel', 'config.json')
 
+/** Copy the desktop application carries and seeds into the user's home on first start. */
+const SHIPPED = join(ROOT, 'apps', 'desktop', 'resources', 'weknora.json')
+
 /** Read one secret, treating an unset or empty variable as absent. */
 function value(name) {
   const raw = process.env[name]
@@ -45,11 +48,14 @@ const config = {
 }
 
 if (process.argv.includes('--check')) {
-  console.log(`Would write ${TARGET}:`)
+  console.log(`Would write ${TARGET} and ${SHIPPED}:`)
   console.log(JSON.stringify({ ...config, apiKey: '[redacted]' }, null, 2))
   process.exit(0)
 }
 
-mkdirSync(dirname(TARGET), { recursive: true })
-writeFileSync(TARGET, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
-console.log(`Wrote the knowledge-base configuration to ${TARGET}`)
+const body = `${JSON.stringify(config, null, 2)}\n`
+for (const target of [TARGET, SHIPPED]) {
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, body, 'utf8')
+  console.log(`Wrote the knowledge-base configuration to ${target}`)
+}

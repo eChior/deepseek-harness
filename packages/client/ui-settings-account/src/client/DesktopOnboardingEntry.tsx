@@ -34,6 +34,7 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   const storedOnce = useRef(false)
   // Opening the dialog is the gate: closing it without signing in opens it again.
   useEffect(() => {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- the host pass can hand an incomplete view
     if (account.view !== undefined && account.view?.status !== 'credential-stored') props.showLogin?.(true)
   }, [account.view, props.showLogin])
   useLayoutEffect(() => {
@@ -76,6 +77,7 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
     if (account.view === undefined) {
       return storedOnce.current ? null : <OnboardingSurface><div className={css.page} aria-busy="true" /></OnboardingSurface>
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- see the gate above
     if (account.view !== undefined && account.view.status !== 'credential-stored') {
       // The gate is the sign-in dialog itself: `showLogin` only flips a flag that the
       // settings page consumes, so the overlay has to render the dialog to show anything.
