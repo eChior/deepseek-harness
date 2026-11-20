@@ -259,6 +259,7 @@ export function apply(ctx: Context): void {
           'desktop')
         if (!result.ok) throw new Error('account start failed')
       } catch (error) {
+        console.error('[account] startSignIn failed', error)
         publish({ ...snapshot, loginFailed: true })
         throw error
       }
@@ -304,6 +305,8 @@ export function apply(ctx: Context): void {
         complete: (reason: 'completed' | 'skipped') => controller.complete(reason),
         retry: () => controller.retry(),
         showLogin: (visible: boolean) => { operations.showLogin(visible) },
+        start: () => operations.start(),
+        cancel: id => operations.cancel(id),
         track: (name, attributes) => ctx.get?.('productAnalytics')?.track(name, attributes),
       }),
     }, DesktopOnboardingEntry))

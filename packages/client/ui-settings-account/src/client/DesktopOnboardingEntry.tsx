@@ -3,10 +3,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { AccountSnapshot } from './AccountSection.tsx'
+import type { SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { DesktopOnboardingProps, DesktopOnboardingState } from './onboarding-contract.ts'
 import { OnboardingSurface } from './OnboardingSurface.tsx'
 import css from './DesktopOnboarding.module.css'
 import { DesktopOnboarding } from './DesktopOnboarding.tsx'
+import { SignInDialog } from './SignInDialog.tsx'
 
 /** Observable sources and actions supplied by the account plugin's apply closure. */
 export interface DesktopOnboardingInjected extends Omit<DesktopOnboardingProps, 'state' | 'account' | 't' | 'exiting' | 'locale'> {
@@ -14,6 +16,9 @@ export interface DesktopOnboardingInjected extends Omit<DesktopOnboardingProps, 
     onboarding: HostObservable<DesktopOnboardingState>
     account: HostObservable<AccountSnapshot>
   }
+  /** Starting and cancelling an authorisation attempt is what the sign-in dialog needs. */
+  start: () => Promise<void>
+  cancel: (id: SignInAttemptId) => Promise<void>
 }
 
 /**
@@ -72,8 +77,14 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
       return storedOnce.current ? null : <OnboardingSurface><div className={css.page} aria-busy="true" /></OnboardingSurface>
     }
     if (account.view !== undefined && account.view.status !== 'credential-stored') {
-      // The gate is the sign-in dialog itself, not a page offering to open one.
-      return <OnboardingSurface><div className={css.page} aria-busy="true" /></OnboardingSurface>
+      // The gate is the sign-in dialog itself: `showLogin` only flips a flag that the
+      // settings page consumes, so the overlay has to render the dialog to show anything.
+      return (
+        <OnboardingSurface>
+          <SignInDialog account={account} colorScheme='light' start={props.start} cancel={props.cancel}
+            t={props.t} close={() => { props.showLogin?.(true) }} useApiKey={() => {}} />
+        </OnboardingSurface>
+      )
     }
     return state.status === 'loading'
       ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null
