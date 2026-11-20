@@ -3,6 +3,15 @@
 // and the real client renders the card in a real Chromium. The loopback Platform double
 // is the observation point: the scenario asserts what the product sent and what the user
 // could read on screen.
+//
+// SKIPPED in this distribution. The scenario exercises the Platform account provider:
+// the stored credential is a Platform grant and the double answers the Platform bonus
+// endpoints. This build ships `@deepseek-ai/dsh-hrzszy-account` as the account provider
+// (`packages/bundle/base/cordis.patch.yml`), which stores an RWork cookie grant under
+// `hrzszy-account/default` and answers `getBalance` with empty wallets and
+// `getUnnotifiedBonuses` with null, so no bonus notice exists to observe. Restoring the
+// Platform provider is what makes the run meaningful again: drop the `.skip` below, then
+// re-record `expected/bonus-notice/notice-flow.expected.md`.
 import { createServer, type Server } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -212,7 +221,11 @@ async function platformCalls(page: Page): Promise<readonly string[]> {
     .__bonusPlatformCalls ?? [])
 }
 
-describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
+/**
+ * Skipped because this distribution has no bonus notice to observe; see the file header
+ * for the provider that would restore it.
+ */
+describe.skip('web e2e: bonus notice', () => {
   let root: string | undefined
   let scaffold: WebScaffold
   let browser: Browser
