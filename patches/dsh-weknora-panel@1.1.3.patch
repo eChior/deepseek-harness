@@ -1,9 +1,8 @@
 diff --git a/lib/index.js b/lib/index.js
-index 70c1c9e..ce6fc1f 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -445,8 +445,20 @@ async function pipeUpstream(res, upstream, { fileName, fallbackType, inline } =
- }
+@@ -43,8 +43,20 @@
+ const { citeLink, PLACEHOLDER_RE, restorePlaceholders, inlineCitations, liveStreams, askLedger, liveKeyFor, pumpSse } = cite
  
  // ── 插件主体 ─────────────────────────────────────────────
 +const z = require('@deepseek-ai/schemastery')
