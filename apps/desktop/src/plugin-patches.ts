@@ -13,7 +13,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 /** Packages this distribution patches, and the marker file that proves it. */
@@ -41,6 +41,26 @@ function digest(path: string): string | undefined {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
+
+/**
+ * Copy a directory tree by reading and writing every file.
+ *
+ * `cpSync` cannot read from inside an asar archive: Electron patches the file
+ * calls but not the directory walker it uses. Reading each file through `fs`
+ * works on both a real directory and an archive.
+ * @param source - file or directory to copy.
+ * @param target - destination path for the same entry.
+ */
+function copyTree(source: string, target: string): void {
+  if (statSync(source).isDirectory()) {
+    mkdirSync(target, { recursive: true })
+    for (const entry of readdirSync(source)) copyTree(join(source, entry), join(target, entry))
+    return
+  }
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, readFileSync(source))
+}
+
 /**
  * Copy the packaged copy of every patched plugin over the profile's copy.
  * @param options Packaged installation root and the home directory beside it.
@@ -56,8 +76,7 @@ export function syncPatchedPlugins(options: PatchedPluginSyncOptions): string[] 
     const sourceDigest = digest(join(source, marker))
     if (sourceDigest === undefined) continue
     if (digest(join(target, marker)) === sourceDigest) continue
-    mkdirSync(dirname(target), { recursive: true })
-    cpSync(source, target, { recursive: true, dereference: true })
+    copyTree(source, target)
     options.log?.(`patched plugin: refreshed ${target}`)
     written.push(name)
   }
