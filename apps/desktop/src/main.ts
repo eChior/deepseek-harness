@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { installBundledReader } from './reader.ts'
 import { installKnowledgeBaseConfig } from './weknora.ts'
+import { syncPatchedPlugins } from './plugin-patches.ts'
 import { grantRuntimeRead } from './runtime-access.ts'
 import { fileURLToPath } from 'node:url'
 import {
@@ -262,6 +263,14 @@ app.whenReady().then(async () => {
   // machine is seeded from the packaged settings once; a saved file the user
   // has already edited is left alone.
   installKnowledgeBaseConfig({ resources, home, log: (message) => { console.info(message) } })
+  // A profile created by an older build keeps the plugin copies it installed
+  // back then, without this distribution's patches; refresh them from the
+  // packaged installation so the patched behaviour is what actually runs.
+  syncPatchedPlugins({
+    dshRoot: app.isPackaged ? join(app.getAppPath(), 'dsh') : join(app.getAppPath(), '.desktop-build', 'development', 'project'),
+    home,
+    log: (message) => { console.info(message) },
+  })
   // The sandbox child cannot reach a directory that names only the user, so
   // both trees it has to start a binary from gain the Everyone read grant.
   for (const directory of [join(home, 'dsh-runtimes'), join(home, 'redaction', 'ocr')]) {
