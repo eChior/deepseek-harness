@@ -202,6 +202,18 @@ ManifestDPIAware true
         ${Loop}
       ${EndIf}
       ${If} $R0 == 0
+        ${If} ${isUpdated}
+          ; An update replaces the files this instance holds open. A window
+          ; closed to the tray still owns a top-level window, so the guard
+          ; reports it as running; end it and carry on instead of asking
+          ; the user to hunt for a process they cannot see.
+          nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM "${APP_EXECUTABLE_FILENAME}"'
+          Pop $R1
+          Sleep 750
+          System::Call '$PLUGINSDIR\window-frame.dll::InstallerFindProcess(w "$INSTDIR\${APP_EXECUTABLE_FILENAME}") i.R0 ?c'
+        ${EndIf}
+      ${EndIf}
+      ${If} $R0 == 0
         MessageBox MB_OK|MB_ICONINFORMATION "$(INSTALLER_RUNNING)" /SD IDOK
         SetErrorLevel 2
         Quit
