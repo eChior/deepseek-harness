@@ -3,6 +3,7 @@ import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
@@ -160,6 +161,37 @@ function currentDesktopLocale(): ReturnType<typeof resolveDesktopLocale> {
   return resolveDesktopLocale(windowsLanguage ?? app.getLocale())
 }
 /** Quit without the task confirmation; the caller has already decided the application must stop. */
+/**
+ * Kylin and the other Chinese desktops stopped mirroring the menu entry onto the desktop, so the
+ * packaged Linux build writes one itself on first start. `xdg-user-dir` honours a localized
+ * folder name such as 桌面; without the tool the English name is the only guess, and the file is
+ * skipped when that directory does not exist.
+ */
+function ensureLinuxDesktopShortcut(): void {
+  if (process.platform !== 'linux' || !app.isPackaged) return
+  let desktop = ''
+  try {
+    desktop = execFileSync('xdg-user-dir', ['DESKTOP'], { encoding: 'utf8' }).trim()
+  } catch { desktop = join(app.getPath('home'), 'Desktop') }
+  if (desktop === '' || !existsSync(desktop)) return
+  const target = join(desktop, 'dsh.desktop')
+  if (existsSync(target)) return
+  const entry = [
+    '[Desktop Entry]',
+    'Type=Application',
+    'Name=益办公',
+    `Exec="${process.execPath}" %U`,
+    'Icon=deepseek-harness',
+    'Terminal=false',
+    'Categories=Development;',
+    'StartupWMClass=deepseek-harness',
+    '',
+  ].join('\n')
+  void writeFile(target, entry, { mode: 0o755 })
+    .then(() => { execFileSync('gio', ['set', target, 'metadata::trusted', 'true']) })
+    .catch((error: unknown) => { console.warn('desktop shortcut: unavailable', error) })
+}
+
 function quitWithoutConfirmation(): void {
   skipQuitConfirmation = true
   app.quit()
@@ -266,6 +298,7 @@ app.whenReady().then(async () => {
   // A profile created by an older build keeps the plugin copies it installed
   // back then, without this distribution's patches; refresh them from the
   // packaged installation so the patched behaviour is what actually runs.
+  ensureLinuxDesktopShortcut()
   syncPatchedPlugins({
     dshRoot: app.isPackaged ? join(app.getAppPath(), 'dsh') : join(app.getAppPath(), '.desktop-build', 'development', 'project'),
     home,
@@ -1252,7 +1285,7 @@ async function main(): Promise<void> {
     // The tray is the way back to a hidden window; without it, relaunching the application still focuses it.
     try {
       tray = new DesktopTray({ iconPath: trayIconPath, locale: currentDesktopLocale,
-        open: () => { focusPrimaryWindow() }, quit: () => { app.quit() },
+        open: () => { focusPrimaryWindow() }, quit: () => { quitWithoutConfirmation() },
         // Linux panels report the secondary click instead of opening the menu themselves, so pop
         // the same entries the Windows tray installs.
         showContextMenu: () => {
@@ -1260,7 +1293,7 @@ async function main(): Promise<void> {
           const menu = Menu.buildFromTemplate([
             { label: messages.openApplication, click: () => { focusPrimaryWindow() } },
             { type: 'separator' },
-            { label: messages.quitApplication, click: () => { app.quit() } },
+            { label: messages.quitApplication, click: () => { quitWithoutConfirmation() } },
           ])
           const owner = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
           if (owner === undefined) menu.popup()
@@ -1537,7 +1570,10 @@ async function main(): Promise<void> {
     if (!hasVisibleWindows) focusPrimaryWindow()
   })
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    // Closing the last window is an explicit quit: asking for confirmation with no window on
+    // screen leaves the process alive behind an unseen dialog, and an installer then reports
+    // the application as still running.
+    if (process.platform !== 'darwin') quitWithoutConfirmation()
   })
   if (process.platform !== 'win32') powerMonitor.on('shutdown', () => { sessionEnding = true })
   const finishQuit = (): void => {
