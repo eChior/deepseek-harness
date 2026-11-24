@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
+import { vi } from 'vitest'
 import { describe, expect, it } from 'vitest'
 import { installBundledReader, readArchive } from '../src/reader.ts'
 
@@ -116,17 +117,36 @@ describe('installBundledReader', () => {
     expect(path).toBeUndefined()
   })
 
-  it('reports nothing when the archive is missing, rather than throwing', async () => {
-    const messages: string[] = []
+  it('unpacks the Windows 7 archive on the 6.x line', async () => {
+    const resources = packaged({ 'dsh-ocr.exe': 'x', 'libSkiaSharp.dll': 'y' }, 'dsh-ocr-win7-x64.zip')
     const path = await installBundledReader({
-      resources: root(),
+      resources,
       home: root(),
       platform: 'win32',
       architecture: 'x64',
-      log: message => messages.push(message),
+      systemVersion: '6.1.7601',
     })
-    expect(path).toBeUndefined()
-    expect(messages.join('\n')).toMatch(/ships no reader/u)
+    expect(path).toBe(join(root(), 'redaction', 'ocr', 'dsh-ocr.exe'))
+  })
+
+  it('reports nothing when the archive is missing, rather than throwing', async () => {
+    // The download is the second source for this archive. On a machine that can
+    // reach the intranet it succeeds, which is not what this case is about.
+    const offline = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+    try {
+      const messages: string[] = []
+      const path = await installBundledReader({
+        resources: root(),
+        home: root(),
+        platform: 'win32',
+        architecture: 'x64',
+        log: message => messages.push(message),
+      })
+      expect(path).toBeUndefined()
+      expect(messages.join('\n')).toMatch(/ships no reader/u)
+    } finally {
+      offline.mockRestore()
+    }
   })
 
   it('leaves nothing behind for an archive with a path that climbs out', async () => {

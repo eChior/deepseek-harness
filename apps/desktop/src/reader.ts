@@ -12,6 +12,7 @@ import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { release } from 'node:os'
 import { inflateRawSync } from 'node:zlib'
 
 /** Archive each platform ships with, relative to the application's resources. */
@@ -36,13 +37,28 @@ async function downloadArchive(name: string): Promise<Buffer | undefined> {
 
 const ARCHIVES: Readonly<Record<string, string>> = {
   'win32-x64': 'ocr/dsh-ocr-win-x64.zip',
+  'win32-x64-win7': 'ocr/dsh-ocr-win7-x64.zip',
   'linux-arm64': 'ocr/dsh-ocr-linux-arm64.zip',
 }
 
 /** Executable the plugin looks for first, per platform. */
 const EXECUTABLES: Readonly<Record<string, string>> = {
   'win32-x64': 'dsh-ocr.exe',
+  'win32-x64-win7': 'dsh-ocr.exe',
   'linux-arm64': 'dsh-ocr',
+}
+
+/**
+ * Whether this Windows predates the one the default reader targets.
+ *
+ * The default Windows reader is a .NET 10 single file, and .NET 10 does not
+ * run on Windows 7. That build carries a second archive instead: the same
+ * engine compiled for .NET Framework 4.8, which Windows 7 SP1 does support.
+ * @param version Windows version as `process.getSystemVersion()` reports it.
+ * @returns True for the 6.x line, which ends at Windows 7.
+ */
+function legacyWindows(version: string): boolean {
+  return version.startsWith('6.')
 }
 
 /**
@@ -141,11 +157,14 @@ export async function installBundledReader(options: {
   home: string
   platform?: NodeJS.Platform
   architecture?: string
+  systemVersion?: string
   log?: (message: string) => void
 }): Promise<string | undefined> {
   const platform = options.platform ?? process.platform
   const architecture = options.architecture ?? process.arch
-  const key = `${platform}-${architecture}`
+  const version = options.systemVersion ?? release()
+  const legacy = platform === 'win32' && legacyWindows(version)
+  const key = `${platform}-${architecture}${legacy ? '-win7' : ''}`
   const archive = ARCHIVES[key]
   const executable = EXECUTABLES[key]
   if (archive === undefined || executable === undefined) return undefined
