@@ -184,7 +184,13 @@ ManifestDPIAware true
   ; System::Call fails and the gate has no way to tell "running" from "cannot
   ; ask", which is how a finished app kept blocking its own upgrade.
   InitPluginsDir
-  File "/oname=$PLUGINSDIR\window-frame.dll" "${INSTALLER_BUILD_DIR}\window-frame.dll"
+  ; Extracted once per run: the macro is inserted more than once, and a second
+  ; File over an already loaded DLL fails with "cannot open the file to write".
+  ; /nonfatal keeps a locked copy from aborting the run as well; the gate below
+  ; treats an absent DLL as "not running" and lets the install go on.
+  ${IfNot} ${FileExists} "$PLUGINSDIR\window-frame.dll"
+    File /nonfatal "/oname=$PLUGINSDIR\window-frame.dll" "${INSTALLER_BUILD_DIR}\window-frame.dll"
+  ${EndIf}
   ; Only a directory that already holds our binary can have our process running.
   ; Without this guard a leftover instance stops a first install with "is
   ; running": a running process keeps reporting the image path it started from,
