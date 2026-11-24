@@ -2825,8 +2825,8 @@ importers:
         specifier: 0.15.3
         version: 0.15.3(4bfac47db3966e07df4b841ad35e7156)
       dsh-weknora-panel:
-        specifier: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/df1f571bd98b968bfb36a4fc618618f81da4df0a
-        version: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/df1f571bd98b968bfb36a4fc618618f81da4df0a(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec)
+        specifier: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/d5c096853b02d6ee3b57e9cba3d508fac5fbe84b
+        version: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/d5c096853b02d6ee3b57e9cba3d508fac5fbe84b(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec)
       dshmarket:
         specifier: 1.73.20
         version: 1.73.20(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery)(node-addon-require-builtin@0.1.6))(@deepseek-ai/schemastery@vendor+schemastery)
@@ -20821,8 +20821,8 @@ packages:
       '@deepseek-ai/schemastery':
         optional: true
 
-  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/df1f571bd98b968bfb36a4fc618618f81da4df0a:
-    resolution: {tarball: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/df1f571bd98b968bfb36a4fc618618f81da4df0a}
+  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/d5c096853b02d6ee3b57e9cba3d508fac5fbe84b:
+    resolution: {gitHosted: true, integrity: sha512-ELgg2bHlFsG1sHxAhoo9frQQauyCaf8qINSpeOcAXdYuTYcZYWNRCcDbEoXt8qXC/raXApRU3WW9RhT4uYtkEw==, tarball: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/d5c096853b02d6ee3b57e9cba3d508fac5fbe84b}
     version: 1.1.3
     engines: {node: '>=18.0.0'}
 
@@ -30353,7 +30353,7 @@ snapshots:
       '@deepseek-ai/dsh-tools': 0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87)
       '@deepseek-ai/schemastery': link:vendor/schemastery
 
-  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/df1f571bd98b968bfb36a4fc618618f81da4df0a(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec): {}
+  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/d5c096853b02d6ee3b57e9cba3d508fac5fbe84b(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec): {}
 
   dshmarket@1.73.20(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery)(node-addon-require-builtin@0.1.6))(@deepseek-ai/schemastery@vendor+schemastery):
     dependencies:
