@@ -179,16 +179,23 @@ ManifestDPIAware true
 !macroend
 
 !macro customCheckAppRunning
-  !ifdef BUILD_UNINSTALLER
-    InitPluginsDir
-    File "/oname=$PLUGINSDIR\window-frame.dll" "${INSTALLER_BUILD_DIR}\window-frame.dll"
-  !endif
+  ; The uninstaller compiles this macro a second time with BUILD_UNINSTALLER
+  ; defined, but the installer needs the probe as well: without the DLL every
+  ; System::Call fails and the gate has no way to tell "running" from "cannot
+  ; ask", which is how a finished app kept blocking its own upgrade.
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\window-frame.dll" "${INSTALLER_BUILD_DIR}\window-frame.dll"
   ; Only a directory that already holds our binary can have our process running.
   ; Without this guard a leftover instance stops a first install with "is
   ; running": a running process keeps reporting the image path it started from,
   ; even after the file itself was moved out of the way.
+  StrCpy $R0 1
   ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
-    System::Call '$PLUGINSDIR\window-frame.dll::InstallerFindProcess(w "$INSTDIR\${APP_EXECUTABLE_FILENAME}") i.R0 ?c'
+    System::Call 'kernel32::LoadLibraryW(w "$PLUGINSDIR\window-frame.dll") i.R9 ?c'
+    ${If} $R9 != 0
+      System::Call 'kernel32::FreeLibrary(i $R9)'
+      System::Call '$PLUGINSDIR\window-frame.dll::InstallerFindProcess(w "$INSTDIR\${APP_EXECUTABLE_FILENAME}") i.R0 ?c'
+    ${EndIf}
     ${If} $R0 == 0
       ${If} ${isUpdated}
         StrCpy $R1 0
@@ -202,16 +209,21 @@ ManifestDPIAware true
         ${Loop}
       ${EndIf}
       ${If} $R0 == 0
-        ${If} ${isUpdated}
-          ; An update replaces the files this instance holds open. A window
-          ; closed to the tray still owns a top-level window, so the guard
-          ; reports it as running; end it and carry on instead of asking
-          ; the user to hunt for a process they cannot see.
-          nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM "${APP_EXECUTABLE_FILENAME}"'
-          Pop $R1
-          Sleep 750
+        ; Anything still holding the install directory is ended here. The guard
+        ; cannot tell a window the user closed from one it closed to the tray,
+        ; and the uninstaller runs this macro too, so the wait below is what
+        ; keeps a restart from being the only way forward.
+        nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM "${APP_EXECUTABLE_FILENAME}"'
+        Pop $R1
+        StrCpy $R1 0
+        ${DoWhile} $R0 == 0
+          Sleep 1000
           System::Call '$PLUGINSDIR\window-frame.dll::InstallerFindProcess(w "$INSTDIR\${APP_EXECUTABLE_FILENAME}") i.R0 ?c'
-        ${EndIf}
+          IntOp $R1 $R1 + 1
+          ${If} $R1 >= 10
+            ${ExitDo}
+          ${EndIf}
+        ${Loop}
       ${EndIf}
       ${If} $R0 == 0
         MessageBox MB_OK|MB_ICONINFORMATION "$(INSTALLER_RUNNING)" /SD IDOK
