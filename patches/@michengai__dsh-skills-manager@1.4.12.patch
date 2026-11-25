@@ -35,3 +35,168 @@ index 0000000..1111111 100644
 +    if (err?.code === "error.repo.noGit") return;
      throw failure(err.message || "\u4ED3\u5E93\u65E0\u6CD5\u8BBF\u95EE\u6216\u4E0D\u5B58\u5728\uFF0C\u8BF7\u68C0\u67E5\u5730\u5740\u6216\u6743\u9650", "error.repo.network");
    }
+diff --git a/lib/repository-git.js b/lib/repository-git.js
+--- a/lib/repository-git.js
++++ b/lib/repository-git.js
+@@ -2,6 +2,7 @@
+ import { join } from "node:path";
+ import { randomUUID } from "node:crypto";
+ import { spawn } from "node:child_process";
++import { fetchHttpRepository, httpApiBase, probeHttpRepository } from "./repository-http.js";
+ function failure(message, code = "error.repo.invalid", params) {
+   return Object.assign(new Error(message), {
+     code,
+@@ -296,6 +297,10 @@
+ async function probeGitRemote(repoUrl, options = {}) {
+   const timeoutMs = options.timeoutMs ?? 3e4;
+   const gitBinary = options.gitBinary || "git";
++  if (httpApiBase(repoUrl) !== undefined) {
++    await probeHttpRepository(repoUrl, { timeoutMs });
++    return;
++  }
+   try {
+     await runGit(["ls-remote", "--heads", "-q", "--", repoUrl], process.cwd(), { timeoutMs, gitBinary });
+   } catch (caught) {
+@@ -377,6 +382,8 @@
+     if (remain <= 0) throw failure("Git \u8BF7\u6C42\u8D85\u65F6\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u540E\u91CD\u8BD5", "error.repo.network");
+     return { timeoutMs: remain, gitBinary, quota: { dir: destinationDir, limit: maxTransientBytes } };
+   };
++  const httpResult = await fetchHttpRepository(repo, destinationDir, options);
++  if (httpResult !== undefined) return httpResult;
+   const repoUrl = repo.url || `https://github.com/${repo.owner}/${repo.name}.git`;
+   const ref = repo.ref && repo.ref !== "HEAD" ? repo.ref : "HEAD";
+   await fs.mkdir(destinationDir, { recursive: true });
+diff --git a/lib/repository-http.js b/lib/repository-http.js
+new file mode 100644
+--- /dev/null
++++ b/lib/repository-http.js
+@@ -0,0 +1,129 @@
++/** Read a gitea repository over HTTP, so no git executable is needed.
++ *
++ * The plugin otherwise shells out to `git` for everything: `ls-remote` to probe,
++ * then `init`/`remote add`/`fetch --depth 1`/`sparse-checkout`/`checkout` to
++ * materialise a working tree. Gitea already serves the same bytes as a branch
++ * archive, and the repositories this distribution reads are small, so the
++ * archive is pulled in one request and unpacked here. The probe becomes a
++ * single metadata call.
++ */
++
++import { mkdirSync, writeFileSync } from 'node:fs'
++import { dirname, join } from 'node:path'
++import { gunzipSync } from 'node:zlib'
++
++const DEFAULT_TIMEOUT_MS = 9e5
++
++/** Split a repository URL into its gitea API base, or undefined when it is not one. */
++export function httpApiBase(input) {
++  let url
++  try {
++    url = new URL(input)
++  } catch {
++    return undefined
++  }
++  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
++  const path = url.pathname.replace(/\.git$/u, '').replace(/\/+$/u, '')
++  if (!/^\/[^/]+\/[^/]+$/u.test(path)) return undefined
++  return `${url.origin}/api/v1/repos${path}`
++}
++
++/** Ask for JSON with the caller's remaining budget. */
++async function getJson(url, timeoutMs) {
++  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
++  if (response.status === 404) {
++    const error = new Error(`repository not found: ${url}`)
++    error.code = 'error.repo.notFound'
++    throw error
++  }
++  if (!response.ok) {
++    const error = new Error(`repository request failed: ${response.status} ${url}`)
++    error.code = 'error.repo.network'
++    throw error
++  }
++  return response.json()
++}
++
++/**
++ * Unpack a tar.gz whose first path segment is the archive's own folder.
++ * @param buffer - the compressed archive.
++ * @param destination - directory the tree is written into.
++ * @returns the number of files written.
++ */
++export function unpackTarGz(buffer, destination) {
++  const raw = gunzipSync(buffer)
++  let offset = 0
++  let files = 0
++  while (offset + 512 <= raw.length) {
++    const header = raw.subarray(offset, offset + 512)
++    if (header.every(byte => byte === 0)) break
++    const name = header.subarray(0, 100).toString('utf8').replace(/\0.*$/u, '')
++    const size = Number.parseInt(header.subarray(124, 136).toString('ascii').replace(/\0.*$/u, '').trim() || '0', 8)
++    const flag = String.fromCharCode(header[156])
++    const padded = Math.ceil(size / 512) * 512
++    // GNU long names and pax records describe the entry that follows them.
++    if (flag === 'g' || flag === 'x' || flag === 'L') { offset += 512 + padded; continue }
++    const relative = name.split('/').slice(1).join('/')
++    offset += 512
++    if (relative === '' || relative.split('/').includes('..')) { offset += padded; continue }
++    const target = join(destination, relative)
++    if (flag === '5') mkdirSync(target, { recursive: true })
++    else if (flag === '0') {
++      mkdirSync(dirname(target), { recursive: true })
++      writeFileSync(target, raw.subarray(offset, offset + size))
++      files += 1
++    }
++    offset += padded
++  }
++  return files
++}
++
++/** Probe a repository without git: its metadata endpoint answers when it exists. */
++export async function probeHttpRepository(repoUrl, options = {}) {
++  const base = httpApiBase(repoUrl)
++  if (base === undefined) return undefined
++  await getJson(base, options.timeoutMs ?? 3e4)
++  return true
++}
++
++/**
++ * Materialise a repository without git.
++ * @param repo - `{ url, owner, name, ref }` as the plugin stores it.
++ * @param destinationDir - directory the working tree is written into.
++ * @param options - `{ timeoutMs }`, matching the git path.
++ * @returns `{ commit }`, the shape the caller reads.
++ */
++export async function fetchHttpRepository(repo, destinationDir, options = {}) {
++  const repoUrl = repo.url || `https://github.com/${repo.owner}/${repo.name}`
++  const base = httpApiBase(repoUrl)
++  if (base === undefined) return undefined
++  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
++  const deadline = Date.now() + timeoutMs
++  const remaining = () => {
++    const left = deadline - Date.now()
++    if (left <= 0) {
++      const error = new Error('repository request timed out')
++      error.code = 'error.repo.network'
++      throw error
++    }
++    return left
++  }
++  const meta = await getJson(base, remaining())
++  const ref = repo.ref && repo.ref !== 'HEAD' ? repo.ref : meta.default_branch
++  const branch = await getJson(`${base}/branches/${encodeURIComponent(ref)}`, remaining())
++  const response = await fetch(`${base}/archive/${encodeURIComponent(ref)}.tar.gz`, { signal: AbortSignal.timeout(remaining()) })
++  if (!response.ok) {
++    const error = new Error(`repository archive failed: ${response.status}`)
++    error.code = 'error.repo.network'
++    throw error
++  }
++  const archive = Buffer.from(await response.arrayBuffer())
++  if (options.maxBytes !== undefined && archive.length * 4 > options.maxBytes) {
++    const error = new Error('repository is larger than this profile allows')
++    error.code = 'error.repo.tooLarge'
++    throw error
++  }
++  mkdirSync(destinationDir, { recursive: true })
++  unpackTarGz(archive, destinationDir)
++  return { commit: branch.commit?.id ?? '' }
++}
