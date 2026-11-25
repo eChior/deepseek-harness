@@ -2825,8 +2825,8 @@ importers:
         specifier: 0.15.3
         version: 0.15.3(4bfac47db3966e07df4b841ad35e7156)
       dsh-weknora-panel:
-        specifier: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/544b76e40f19975671360a8414f95180dc037440
-        version: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/544b76e40f19975671360a8414f95180dc037440(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec)
+        specifier: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/c8adf225b635f007090269afb4b64fad16410640
+        version: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/c8adf225b635f007090269afb4b64fad16410640(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec)
       dshmarket:
         specifier: 1.84.1
         version: 1.84.1(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery)(node-addon-require-builtin@0.1.6))(@deepseek-ai/schemastery@vendor+schemastery)
@@ -20821,8 +20821,8 @@ packages:
       '@deepseek-ai/schemastery':
         optional: true
 
-  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/544b76e40f19975671360a8414f95180dc037440:
-    resolution: {gitHosted: true, integrity: sha512-87FbgC4Wk+/TgCtbfBFD5B/WxMU85xlnEfu6tOvsmOFUEntXUY8cYr8D568U7wuFYJnHXyMGpefrV4In9YPlqA==, tarball: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/544b76e40f19975671360a8414f95180dc037440}
+  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/c8adf225b635f007090269afb4b64fad16410640:
+    resolution: {gitHosted: true, integrity: sha512-DVjkbjhcE75bmGqlAkfbFyoM09BhYEYRYeGUJfmdbvF3ASw9WKFu+UDQt9Bjk3sAKAGnJF2z6XBgvBdDtiI8FQ==, tarball: https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/c8adf225b635f007090269afb4b64fad16410640}
     version: 1.2.0
     engines: {node: '>=18.0.0'}
 
@@ -30357,7 +30357,7 @@ snapshots:
       '@deepseek-ai/dsh-tools': 0.2.0-rc.2(0d3624f9681ce5c609abbe1480173d87)
       '@deepseek-ai/schemastery': link:vendor/schemastery
 
-  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/544b76e40f19975671360a8414f95180dc037440(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec): {}
+  dsh-weknora-panel@https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/c8adf225b635f007090269afb4b64fad16410640(patch_hash=76d288cf94876430b464aad7117fb871e129e93e29d1cc5e0a3507967e87c8ec): {}
 
   dshmarket@1.84.1(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-settings@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-brand@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-hmr@0.2.0-rc.2(@deepseek-ai/cordis-plugin-include@vendor+include)(@deepseek-ai/cordis-plugin-loader@vendor+loader)(@deepseek-ai/cordis-plugin-timer@1.1.6(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-app-boot@packages+boot+app-boot)(@deepseek-ai/dsh-cmdline@packages+boot+cmdline))(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@vendor+cordis))(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/schemastery@vendor+schemastery)(node-addon-require-builtin@0.1.6))(@deepseek-ai/schemastery@vendor+schemastery):
     dependencies:
