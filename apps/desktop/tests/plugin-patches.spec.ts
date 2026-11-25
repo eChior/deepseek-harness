@@ -26,6 +26,18 @@ function installWithPatch(body: string): string {
 }
 
 describe('syncPatchedPlugins', () => {
+  it('rewrites the installed file when the installation carries no copy', () => {
+    const home = homeWithProfile('if (err?.code === "error.repo.noGit") throw err;')
+    const written = syncPatchedPlugins({
+      dshRoot: mkdtempSync(join(tmpdir(), 'dsh-empty-install-')),
+      home,
+      log: () => {},
+    })
+    expect(readFileSync(join(home, 'profiles', 'desktop', 'node_modules', MARKER), 'utf8'))
+      .toContain('if (err?.code === "error.repo.noGit") return;')
+    expect(written).toContain('@michengai/dsh-skills-manager')
+  })
+
   it('replaces an unpatched profile copy with the packaged one', () => {
     const home = homeWithProfile('if (code === "error.repo.noGit") throw error;')
     const dshRoot = installWithPatch('if (code === "error.repo.noGit") return;')
