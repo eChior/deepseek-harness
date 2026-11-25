@@ -13,7 +13,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 /** Packages this distribution patches, and the marker file that proves it. */
@@ -54,11 +54,17 @@ function digest(path: string): string | undefined {
  */
 function copyTree(source: string, target: string): void {
   if (statSync(source).isDirectory()) {
+    // pnpm links a profile package to the store; a directory here is either
+    // that link resolved or a plain copy, and both take the same walk.
     mkdirSync(target, { recursive: true })
     for (const entry of readdirSync(source)) copyTree(join(source, entry), join(target, entry))
     return
   }
   mkdirSync(dirname(target), { recursive: true })
+  // A file pnpm installed may be a hard link into the store and read-only:
+  // writing through it either fails or edits the store. Replace the name
+  // instead of the contents.
+  if (existsSync(target)) unlinkSync(target)
   writeFileSync(target, readFileSync(source))
 }
 

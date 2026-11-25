@@ -113,7 +113,7 @@ minimumReleaseAgeExclude:
   - '@michengai/dsh-archive-manager@1.0.19'
   - dshmarket@1.66.22
 patchedDependencies:
-  dsh-weknora-panel@1.1.3: patches/dsh-weknora-panel@1.1.3.patch
+  dsh-weknora-panel@1.2.0: patches/dsh-weknora-panel@1.2.0.patch
   '@earendil-works/pi-ai@0.87.1': patches/@earendil-works__pi-ai@0.87.1.patch
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
   '@fortune-sheet/core@1.0.4': patches/@fortune-sheet__core@1.0.4.patch
