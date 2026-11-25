@@ -29,14 +29,17 @@ describe('syncPatchedPlugins', () => {
   it('replaces an unpatched profile copy with the packaged one', () => {
     const home = homeWithProfile('if (code === "error.repo.noGit") throw error;')
     const dshRoot = installWithPatch('if (code === "error.repo.noGit") return;')
-    const log = vi.fn()
+    const log = vi.fn<(message: string) => void>()
 
     const written = syncPatchedPlugins({ dshRoot, home, log })
 
     expect(written).toEqual(['@michengai/dsh-skills-manager'])
     expect(readFileSync(join(home, 'profiles', 'desktop', 'node_modules', MARKER), 'utf8'))
       .toBe('if (code === "error.repo.noGit") return;')
-    expect(log).toHaveBeenCalledOnce()
+    // The second entry in the list is absent here, and it says so; what this
+    // case is about is the replacement message for the plugin that is present.
+    expect(log.mock.calls.some(([message]) => message.includes('@michengai/dsh-skills-manager')))
+      .toBe(true)
   })
 
   it('leaves the profile alone when the bytes already agree', () => {

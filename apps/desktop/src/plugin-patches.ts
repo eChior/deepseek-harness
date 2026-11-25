@@ -19,6 +19,7 @@ import { dirname, join } from 'node:path'
 /** Packages this distribution patches, and the marker file that proves it. */
 const PATCHED_PACKAGES: readonly { readonly name: string; readonly marker: string }[] = [
   { name: '@michengai/dsh-skills-manager', marker: join('lib', 'repository-git.js') },
+  { name: 'dsh-weknora-panel', marker: join('lib', 'index.js') },
 ]
 
 /** Where the packaged installation and the user's home directory are. */
@@ -74,10 +75,15 @@ export function syncPatchedPlugins(options: PatchedPluginSyncOptions): string[] 
     const source = join(options.dshRoot, 'node_modules', name)
     const target = join(profileModules, name)
     const sourceDigest = digest(join(source, marker))
-    if (sourceDigest === undefined) continue
+    if (sourceDigest === undefined) {
+      // The installation carries no copy, so the profile keeps whatever it has.
+      // Saying so is the only way to tell this apart from "already up to date".
+      options.log?.(`patched plugin: ${name} is absent from ${source}`)
+      continue
+    }
     if (digest(join(target, marker)) === sourceDigest) continue
     copyTree(source, target)
-    options.log?.(`patched plugin: refreshed ${target}`)
+    options.log?.(`patched plugin: refreshed ${name} at ${target}`)
     written.push(name)
   }
   return written
