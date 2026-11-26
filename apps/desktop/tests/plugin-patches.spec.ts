@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -36,6 +36,29 @@ describe('syncPatchedPlugins', () => {
     expect(readFileSync(join(home, 'profiles', 'desktop', 'node_modules', MARKER), 'utf8'))
       .toContain('if (err?.code === "error.repo.noGit") return;')
     expect(written).toContain('@michengai/dsh-skills-manager')
+  })
+
+  it('replaces a symlinked profile package without editing its store target', () => {
+    // pnpm installs a profile package as a link into its store. Writing through
+    // that link edits the store, and every package sharing the file breaks with
+    // it — an update then loses the knowledge base and the session service.
+    const home = mkdtempSync(join(tmpdir(), 'dsh-plugin-sync-'))
+    const profile = join(home, 'profiles', 'desktop')
+    const store = join(home, '.store', PACKAGE)
+    mkdirSync(join(store, 'lib'), { recursive: true })
+    writeFileSync(join(store, 'lib', 'repository-git.js'), 'if (code === "error.repo.noGit") throw error;')
+    mkdirSync(join(profile, 'node_modules', '@michengai'), { recursive: true })
+    symlinkSync(store, join(profile, 'node_modules', PACKAGE), 'junction')
+    const dshRoot = installWithPatch('if (code === "error.repo.noGit") return;')
+
+    syncPatchedPlugins({ dshRoot, home, log: () => {} })
+
+    // The store keeps the published bytes...
+    expect(readFileSync(join(store, 'lib', 'repository-git.js'), 'utf8'))
+      .toContain('if (code === "error.repo.noGit") throw error;')
+    // ...and the profile now holds a real directory with the patched copy.
+    expect(readFileSync(join(profile, 'node_modules', MARKER), 'utf8'))
+      .toContain('if (code === "error.repo.noGit") return;')
   })
 
   it('replaces an unpatched profile copy with the packaged one', () => {

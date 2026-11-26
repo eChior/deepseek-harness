@@ -13,7 +13,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 /** Packages this distribution patches, and the marker file that proves it. */
@@ -139,6 +139,13 @@ export function syncPatchedPlugins(options: PatchedPluginSyncOptions): string[] 
       continue
     }
     if (digest(join(target, marker)) === sourceDigest) continue
+    // Replace the whole target tree instead of writing over it. pnpm installs a
+    // profile package as a symlink into its store, and writing through that link
+    // edits the store itself — every other package sharing those files breaks
+    // with it. Files the new build no longer ships would survive a plain
+    // overlay too, so the tree is rebuilt from the packaged copy every time the
+    // marker differs.
+    if (existsSync(target)) rmSync(target, { recursive: true, force: true })
     copyTree(source, target)
     options.log?.(`patched plugin: refreshed ${name} at ${target}`)
     written.push(name)
