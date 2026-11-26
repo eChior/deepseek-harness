@@ -42,6 +42,9 @@ env:
   NODE_OPTIONS: '--max-old-space-size=12288'
   PRIMARY_NODE_VERSION: '24'
 
+concurrency:
+  group: desktop-windows7-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   package:
     name: package win-x64 unsigned
