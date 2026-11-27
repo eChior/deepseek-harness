@@ -187,7 +187,7 @@
     "dsh-notify-me": "1.25.0",
     "dsh-rewind-plugin": "0.15.3",
     "dshmarket": "1.84.1",
-    "dsh-weknora-panel": "https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/f4755f76af17f22fe925ff861852ebdf8238f143",
+    "dsh-weknora-panel": "https://codeload.github.com/eChior/dsh-weknora-panel/tar.gz/bdab4faf54b773867f8332b7274389074f767f92",
     "superpowers-dsh": "0.5.0"
   },
   "peerDependencies": {
